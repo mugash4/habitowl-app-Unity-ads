@@ -1,0 +1,52 @@
+{
+  "cli": {
+    "version": ">= 7.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleDebug"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease"
+      },
+      "env": {
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyDca2O9HlRLWSm09kHDtn8CaR2lWdpCXZk",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "habitowl-3405d.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "habitowl-3405d",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "habitowl-3405d.firebasestorage.app",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "387609126713",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:387609126713:web:514bf97800c4d2112ceae8",
+        "EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID": "G-2FFS8JMX4K",
+        "NODE_ENV": "production"
+      }
+    },
+    "production": {
+      "android": {
+        "buildType": "app-bundle",
+        "gradleCommand": ":app:bundleRelease"
+      },
+      "env": {
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyDca2O9HlRLWSm09kHDtn8CaR2lWdpCXZk",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "habitowl-3405d.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "habitowl-3405d",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "habitowl-3405d.firebasestorage.app",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "387609126713",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:387609126713:web:514bf97800c4d2112ceae8",
+        "EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID": "G-2FFS8JMX4K",
+        "NODE_ENV": "production"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

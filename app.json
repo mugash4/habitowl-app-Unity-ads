@@ -1,0 +1,100 @@
+{
+  "expo": {
+    "name": "HabitOwl",
+    "slug": "habitowl",
+    "version": "2.2.1",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#4f46e5"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.habitowl.app",
+      "buildNumber": "1",
+      "config": {
+        "googleMobileAdsAppId": "ca-app-pub-2371616866592450~9516891462"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#4f46e5"
+      },
+      "package": "com.habitowl.app",
+      "versionCode": 4,
+      "permissions": [
+        "NOTIFICATIONS",
+        "VIBRATE",
+        "RECEIVE_BOOT_COMPLETED",
+        "INTERNET",
+        "ACCESS_NETWORK_STATE"
+      ],
+      "config": {
+        "googleMobileAdsAppId": "ca-app-pub-2371616866592450~9516891462"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "name": "HabitOwl - Smart Habit & Routine Builder App",
+      "shortName": "HabitOwl",
+      "lang": "en",
+      "scope": "/",
+      "themeColor": "#4f46e5",
+      "description": "Smart Habit & Routine Builder App - Build better habits with AI-powered coaching",
+      "dir": "auto",
+      "display": "standalone",
+      "orientation": "portrait",
+      "startUrl": "/",
+      "backgroundColor": "#ffffff"
+    },
+    "plugins": [
+      [
+        "expo-font",
+        {
+          "fonts": []
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#4f46e5",
+          "sounds": []
+        }
+      ],
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-2371616866592450~9516891462",
+          "iosAppId": "ca-app-pub-2371616866592450~9516891462",
+          "userTrackingUsageDescription": "This identifier will be used to deliver personalized ads to you."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 34,
+            "targetSdkVersion": 34,
+            "buildToolsVersion": "34.0.0",
+            "minSdkVersion": 23,
+            "kotlinVersion": "2.0.0"
+          }
+        }
+      ]
+    ],
+    "owner": "stinemug",
+    "extra": {
+      "eas": {
+        "projectId": "feef09e8-2429-4834-94be-cbba52db386c"
+      }
+    }
+  }
+}

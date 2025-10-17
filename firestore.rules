@@ -1,0 +1,57 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Users can only access their own user document
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Habits belong to specific users
+    match /habits/{habitId} {
+      allow read, write: if request.auth != null && 
+        request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && 
+        request.auth.uid == request.resource.data.userId;
+    }
+    
+    // Admin configuration - only admin users can access
+    match /admin_config/{document} {
+      allow read, write: if request.auth != null && 
+        request.auth.token.email in get(/databases/$(database)/documents/admin_config/settings).data.admin_emails;
+    }
+    
+    // App information - public read, admin write
+    match /app_info/{document} {
+      allow read: if true;
+      allow write: if request.auth != null && 
+        request.auth.token.email in get(/databases/$(database)/documents/admin_config/settings).data.admin_emails;
+    }
+    
+    // Analytics - users can create their own events
+    match /analytics/{document} {
+      allow create: if request.auth != null;
+      allow read: if request.auth != null && 
+        request.auth.token.email in get(/databases/$(database)/documents/admin_config/settings).data.admin_emails;
+    }
+    
+    // Referrals - users can read their own referrals
+    match /referrals/{referralId} {
+      allow read: if request.auth != null && 
+        (request.auth.uid == resource.data.referrerId || 
+         request.auth.uid == resource.data.referredUserId);
+      allow create: if request.auth != null;
+    }
+    
+    // Support tickets - users can create and read their own tickets
+    match /support_tickets/{ticketId} {
+      allow read, write: if request.auth != null && 
+        request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && 
+        request.auth.uid == request.resource.data.userId;
+      // Admins can read all tickets
+      allow read: if request.auth != null && 
+        request.auth.token.email in get(/databases/$(database)/documents/admin_config/settings).data.admin_emails;
+    }
+  }
+}

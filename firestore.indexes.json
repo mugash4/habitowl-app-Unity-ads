@@ -1,0 +1,75 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "habits",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "isActive",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "uid",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "referrals",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "referrerId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "analytics",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "timestamp",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "support_tickets",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
