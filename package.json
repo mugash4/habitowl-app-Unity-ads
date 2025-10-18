@@ -1,7 +1,7 @@
 {
   "name": "habitowl",
   "version": "2.3.0",
-  "description": "Smart Habit & Routine Builder App",
+  "description": "Smart Habit & Routine Builder App - easy to use",
   "main": "index.js",
   "scripts": {
     "start": "expo start",
