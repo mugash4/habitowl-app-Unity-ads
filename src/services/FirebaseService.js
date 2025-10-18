@@ -21,13 +21,16 @@ import {
   updateProfile,
   GoogleAuthProvider,
   signInWithCredential,
-  signInWithPopup
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult
 } from 'firebase/auth';
 import { db, auth } from '../config/firebase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as AuthSession from 'expo-auth-session';
+import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
+import { makeRedirectUri } from 'expo-auth-session';
 
 // Required for Expo AuthSession
 WebBrowser.maybeCompleteAuthSession();
@@ -47,34 +50,54 @@ class FirebaseService {
   // Authentication Methods
   async signUp(email, password, displayName) {
     try {
+      console.log('Starting sign up process...');
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
       
+      console.log('User created, updating profile...');
       // Update profile with display name
       await updateProfile(user, { displayName });
       
+      console.log('Creating user document...');
       // Create user document
       await this.createUserDocument(user);
       
+      console.log('Sign up complete!');
       return user;
     } catch (error) {
+      console.error('Sign up error:', error);
       throw this.handleFirebaseError(error);
     }
   }
 
   async signIn(email, password) {
     try {
+      console.log('Starting sign in process...');
+      console.log('Email:', email);
+      
+      if (!email || !password) {
+        throw new Error('Email and password are required');
+      }
+
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      console.log('Sign in successful!');
       return userCredential.user;
     } catch (error) {
+      console.error('Sign in error:', error);
+      console.error('Error code:', error.code);
+      console.error('Error message:', error.message);
       throw this.handleFirebaseError(error);
     }
   }
 
   async signInWithGoogle() {
     try {
+      console.log('Starting Google sign in...');
+      console.log('Platform:', Platform.OS);
+
       if (Platform.OS === 'web') {
         // Web implementation
+        console.log('Using web sign in...');
         const provider = new GoogleAuthProvider();
         provider.addScope('email');
         provider.addScope('profile');
@@ -83,27 +106,42 @@ class FirebaseService {
         
         if (result && result.user) {
           await this.createUserDocument(result.user);
+          console.log('Web sign in successful!');
           return result.user;
         }
       } else {
-        // Mobile implementation using Expo AuthSession
-        const redirectUri = AuthSession.makeRedirectUri({
-          useProxy: true,
+        // Mobile implementation using expo-auth-session/providers/google
+        console.log('Using mobile sign in...');
+        
+        // Configure the redirect URI
+        const redirectUri = makeRedirectUri({
+          scheme: 'habitowl',
+          path: 'redirect'
         });
 
-        const request = new AuthSession.AuthRequest({
-          clientId: '387609126713-1vpqhjkaha1ku86srq7lla63vqbpj98j.apps.googleusercontent.com', // You need to replace this
-          scopes: ['openid', 'profile', 'email'],
-          redirectUri,
-        });
+        console.log('Redirect URI:', redirectUri);
 
-        await request.promptAsync({
-          authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
-        });
+        // Use expo-google-sign-in for better mobile support
+        const config = {
+          androidClientId: '387609126713-YOUR_ANDROID_CLIENT_ID.apps.googleusercontent.com',
+          iosClientId: '387609126713-YOUR_IOS_CLIENT_ID.apps.googleusercontent.com',
+          webClientId: '387609126713-1vpqhjkaha1ku86srq7lla63vqbpj98j.apps.googleusercontent.com',
+        };
 
-        // Note: Full implementation requires Google OAuth client ID for mobile
-        // For now, we'll show an informative error
-        throw new Error('Google Sign-In on mobile requires additional configuration. Please use email/password or configure Google OAuth in Firebase Console.');
+        // Use Expo's Google Auth
+        const [request, response, promptAsync] = Google.useIdTokenAuthRequest(config);
+        
+        // For standalone apps, we need a different approach
+        // Show informative error with instructions
+        throw new Error(
+          'Google Sign-In Setup Required:\n\n' +
+          '1. Go to Firebase Console > Authentication > Sign-in method\n' +
+          '2. Enable Google Sign-In\n' +
+          '3. Download google-services.json for Android\n' +
+          '4. Add SHA-1 fingerprint from your keystore\n' +
+          '5. Rebuild your APK\n\n' +
+          'For now, please use Email/Password sign in.'
+        );
       }
       
       return null;
@@ -115,15 +153,20 @@ class FirebaseService {
 
   async signOut() {
     try {
+      console.log('Signing out...');
       await signOut(auth);
       await AsyncStorage.clear(); // Clear local storage
+      console.log('Sign out successful!');
     } catch (error) {
+      console.error('Sign out error:', error);
       throw this.handleFirebaseError(error);
     }
   }
 
   onAuthStateChanged(callback) {
     this.authStateChangedListeners.push(callback);
+    // Call immediately with current state
+    callback(this.currentUser);
     return () => {
       this.authStateChangedListeners = this.authStateChangedListeners.filter(
         listener => listener !== callback
@@ -132,54 +175,66 @@ class FirebaseService {
   }
 
   async createUserDocument(user) {
-    // Check if user document already exists
-    const q = query(
-      collection(db, 'users'),
-      where('uid', '==', user.uid)
-    );
-    
-    const querySnapshot = await getDocs(q);
-    
-    if (querySnapshot.empty) {
-      // Create new user document
-      const userDoc = {
-        uid: user.uid,
-        email: user.email,
-        displayName: user.displayName || user.email.split('@')[0],
-        photoURL: user.photoURL || null,
-        createdAt: serverTimestamp(),
-        isPremium: false,
-        totalHabits: 0,
-        longestStreak: 0,
-        referralCode: this.generateReferralCode(),
-        referredBy: null,
-        referralCount: 0,
-        authProvider: user.providerData[0]?.providerId || 'password'
-      };
+    try {
+      console.log('Creating/updating user document for:', user.uid);
+      
+      // Check if user document already exists
+      const q = query(
+        collection(db, 'users'),
+        where('uid', '==', user.uid)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      
+      if (querySnapshot.empty) {
+        console.log('Creating new user document...');
+        // Create new user document
+        const userDoc = {
+          uid: user.uid,
+          email: user.email,
+          displayName: user.displayName || user.email.split('@')[0],
+          photoURL: user.photoURL || null,
+          createdAt: serverTimestamp(),
+          isPremium: false,
+          totalHabits: 0,
+          longestStreak: 0,
+          referralCode: this.generateReferralCode(),
+          referredBy: null,
+          referralCount: 0,
+          authProvider: user.providerData[0]?.providerId || 'password'
+        };
 
-      await addDoc(collection(db, 'users'), userDoc);
-      return userDoc;
-    } else {
-      // Update existing user document if needed
-      const existingDoc = querySnapshot.docs[0];
-      const existingData = existingDoc.data();
-      
-      const updates = {};
-      if (user.displayName && !existingData.displayName) {
-        updates.displayName = user.displayName;
+        await addDoc(collection(db, 'users'), userDoc);
+        console.log('User document created!');
+        return userDoc;
+      } else {
+        console.log('User document already exists, updating...');
+        // Update existing user document if needed
+        const existingDoc = querySnapshot.docs[0];
+        const existingData = existingDoc.data();
+        
+        const updates = {};
+        if (user.displayName && !existingData.displayName) {
+          updates.displayName = user.displayName;
+        }
+        if (user.photoURL && !existingData.photoURL) {
+          updates.photoURL = user.photoURL;
+        }
+        
+        if (Object.keys(updates).length > 0) {
+          await updateDoc(existingDoc.ref, {
+            ...updates,
+            updatedAt: serverTimestamp()
+          });
+          console.log('User document updated!');
+        }
+        
+        return existingData;
       }
-      if (user.photoURL && !existingData.photoURL) {
-        updates.photoURL = user.photoURL;
-      }
-      
-      if (Object.keys(updates).length > 0) {
-        await updateDoc(existingDoc.ref, {
-          ...updates,
-          updatedAt: serverTimestamp()
-        });
-      }
-      
-      return existingData;
+    } catch (error) {
+      console.error('Error creating/updating user document:', error);
+      // Don't throw error here, just log it
+      // The authentication itself was successful
     }
   }
 
@@ -451,6 +506,8 @@ class FirebaseService {
   }
 
   handleFirebaseError(error) {
+    console.error('Firebase error:', error);
+    
     const errorMessages = {
       'auth/email-already-in-use': 'This email is already registered',
       'auth/invalid-email': 'Invalid email address',
@@ -464,10 +521,14 @@ class FirebaseService {
       'auth/popup-closed-by-user': 'Sign-in popup was closed before completion',
       'auth/popup-blocked': 'Sign-in popup was blocked by the browser',
       'auth/cancelled-popup-request': 'Multiple popup requests detected',
-      'auth/account-exists-with-different-credential': 'An account already exists with the same email but different sign-in credentials'
+      'auth/account-exists-with-different-credential': 'An account already exists with the same email but different sign-in credentials',
+      'auth/network-request-failed': 'Network error. Please check your internet connection and try again',
+      'auth/invalid-api-key': 'Invalid API key. Please check your Firebase configuration',
+      'auth/app-not-authorized': 'App not authorized. Please check your Firebase configuration'
     };
 
-    return new Error(errorMessages[error.code] || error.message);
+    const message = errorMessages[error.code] || error.message || 'An unexpected error occurred';
+    return new Error(message);
   }
 }
 

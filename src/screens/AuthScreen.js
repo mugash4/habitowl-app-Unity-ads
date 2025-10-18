@@ -8,7 +8,8 @@ import {
   Alert,
   Animated,
   ScrollView,
-  Dimensions
+  Dimensions,
+  ActivityIndicator
 } from 'react-native';
 import {
   TextInput,
@@ -54,6 +55,7 @@ const AuthScreen = ({ navigation }) => {
     // Check if user is already signed in
     const unsubscribe = FirebaseService.onAuthStateChanged((user) => {
       if (user) {
+        console.log('User already signed in, navigating to Main...');
         navigation.replace('Main');
       }
     });
@@ -68,33 +70,33 @@ const AuthScreen = ({ navigation }) => {
 
   const validateForm = () => {
     if (!email.trim()) {
-      Alert.alert('Error', 'Please enter your email');
+      Alert.alert('Validation Error', 'Please enter your email');
       return false;
     }
 
     if (!validateEmail(email)) {
-      Alert.alert('Error', 'Please enter a valid email address');
+      Alert.alert('Validation Error', 'Please enter a valid email address');
       return false;
     }
 
     if (!password) {
-      Alert.alert('Error', 'Please enter your password');
+      Alert.alert('Validation Error', 'Please enter your password');
       return false;
     }
 
     if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
+      Alert.alert('Validation Error', 'Password must be at least 6 characters');
       return false;
     }
 
     if (!isLogin) {
       if (!displayName.trim()) {
-        Alert.alert('Error', 'Please enter your name');
+        Alert.alert('Validation Error', 'Please enter your name');
         return false;
       }
 
       if (password !== confirmPassword) {
-        Alert.alert('Error', 'Passwords do not match');
+        Alert.alert('Validation Error', 'Passwords do not match');
         return false;
       }
     }
@@ -103,38 +105,69 @@ const AuthScreen = ({ navigation }) => {
   };
 
   const handleAuth = async () => {
-    if (!validateForm()) return;
+    console.log('=== Auth Button Pressed ===');
+    console.log('Is Login:', isLogin);
+    console.log('Email:', email);
+    console.log('Password length:', password.length);
+
+    if (!validateForm()) {
+      console.log('Form validation failed');
+      return;
+    }
 
     try {
       setLoading(true);
+      console.log('Loading state set to true');
 
       if (isLogin) {
-        await FirebaseService.signIn(email.trim(), password);
+        console.log('Attempting sign in...');
+        const user = await FirebaseService.signIn(email.trim(), password);
+        console.log('Sign in successful:', user.uid);
+        Alert.alert('Success', 'Welcome back!');
       } else {
-        await FirebaseService.signUp(email.trim(), password, displayName.trim());
+        console.log('Attempting sign up...');
+        const user = await FirebaseService.signUp(email.trim(), password, displayName.trim());
+        console.log('Sign up successful:', user.uid);
+        Alert.alert('Success', 'Account created successfully!');
       }
 
       // Navigation is handled by the auth state listener
     } catch (error) {
-      Alert.alert('Error', error.message);
+      console.error('Auth error:', error);
+      Alert.alert(
+        isLogin ? 'Sign In Error' : 'Sign Up Error', 
+        error.message || 'An unexpected error occurred. Please try again.'
+      );
     } finally {
       setLoading(false);
+      console.log('Loading state set to false');
     }
   };
 
   const handleGoogleAuth = async () => {
+    console.log('=== Google Auth Button Pressed ===');
+    
     try {
       setGoogleLoading(true);
+      console.log('Google loading state set to true');
+      
       await FirebaseService.signInWithGoogle();
       // Navigation is handled by the auth state listener
+      
     } catch (error) {
-      Alert.alert('Google Sign In', error.message);
+      console.error('Google auth error:', error);
+      Alert.alert(
+        'Google Sign In', 
+        error.message || 'Failed to sign in with Google. Please try again.'
+      );
     } finally {
       setGoogleLoading(false);
+      console.log('Google loading state set to false');
     }
   };
 
   const toggleAuthMode = () => {
+    console.log('Toggling auth mode');
     setIsLogin(!isLogin);
     setEmail('');
     setPassword('');
@@ -212,7 +245,13 @@ const AuthScreen = ({ navigation }) => {
                   autoCapitalize="none"
                   autoComplete="email"
                   disabled={loading || googleLoading}
+                  error={email.length > 0 && !validateEmail(email)}
                 />
+                {email.length > 0 && !validateEmail(email) && (
+                  <HelperText type="error" visible={true}>
+                    Please enter a valid email address
+                  </HelperText>
+                )}
 
                 <TextInput
                   label="Password"
@@ -224,20 +263,34 @@ const AuthScreen = ({ navigation }) => {
                   secureTextEntry
                   autoComplete={isLogin ? "password" : "new-password"}
                   disabled={loading || googleLoading}
+                  error={password.length > 0 && password.length < 6}
                 />
+                {password.length > 0 && password.length < 6 && (
+                  <HelperText type="error" visible={true}>
+                    Password must be at least 6 characters
+                  </HelperText>
+                )}
 
                 {!isLogin && (
-                  <TextInput
-                    label="Confirm Password"
-                    value={confirmPassword}
-                    onChangeText={setConfirmPassword}
-                    mode="outlined"
-                    style={styles.input}
-                    left={<TextInput.Icon icon="lock-check" />}
-                    secureTextEntry
-                    autoComplete="new-password"
-                    disabled={loading || googleLoading}
-                  />
+                  <>
+                    <TextInput
+                      label="Confirm Password"
+                      value={confirmPassword}
+                      onChangeText={setConfirmPassword}
+                      mode="outlined"
+                      style={styles.input}
+                      left={<TextInput.Icon icon="lock-check" />}
+                      secureTextEntry
+                      autoComplete="new-password"
+                      disabled={loading || googleLoading}
+                      error={confirmPassword.length > 0 && password !== confirmPassword}
+                    />
+                    {confirmPassword.length > 0 && password !== confirmPassword && (
+                      <HelperText type="error" visible={true}>
+                        Passwords do not match
+                      </HelperText>
+                    )}
+                  </>
                 )}
 
                 <Button
@@ -249,8 +302,15 @@ const AuthScreen = ({ navigation }) => {
                   contentStyle={styles.authButtonContent}
                   labelStyle={styles.authButtonLabel}
                 >
-                  {isLogin ? 'Sign In' : 'Create Account'}
+                  {loading ? 'Processing...' : (isLogin ? 'Sign In' : 'Create Account')}
                 </Button>
+
+                {/* Debug info (remove in production) */}
+                {__DEV__ && (
+                  <Text style={styles.debugText}>
+                    Status: {loading ? 'Loading...' : 'Ready'}
+                  </Text>
+                )}
 
                 {/* Divider */}
                 <View style={styles.divider}>
@@ -270,7 +330,7 @@ const AuthScreen = ({ navigation }) => {
                   labelStyle={styles.googleButtonLabel}
                   icon={() => <Icon name="google" size={20} color="#4285f4" />}
                 >
-                  Continue with Google
+                  {googleLoading ? 'Connecting...' : 'Continue with Google'}
                 </Button>
 
                 <View style={styles.switchAuth}>
@@ -388,7 +448,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   input: {
-    marginBottom: 16,
+    marginBottom: 12,
     backgroundColor: '#ffffff',
   },
   authButton: {
@@ -403,6 +463,12 @@ const styles = StyleSheet.create({
   authButtonLabel: {
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  debugText: {
+    fontSize: 12,
+    color: '#9ca3af',
+    textAlign: 'center',
+    marginBottom: 8,
   },
   divider: {
     flexDirection: 'row',
