@@ -20,12 +20,17 @@ import {
   onAuthStateChanged,
   updateProfile,
   GoogleAuthProvider,
-  signInWithPopup,
-  signInWithRedirect,
-  getRedirectResult
+  signInWithCredential,
+  signInWithPopup
 } from 'firebase/auth';
-import { db, auth } from '../../firebase';
+import { db, auth } from '../config/firebase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as AuthSession from 'expo-auth-session';
+import * as WebBrowser from 'expo-web-browser';
+import { Platform } from 'react-native';
+
+// Required for Expo AuthSession
+WebBrowser.maybeCompleteAuthSession();
 
 class FirebaseService {
   constructor() {
@@ -68,24 +73,37 @@ class FirebaseService {
 
   async signInWithGoogle() {
     try {
-      const provider = new GoogleAuthProvider();
-      provider.addScope('email');
-      provider.addScope('profile');
-      
-      let result;
-      if (this.isWeb()) {
-        // For web, use popup
-        result = await signInWithPopup(auth, provider);
+      if (Platform.OS === 'web') {
+        // Web implementation
+        const provider = new GoogleAuthProvider();
+        provider.addScope('email');
+        provider.addScope('profile');
+        
+        const result = await signInWithPopup(auth, provider);
+        
+        if (result && result.user) {
+          await this.createUserDocument(result.user);
+          return result.user;
+        }
       } else {
-        // For mobile, use redirect
-        await signInWithRedirect(auth, provider);
-        result = await getRedirectResult(auth);
-      }
-      
-      if (result && result.user) {
-        // Create or update user document
-        await this.createUserDocument(result.user);
-        return result.user;
+        // Mobile implementation using Expo AuthSession
+        const redirectUri = AuthSession.makeRedirectUri({
+          useProxy: true,
+        });
+
+        const request = new AuthSession.AuthRequest({
+          clientId: '387609126713-1vpqhjkaha1ku86srq7lla63vqbpj98j.apps.googleusercontent.com', // You need to replace this
+          scopes: ['openid', 'profile', 'email'],
+          redirectUri,
+        });
+
+        await request.promptAsync({
+          authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
+        });
+
+        // Note: Full implementation requires Google OAuth client ID for mobile
+        // For now, we'll show an informative error
+        throw new Error('Google Sign-In on mobile requires additional configuration. Please use email/password or configure Google OAuth in Firebase Console.');
       }
       
       return null;
@@ -93,10 +111,6 @@ class FirebaseService {
       console.error('Google sign in error:', error);
       throw this.handleFirebaseError(error);
     }
-  }
-
-  isWeb() {
-    return typeof window !== 'undefined' && window.document;
   }
 
   async signOut() {
@@ -391,7 +405,7 @@ class FirebaseService {
         eventName,
         parameters,
         timestamp: serverTimestamp(),
-        platform: 'mobile'
+        platform: Platform.OS
       });
     } catch (error) {
       console.error('Analytics tracking error:', error);
@@ -441,11 +455,12 @@ class FirebaseService {
       'auth/email-already-in-use': 'This email is already registered',
       'auth/invalid-email': 'Invalid email address',
       'auth/operation-not-allowed': 'Operation not allowed',
-      'auth/weak-password': 'Password is too weak',
+      'auth/weak-password': 'Password is too weak (minimum 6 characters)',
       'auth/user-disabled': 'User account has been disabled',
       'auth/user-not-found': 'No user found with this email',
       'auth/wrong-password': 'Incorrect password',
-      'auth/too-many-requests': 'Too many attempts. Try again later',
+      'auth/invalid-credential': 'Invalid email or password',
+      'auth/too-many-requests': 'Too many attempts. Please try again later',
       'auth/popup-closed-by-user': 'Sign-in popup was closed before completion',
       'auth/popup-blocked': 'Sign-in popup was blocked by the browser',
       'auth/cancelled-popup-request': 'Multiple popup requests detected',

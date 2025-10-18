@@ -6,7 +6,9 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
-  Animated
+  Animated,
+  ScrollView,
+  Dimensions
 } from 'react-native';
 import {
   TextInput,
@@ -20,6 +22,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 import FirebaseService from '../services/FirebaseService';
+
+const { height } = Dimensions.get('window');
 
 const AuthScreen = ({ navigation }) => {
   const [isLogin, setIsLogin] = useState(true);
@@ -124,7 +128,7 @@ const AuthScreen = ({ navigation }) => {
       await FirebaseService.signInWithGoogle();
       // Navigation is handled by the auth state listener
     } catch (error) {
-      Alert.alert('Google Sign In Error', error.message);
+      Alert.alert('Google Sign In', error.message);
     } finally {
       setGoogleLoading(false);
     }
@@ -143,152 +147,166 @@ const AuthScreen = ({ navigation }) => {
       <KeyboardAvoidingView
         style={styles.keyboardAvoid}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
-        <Animated.View
-          style={[
-            styles.content,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-            },
-          ]}
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          {/* App Branding */}
-          <View style={styles.branding}>
-            <View style={styles.logoContainer}>
-              <Icon name="owl" size={80} color="#ffffff" />
-            </View>
-            <Headline style={styles.appName}>HabitOwl</Headline>
-            <Paragraph style={styles.tagline}>
-              Smart Habit & Routine Builder App
-            </Paragraph>
-          </View>
-
-          {/* Auth Form */}
-          <Card style={styles.authCard}>
-            <Card.Content style={styles.cardContent}>
-              <Text style={styles.authTitle}>
-                {isLogin ? 'Welcome Back!' : 'Create Account'}
-              </Text>
-              <Text style={styles.authSubtitle}>
-                {isLogin 
-                  ? 'Sign in to continue your habit journey'
-                  : 'Start building better habits today'
-                }
-              </Text>
-
-              {!isLogin && (
-                <TextInput
-                  label="Full Name"
-                  value={displayName}
-                  onChangeText={setDisplayName}
-                  mode="outlined"
-                  style={styles.input}
-                  left={<TextInput.Icon icon="account" />}
-                  autoCapitalize="words"
-                  autoComplete="name"
-                />
-              )}
-
-              <TextInput
-                label="Email"
-                value={email}
-                onChangeText={setEmail}
-                mode="outlined"
-                style={styles.input}
-                left={<TextInput.Icon icon="email" />}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoComplete="email"
-              />
-
-              <TextInput
-                label="Password"
-                value={password}
-                onChangeText={setPassword}
-                mode="outlined"
-                style={styles.input}
-                left={<TextInput.Icon icon="lock" />}
-                secureTextEntry
-                autoComplete={isLogin ? "password" : "new-password"}
-              />
-
-              {!isLogin && (
-                <TextInput
-                  label="Confirm Password"
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                  mode="outlined"
-                  style={styles.input}
-                  left={<TextInput.Icon icon="lock-check" />}
-                  secureTextEntry
-                  autoComplete="new-password"
-                />
-              )}
-
-              <Button
-                mode="contained"
-                onPress={handleAuth}
-                loading={loading}
-                disabled={loading || googleLoading}
-                style={styles.authButton}
-                contentStyle={styles.authButtonContent}
-              >
-                {isLogin ? 'Sign In' : 'Create Account'}
-              </Button>
-
-              {/* Divider */}
-              <View style={styles.divider}>
-                <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>or</Text>
-                <View style={styles.dividerLine} />
+          <Animated.View
+            style={[
+              styles.content,
+              {
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }],
+              },
+            ]}
+          >
+            {/* App Branding */}
+            <View style={styles.branding}>
+              <View style={styles.logoContainer}>
+                <Icon name="owl" size={70} color="#ffffff" />
               </View>
+              <Headline style={styles.appName}>HabitOwl</Headline>
+              <Paragraph style={styles.tagline}>
+                Smart Habit & Routine Builder
+              </Paragraph>
+            </View>
 
-              {/* Google Sign In Button */}
-              <Button
-                mode="outlined"
-                onPress={handleGoogleAuth}
-                loading={googleLoading}
-                disabled={loading || googleLoading}
-                style={styles.googleButton}
-                contentStyle={styles.googleButtonContent}
-                icon={() => <Icon name="google" size={20} color="#4285f4" />}
-              >
-                Continue with Google
-              </Button>
-
-              <View style={styles.switchAuth}>
-                <Text style={styles.switchAuthText}>
-                  {isLogin ? "Don't have an account?" : "Already have an account?"}
+            {/* Auth Form */}
+            <Card style={styles.authCard}>
+              <Card.Content style={styles.cardContent}>
+                <Text style={styles.authTitle}>
+                  {isLogin ? 'Welcome Back!' : 'Create Account'}
                 </Text>
-                <Button
-                  mode="text"
-                  onPress={toggleAuthMode}
-                  disabled={loading || googleLoading}
-                  labelStyle={styles.switchAuthButton}
-                >
-                  {isLogin ? 'Sign Up' : 'Sign In'}
-                </Button>
-              </View>
-            </Card.Content>
-          </Card>
+                <Text style={styles.authSubtitle}>
+                  {isLogin 
+                    ? 'Sign in to continue your journey'
+                    : 'Start building better habits today'
+                  }
+                </Text>
 
-          {/* Features Preview */}
-          <View style={styles.features}>
-            <View style={styles.feature}>
-              <Icon name="target" size={24} color="#e0e7ff" />
-              <Text style={styles.featureText}>Track Daily Habits</Text>
+                {!isLogin && (
+                  <TextInput
+                    label="Full Name"
+                    value={displayName}
+                    onChangeText={setDisplayName}
+                    mode="outlined"
+                    style={styles.input}
+                    left={<TextInput.Icon icon="account" />}
+                    autoCapitalize="words"
+                    autoComplete="name"
+                    disabled={loading || googleLoading}
+                  />
+                )}
+
+                <TextInput
+                  label="Email"
+                  value={email}
+                  onChangeText={setEmail}
+                  mode="outlined"
+                  style={styles.input}
+                  left={<TextInput.Icon icon="email" />}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoComplete="email"
+                  disabled={loading || googleLoading}
+                />
+
+                <TextInput
+                  label="Password"
+                  value={password}
+                  onChangeText={setPassword}
+                  mode="outlined"
+                  style={styles.input}
+                  left={<TextInput.Icon icon="lock" />}
+                  secureTextEntry
+                  autoComplete={isLogin ? "password" : "new-password"}
+                  disabled={loading || googleLoading}
+                />
+
+                {!isLogin && (
+                  <TextInput
+                    label="Confirm Password"
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    mode="outlined"
+                    style={styles.input}
+                    left={<TextInput.Icon icon="lock-check" />}
+                    secureTextEntry
+                    autoComplete="new-password"
+                    disabled={loading || googleLoading}
+                  />
+                )}
+
+                <Button
+                  mode="contained"
+                  onPress={handleAuth}
+                  loading={loading}
+                  disabled={loading || googleLoading}
+                  style={styles.authButton}
+                  contentStyle={styles.authButtonContent}
+                  labelStyle={styles.authButtonLabel}
+                >
+                  {isLogin ? 'Sign In' : 'Create Account'}
+                </Button>
+
+                {/* Divider */}
+                <View style={styles.divider}>
+                  <View style={styles.dividerLine} />
+                  <Text style={styles.dividerText}>or</Text>
+                  <View style={styles.dividerLine} />
+                </View>
+
+                {/* Google Sign In Button */}
+                <Button
+                  mode="outlined"
+                  onPress={handleGoogleAuth}
+                  loading={googleLoading}
+                  disabled={loading || googleLoading}
+                  style={styles.googleButton}
+                  contentStyle={styles.googleButtonContent}
+                  labelStyle={styles.googleButtonLabel}
+                  icon={() => <Icon name="google" size={20} color="#4285f4" />}
+                >
+                  Continue with Google
+                </Button>
+
+                <View style={styles.switchAuth}>
+                  <Text style={styles.switchAuthText}>
+                    {isLogin ? "Don't have an account?" : "Already have an account?"}
+                  </Text>
+                  <Button
+                    mode="text"
+                    onPress={toggleAuthMode}
+                    disabled={loading || googleLoading}
+                    labelStyle={styles.switchAuthButton}
+                    compact
+                  >
+                    {isLogin ? 'Sign Up' : 'Sign In'}
+                  </Button>
+                </View>
+              </Card.Content>
+            </Card>
+
+            {/* Features Preview */}
+            <View style={styles.features}>
+              <View style={styles.feature}>
+                <Icon name="target" size={24} color="#ffffff" />
+                <Text style={styles.featureText}>Track Habits</Text>
+              </View>
+              <View style={styles.feature}>
+                <Icon name="chart-line" size={24} color="#ffffff" />
+                <Text style={styles.featureText}>View Progress</Text>
+              </View>
+              <View style={styles.feature}>
+                <Icon name="robot" size={24} color="#ffffff" />
+                <Text style={styles.featureText}>AI Coaching</Text>
+              </View>
             </View>
-            <View style={styles.feature}>
-              <Icon name="chart-line" size={24} color="#e0e7ff" />
-              <Text style={styles.featureText}>View Progress</Text>
-            </View>
-            <View style={styles.feature}>
-              <Icon name="robot" size={24} color="#e0e7ff" />
-              <Text style={styles.featureText}>AI Coaching</Text>
-            </View>
-          </View>
-        </Animated.View>
+          </Animated.View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </LinearGradient>
   );
@@ -301,67 +319,90 @@ const styles = StyleSheet.create({
   keyboardAvoid: {
     flex: 1,
   },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingVertical: 20,
+  },
   content: {
     flex: 1,
     justifyContent: 'center',
     paddingHorizontal: 20,
+    paddingTop: 40,
+    paddingBottom: 20,
   },
   branding: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 30,
   },
   logoContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
+    borderWidth: 3,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   appName: {
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: 'bold',
     color: '#ffffff',
-    marginBottom: 8,
+    marginBottom: 6,
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
   tagline: {
     fontSize: 16,
-    color: '#e0e7ff',
+    color: '#ffffff',
     textAlign: 'center',
     marginBottom: 20,
+    fontWeight: '500',
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   authCard: {
     borderRadius: 20,
     elevation: 8,
     marginBottom: 30,
+    backgroundColor: '#ffffff',
   },
   cardContent: {
     padding: 24,
   },
   authTitle: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: 'bold',
     color: '#1f2937',
     textAlign: 'center',
     marginBottom: 8,
   },
   authSubtitle: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#6b7280',
     textAlign: 'center',
     marginBottom: 24,
   },
   input: {
     marginBottom: 16,
+    backgroundColor: '#ffffff',
   },
   authButton: {
     marginTop: 8,
     marginBottom: 16,
     backgroundColor: '#4f46e5',
+    borderRadius: 10,
   },
   authButtonContent: {
     paddingVertical: 8,
+  },
+  authButtonLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   divider: {
     flexDirection: 'row',
@@ -375,20 +416,30 @@ const styles = StyleSheet.create({
   },
   dividerText: {
     marginHorizontal: 12,
-    color: '#6b7280',
+    color: '#9ca3af',
     fontSize: 14,
+    fontWeight: '500',
   },
   googleButton: {
-    borderColor: '#e5e7eb',
+    borderColor: '#dadce0',
+    borderWidth: 1.5,
     marginBottom: 16,
+    borderRadius: 10,
+    backgroundColor: '#ffffff',
   },
   googleButtonContent: {
     paddingVertical: 8,
+  },
+  googleButtonLabel: {
+    color: '#3c4043',
+    fontSize: 15,
+    fontWeight: '600',
   },
   switchAuth: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    marginTop: 8,
   },
   switchAuthText: {
     color: '#6b7280',
@@ -402,17 +453,22 @@ const styles = StyleSheet.create({
   features: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    paddingHorizontal: 20,
+    paddingHorizontal: 10,
+    marginTop: 10,
   },
   feature: {
     alignItems: 'center',
     flex: 1,
   },
   featureText: {
-    color: '#e0e7ff',
-    fontSize: 12,
+    color: '#ffffff',
+    fontSize: 13,
     marginTop: 8,
     textAlign: 'center',
+    fontWeight: '600',
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
 });
 
