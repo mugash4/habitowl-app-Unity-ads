@@ -1,19 +1,35 @@
-// Firebase Configuration
-// 🔧 REPLACE THIS WITH YOUR ACTUAL FIREBASE CONFIG
-// Get this from: Firebase Console → Project Settings → Your apps → Web app config
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
 
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  // 📋 Replace these with your actual values from Firebase Console
-  apiKey: "YOUR-API-KEY-HERE",
-  authDomain: "habitowl-3405d.firebaseapp.com", // Updated to match your project
-  projectId: "habitowl-3405d", // Updated to match your project
-  storageBucket: "habitowl-3405d.appspot.com", // Updated to match your project
-  messagingSenderId: "YOUR-MESSAGING-SENDER-ID",
-  appId: "YOUR-APP-ID",
-  measurementId: "YOUR-MEASUREMENT-ID" // Optional - for Google Analytics
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || "AIzaSyDca2O9HlRLWSm09kHDtn8CaR2lWdpCXZk",
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || "habitowl-3405d.firebaseapp.com",
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || "habitowl-3405d",
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET || "habitowl-3405d.firebasestorage.app",
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "387609126713",
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID || "1:387609126713:web:514bf97800c4d2112ceae8",
+  measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID || "G-2FFS8JMX4K"
 };
 
-// 🚨 IMPORTANT: Update the config above with your actual Firebase project details
-// You can find these in: Firebase Console → Project Settings → General tab → Your apps
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
 
-export default firebaseConfig;
+// Initialize Firebase services
+export const auth = getAuth(app);
+export const db = getFirestore(app);
+export const storage = getStorage(app);
+
+// Initialize Analytics (only in web environment)
+let analytics;
+if (typeof window !== 'undefined') {
+  analytics = getAnalytics(app);
+}
+
+export { analytics };
+export default app;

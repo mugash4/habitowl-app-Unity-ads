@@ -1,296 +1,298 @@
-# 👋 START HERE FIRST!
+# 🎯 START HERE FIRST!
 
-## 🎉 Welcome to HabitOwl v2.1.0 - FIXED VERSION!
+## Welcome to HabitOwl with Unity Ads!
 
-Your npm installation error has been **COMPLETELY FIXED**. This package is ready to use immediately!
-
----
-
-## ⚡ 3-Step Quick Start
-
-### Step 1️⃣: Open This Folder in VS Code
-1. Right-click this folder
-2. Select "Open with Code"
-
-### Step 2️⃣: Open Terminal & Install
-1. In VS Code menu: **Terminal** → **New Terminal**
-2. Type this and press Enter:
-```bash
-npm install
-```
-✅ Wait 2-5 minutes. It will work perfectly!
-
-### Step 3️⃣: Start the App
-```bash
-npm start
-```
-🎊 Done! Your app is running!
+**If you're not a developer, don't worry!** This guide will help you step by step.
 
 ---
 
-## 📚 Which Guide Should I Read?
+## What is This Package?
 
-### 🆕 **New to Development?**
-**Read:** [`NON_DEVELOPER_GUIDE.md`](NON_DEVELOPER_GUIDE.md)
-- Simple explanations
-- No technical jargon
-- Step-by-step instructions
-- Troubleshooting for beginners
+This is your **HabitOwl app** updated to use **Unity Ads** instead of Google AdMob.
 
-### 🔧 **Want to Know What Was Fixed?**
-**Read:** [`FIX_DOCUMENTATION.md`](FIX_DOCUMENTATION.md)
-- Detailed explanation of the error
-- What packages were changed
-- How the fix works
-- Testing instructions
-
-### 🚀 **Ready to Deploy?**
-**Read:** [`DEPLOYMENT_GUIDE.md`](DEPLOYMENT_GUIDE.md)
-- Firebase setup
-- AdMob configuration
-- Building for mobile
-- Publishing to app stores
-
-### ⚡ **Need Quick Reference?**
-**Read:** [`QUICK_REFERENCE.md`](QUICK_REFERENCE.md)
-- Essential commands
-- Key file locations
-- Troubleshooting quick fixes
-- Checklists
-
-### 👨‍💻 **Technical Details?**
-**Read:** [`MIGRATION_GUIDE.md`](MIGRATION_GUIDE.md)
-- API changes
-- Code migration details
-- Technical documentation
+Everything else works exactly the same:
+- ✅ All your app features
+- ✅ Same design
+- ✅ Same functionality
+- ✅ Just different ad provider
 
 ---
 
-## ✅ What Was Fixed
+## Quick Decision: Which Guide Should You Follow?
 
-### ❌ The Error You Had:
-```
-npm error 404 Not Found - GET https://registry.npmjs.org/expo-ads-google-admob
-npm error 404 The requested resource 'expo-ads-google-admob@~3.0.0' could not be found
-```
+### 👉 Choose ONE guide below:
 
-### ✅ The Fix:
-- **Removed:** `expo-ads-google-admob` (deprecated package)
-- **Added:** `react-native-google-mobile-ads` (modern, maintained package)
-- **Updated:** All related code files
-- **Result:** npm install now works perfectly!
+1. **INSTALL.md** (5 minutes)
+   - Quick and simple
+   - For experienced users
+   - Just the essential steps
+
+2. **UNITY_ADS_SETUP_GUIDE.md** (30 minutes) ⭐ RECOMMENDED
+   - Complete step-by-step guide
+   - With screenshots descriptions
+   - Covers everything in detail
+   - Perfect for first-time users
+
+3. **CHECKLIST.md** (As you go)
+   - Follow along with any guide
+   - Check off each completed step
+   - Track your progress
 
 ---
 
-## 📦 Package Contents
+## The 3 Main Things You Need To Do
+
+### 1️⃣ Get Unity Ads Account & IDs (15 minutes)
+
+- Create account at https://dashboard.unity3d.com/
+- Create project: "HabitOwl"
+- Get your **Game IDs** (you'll need 2: Android + iOS)
+- Get your **Placement IDs** (you'll need 6: 3 for Android, 3 for iOS)
+
+**📖 Detailed instructions in:** `UNITY_ADS_SETUP_GUIDE.md` (Part 1)
+
+### 2️⃣ Configure Your App (2 minutes)
+
+- Open file: `src/config/unityAdsConfig.js`
+- Copy-paste your Game IDs and Placement IDs
+- Save the file
+
+**📖 Detailed instructions in:** `UNITY_ADS_SETUP_GUIDE.md` (Part 2)
+
+### 3️⃣ Install & Test (10 minutes)
+
+- Run: `npm install`
+- Run: `npm start`
+- Test the app
+
+**📖 Detailed instructions in:** `UNITY_ADS_SETUP_GUIDE.md` (Part 2 & 3)
+
+---
+
+## File Guide - Which Files Do What
+
+### 📱 Files YOU NEED TO UPDATE:
+
+**⚠️ MUST UPDATE:**
+- `src/config/unityAdsConfig.js` - Add your Unity Ads IDs here
+
+**Maybe Update (if needed):**
+- `src/config/firebase.js` - Your Firebase config (if fresh install)
+
+### 📚 Documentation Files (Read These):
+
+- `START_HERE_FIRST.md` - This file! Your starting point
+- `INSTALL.md` - Quick 5-minute installation guide
+- `UNITY_ADS_SETUP_GUIDE.md` - Complete detailed guide (BEST for non-developers)
+- `CHECKLIST.md` - Track your progress
+- `README_UNITY_ADS.md` - Technical overview
+- `WHAT_CHANGED.md` - Shows what's different from AdMob version
+
+### 🔧 Code Files (Don't Touch These):
+
+All other files work automatically! Including:
+- `App.js` - Main app file
+- `package.json` - Dependencies list
+- `src/services/UnityAdsService.js` - Unity Ads logic
+- `src/components/UnityBannerAd.js` - Banner ad component
+- All screens, navigation, etc.
+
+---
+
+## Your Success Path
 
 ```
-habitowl-app-fixed/
-│
-├── 📄 START_HERE_FIRST.md          ← YOU ARE HERE!
-│
-├── 📚 GUIDES FOR NON-DEVELOPERS:
-│   ├── NON_DEVELOPER_GUIDE.md      ← Start here if new to coding
-│   ├── QUICK_REFERENCE.md          ← Quick commands & tips
-│   └── SIMPLE_SETUP_GUIDE.md       ← Detailed setup steps
-│
-├── 📚 TECHNICAL DOCUMENTATION:
-│   ├── FIX_DOCUMENTATION.md        ← What was fixed & why
-│   ├── MIGRATION_GUIDE.md          ← Technical migration details
-│   └── IMPLEMENTATION_SUMMARY.md   ← App features overview
-│
-├── 📚 DEPLOYMENT GUIDES:
-│   ├── DEPLOYMENT_GUIDE.md         ← Full deployment instructions
-│   ├── QUICK_DEPLOYMENT_GUIDE.md   ← Quick deploy steps
-│   └── SECURITY_CHECKLIST.md       ← Security best practices
-│
-├── 🔧 CONFIGURATION FILES:
-│   ├── package.json                ← ✅ FIXED - Dependencies
-│   ├── app.json                    ← ✅ UPDATED - App config
-│   ├── firebase.json               ← Firebase hosting config
-│   └── eas.json                    ← Build configuration
-│
-├── 💻 SOURCE CODE:
-│   └── src/
-│       ├── components/             ← UI components (✅ AdBanner fixed)
-│       ├── screens/                ← App pages
-│       ├── services/               ← Backend (✅ AdService fixed)
-│       ├── navigation/             ← App navigation
-│       └── config/                 ← Firebase config (⚠️ needs your keys)
-│
-└── 🌐 PUBLIC FILES:
-    └── public/                     ← Privacy policy, terms, etc.
+START → Read Guide → Get Unity IDs → Configure App → Install → Test → Build → Launch
+  ↑         ↓              ↓              ↓            ↓        ↓       ↓        ↓
+ You    SETUP GUIDE    Unity Site    unityAdsConfig  npm   npm start  EAS    App Store
+        (30 min)       (15 min)      (2 min)       install (test)   Build   Submit
 ```
 
----
-
-## 🎯 Your Next Steps
-
-### Immediate (Do Now):
-1. ✅ Run `npm install` (should work perfectly!)
-2. ✅ Run `npm start` (test the app)
-3. ✅ Explore the app on your phone/browser
-
-### Before Deployment (Do Soon):
-4. ⚠️ Update Firebase config in `src/config/firebase.js`
-5. ⚠️ Add your email as admin in Firestore
-6. ⚠️ Add DeepSeek API key (for AI features)
-7. ⚠️ Update iOS AdMob IDs (if deploying to iOS)
-
-### For Launch (Do When Ready):
-8. 🚀 Build web version: `npm run build:web`
-9. 🚀 Deploy to Firebase: `firebase deploy`
-10. 🚀 Build mobile apps: `eas build -p android`
-11. 🚀 Submit to Google Play Store
+**Total Time: ~1-2 hours**
 
 ---
 
-## 💡 Important Notes
+## Common Questions Before You Start
 
-### ✅ What's Already Working:
-- All packages install correctly
-- AdMob ads work with test IDs
-- Android AdMob IDs are configured
-- All app features are functional
-- Firebase integration is ready
-- Navigation and UI work perfectly
+### "I've never done this before. Can I do it?"
 
-### ⚠️ What You Need to Configure:
-- Your Firebase project credentials
-- Your admin email in Firestore
-- DeepSeek API key for AI features
-- iOS AdMob IDs (if deploying to iOS)
+**YES!** The guides are written for non-developers. Just follow step by step.
 
-### 📱 Your AdMob IDs (Already Set):
+### "What if I make a mistake?"
+
+**Don't worry!** 
+- You can't break anything permanently
+- You have your old version as backup
+- All changes are reversible
+
+### "Do I need coding knowledge?"
+
+**No!** You just need to:
+- Create a Unity account
+- Copy some IDs
+- Paste them into a file
+- Run 2 simple commands
+
+### "What if I get stuck?"
+
+**Multiple resources available:**
+1. Read the troubleshooting section in any guide
+2. Check `WHAT_CHANGED.md` to understand what's different
+3. Use `CHECKLIST.md` to see what you might have missed
+4. All common problems are covered in the guides
+
+### "How long will this take?"
+
+**Breakdown:**
+- Unity account setup: 15 minutes
+- Getting IDs: 10 minutes
+- Configuring app: 2 minutes
+- Installation: 10 minutes
+- Testing: 15 minutes
+- **Total: ~1 hour** (first time)
+
+### "What if I want to go back to AdMob?"
+
+**Easy!** 
+- Keep your old folder as backup
+- Or download from your GitHub again
+- Swap them back if needed
+
+---
+
+## Ready to Start?
+
+### Step 1: Choose Your Guide
+
+**Recommended for non-developers:** 
+→ Open `UNITY_ADS_SETUP_GUIDE.md`
+
+**For quick installation:** 
+→ Open `INSTALL.md`
+
+### Step 2: Open the Checklist
+
+→ Open `CHECKLIST.md` in another window
+
+Check off items as you complete them!
+
+### Step 3: Follow the Guide
+
+Read carefully and follow each step.
+
+Don't skip steps!
+
+---
+
+## Important Reminders
+
+### ✅ DO:
+
+- Read instructions carefully
+- Follow steps in order
+- Save all IDs in a text file
+- Test after each major step
+- Ask for help if stuck
+
+### ❌ DON'T:
+
+- Skip steps
+- Make up IDs
+- Change other files
+- Panic if something doesn't work immediately
+- Give up - it's easier than it looks!
+
+---
+
+## What Happens After Setup?
+
+Once you complete the setup:
+
+1. **Development:**
+   - Your app runs with Unity Ads
+   - You can test on your device
+   - All features work normally
+
+2. **Building:**
+   - Create production build with `eas build`
+   - Same process as before
+   - Takes 15-30 minutes
+
+3. **Launching:**
+   - Submit to app stores (Google Play, App Store)
+   - Users get Unity Ads instead of AdMob
+   - Premium users still see no ads
+
+4. **Monitoring:**
+   - Check Unity Dashboard for revenue
+   - See ad impressions, clicks, earnings
+   - Usually higher than AdMob!
+
+---
+
+## Support Resources
+
+### In This Package:
+
+- `UNITY_ADS_SETUP_GUIDE.md` - Detailed guide
+- `INSTALL.md` - Quick guide
+- `CHECKLIST.md` - Progress tracker
+- `WHAT_CHANGED.md` - Changes from AdMob
+- `README_UNITY_ADS.md` - Technical details
+
+### Online Resources:
+
+- Unity Dashboard: https://dashboard.unity3d.com/
+- Unity Ads Docs: https://docs.unity.com/grow/levelplay
+- ironSource SDK: https://docs.unity.com/grow/levelplay/sdk/react
+
+---
+
+## Let's Begin! 🚀
+
+**Your Next Step:**
+
+1. Open: `UNITY_ADS_SETUP_GUIDE.md`
+2. Start with: "PART 1: Creating Unity Ads Account"
+3. Follow each step carefully
+4. Use `CHECKLIST.md` to track progress
+
+**Good luck!** You've got this! 💪
+
+---
+
+## Quick Reference Card
+
 ```
-Android App ID: ca-app-pub-2371616866592450~9516891462
-Banner Ad: ca-app-pub-2371616866592450/1677929899
-Interstitial Ad: ca-app-pub-2371616866592450/8051766556
-Rewarded Ad: ca-app-pub-2371616866592450/9388898951
+┌─────────────────────────────────────────────┐
+│  UNITY ADS QUICK REFERENCE                  │
+├─────────────────────────────────────────────┤
+│  1. Unity Dashboard:                        │
+│     https://dashboard.unity3d.com/          │
+│                                             │
+│  2. File to Update:                         │
+│     src/config/unityAdsConfig.js            │
+│                                             │
+│  3. Install Command:                        │
+│     npm install                             │
+│                                             │
+│  4. Start Command:                          │
+│     npm start                               │
+│                                             │
+│  5. Build Command:                          │
+│     npx eas build -p android --profile production │
+│                                             │
+│  6. Help Files:                             │
+│     - UNITY_ADS_SETUP_GUIDE.md (main)      │
+│     - INSTALL.md (quick)                    │
+│     - CHECKLIST.md (tracker)                │
+└─────────────────────────────────────────────┘
 ```
 
----
-
-## 🆘 Having Issues?
-
-### If npm install fails:
-```bash
-npm cache clean --force
-rm -rf node_modules package-lock.json
-npm install
-```
-
-### If you see module errors:
-```bash
-npm install
-npx expo start -c
-```
-
-### If you need help:
-1. Check the error message
-2. Look in the documentation files
-3. Search the error on Google
-4. Check [Expo Documentation](https://docs.expo.dev)
+**Save this for reference!** ⭐
 
 ---
 
-## 📊 App Features Reminder
-
-### Free Users (Ad-Supported):
-- ✅ Create up to 5 habits
-- ✅ Track daily progress
-- ✅ View statistics
-- ✅ Get notifications
-- 📺 See ads (your revenue!)
-
-### Premium Users ($4.99/month):
-- ✅ Unlimited habits
-- ✅ AI coaching
-- ✅ No ads
-- ✅ Advanced analytics
-
-### Revenue Potential:
-- **100 free users:** ~$100-200/month from ads
-- **50 premium users:** ~$250/month from subscriptions
-- **Total:** $350-450/month
-
----
-
-## 🎓 Learning Resources
-
-### For Beginners:
-- [React Native Tutorial](https://reactnative.dev/docs/tutorial)
-- [Expo Documentation](https://docs.expo.dev)
-- [JavaScript Basics](https://javascript.info)
-
-### For Firebase:
-- [Firebase Documentation](https://firebase.google.com/docs)
-- [Firestore Guide](https://firebase.google.com/docs/firestore)
-
-### For AdMob:
-- [AdMob Help Center](https://support.google.com/admob)
-- [AdMob Best Practices](https://support.google.com/admob/answer/6128877)
-
----
-
-## ✅ Quick Test Checklist
-
-After running `npm install` and `npm start`:
-
-- [ ] No errors during installation
-- [ ] App starts and shows QR code
-- [ ] Can open app on phone/browser
-- [ ] Home screen loads
-- [ ] Can create a habit
-- [ ] Test ads show "Test Ad" label
-- [ ] Statistics page works
-- [ ] Premium prompt shows for 6th habit
-
-If all checked ✅ - **YOU'RE READY TO GO!**
-
----
-
-## 🎊 Success!
-
-You now have a **fully working, production-ready app** with:
-- ✅ Fixed npm installation
-- ✅ Modern AdMob SDK
-- ✅ All features working
-- ✅ Complete documentation
-- ✅ Ready for deployment
-
-**Recommended reading order:**
-1. This file (done! ✅)
-2. NON_DEVELOPER_GUIDE.md (if new to development)
-3. SIMPLE_SETUP_GUIDE.md (for detailed setup)
-4. DEPLOYMENT_GUIDE.md (when ready to launch)
-
----
-
-## 🚀 Let's Get Started!
-
-Open your terminal in VS Code and run:
-```bash
-npm install
-```
-
-Then:
-```bash
-npm start
-```
-
-**That's it! Your app is running!** 🎉
-
----
-
-**Questions?** Check the documentation files!  
-**Stuck?** Read the troubleshooting sections!  
-**Ready to deploy?** Follow the DEPLOYMENT_GUIDE.md!
-
-**You've got this!** 💪
-
----
-
-**Version:** 2.1.0  
-**Status:** ✅ Fixed & Ready  
-**Last Updated:** October 2024
+**Version:** 2.3.0  
+**Last Updated:** 2025  
+**Made for:** Non-Developers 💚

@@ -15,10 +15,10 @@ import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 import HabitCard from '../components/HabitCard';
-import AdBanner from '../components/AdBanner';
+import UnityBannerAd from '../components/UnityBannerAd';
 import FirebaseService from '../services/FirebaseService';
 import NotificationService from '../services/NotificationService';
-import AdService from '../services/AdService';
+import unityAdsService from '../services/UnityAdsService';
 import AIService from '../services/AIService';
 
 const HomeScreen = ({ navigation }) => {
@@ -115,12 +115,13 @@ const HomeScreen = ({ navigation }) => {
         }
         
         // Show interstitial ad occasionally after habit completion
-        const shouldShowAd = await AdService.shouldShowInterstitialAfterAction('habit_complete');
-        if (shouldShowAd) {
-          setTimeout(() => {
-            AdService.showInterstitial('habit_completion');
-          }, 1000);
-        }
+        setTimeout(async () => {
+          try {
+            await unityAdsService.showInterstitialAd('habit_completion');
+          } catch (error) {
+            console.log('Ad not shown:', error);
+          }
+        }, 1000);
       } else {
         newCompletions.delete(habit.id);
       }
@@ -139,14 +140,6 @@ const HomeScreen = ({ navigation }) => {
 
   const handleCreateHabit = async () => {
     navigation.navigate('CreateHabit');
-    
-    // Show interstitial ad occasionally
-    const shouldShowAd = await AdService.shouldShowInterstitialAfterAction('habit_create');
-    if (shouldShowAd) {
-      setTimeout(() => {
-        AdService.showInterstitial('habit_creation');
-      }, 500);
-    }
   };
 
   const handleEditHabit = (habit) => {
@@ -189,7 +182,7 @@ const HomeScreen = ({ navigation }) => {
         
         <View style={styles.headerContent}>
           <Text style={styles.greeting}>
-            Good {getTimeOfDay()}, {FirebaseService.currentUser?.displayName || 'there'}! 👋
+            Good {getTimeOfDay()}, {FirebaseService.currentUser?.displayName || 'there'}! 
           </Text>
           
           {motivationalMessage && (
@@ -306,8 +299,8 @@ const HomeScreen = ({ navigation }) => {
           </>
         )}
 
-        {/* Ad Banner */}
-        <AdBanner placement="home_bottom" style={styles.adBanner} />
+        {/* Unity Banner Ad */}
+        <UnityBannerAd style={styles.adBanner} />
         
         {/* Bottom padding for FAB */}
         <View style={styles.bottomPadding} />
@@ -437,6 +430,7 @@ const styles = StyleSheet.create({
   },
   adBanner: {
     marginTop: 20,
+    marginBottom: 10,
   },
   bottomPadding: {
     height: 100,

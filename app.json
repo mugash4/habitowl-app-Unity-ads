@@ -2,14 +2,17 @@
   "expo": {
     "name": "HabitOwl",
     "slug": "habitowl",
-    "version": "2.2.1",
+    "version": "2.3.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#4f46e5"
+      "backgroundColor": "#ffffff"
+    },
+    "updates": {
+      "fallbackToCacheTimeout": 0
     },
     "assetBundlePatterns": [
       "**/*"
@@ -17,64 +20,45 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.habitowl.app",
-      "buildNumber": "1",
-      "config": {
-        "googleMobileAdsAppId": "ca-app-pub-2371616866592450~9516891462"
+      "infoPlist": {
+        "SKAdNetworkItems": [
+          {
+            "SKAdNetworkIdentifier": "su67r6k2v3.skadnetwork"
+          }
+        ],
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        },
+        "NSAdvertisingAttributionReportEndpoint": "https://postbacks-mobile.unity3d.com/v1/ios",
+        "NSUserTrackingUsageDescription": "This identifier will be used to deliver personalized ads to you."
       }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#4f46e5"
+        "backgroundColor": "#FFFFFF"
       },
       "package": "com.habitowl.app",
-      "versionCode": 4,
       "permissions": [
-        "NOTIFICATIONS",
-        "VIBRATE",
-        "RECEIVE_BOOT_COMPLETED",
-        "INTERNET",
-        "ACCESS_NETWORK_STATE"
+        "com.google.android.gms.permission.AD_ID",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE"
       ],
-      "config": {
-        "googleMobileAdsAppId": "ca-app-pub-2371616866592450~9516891462"
-      }
+      "versionCode": 1
     },
     "web": {
-      "favicon": "./assets/favicon.png",
-      "name": "HabitOwl - Smart Habit & Routine Builder App",
-      "shortName": "HabitOwl",
-      "lang": "en",
-      "scope": "/",
-      "themeColor": "#4f46e5",
-      "description": "Smart Habit & Routine Builder App - Build better habits with AI-powered coaching",
-      "dir": "auto",
-      "display": "standalone",
-      "orientation": "portrait",
-      "startUrl": "/",
-      "backgroundColor": "#ffffff"
+      "favicon": "./assets/favicon.png"
+    },
+    "notification": {
+      "icon": "./assets/notification-icon.png",
+      "color": "#4f46e5"
     },
     "plugins": [
-      [
-        "expo-font",
-        {
-          "fonts": []
-        }
-      ],
       [
         "expo-notifications",
         {
           "icon": "./assets/notification-icon.png",
-          "color": "#4f46e5",
-          "sounds": []
-        }
-      ],
-      [
-        "react-native-google-mobile-ads",
-        {
-          "androidAppId": "ca-app-pub-2371616866592450~9516891462",
-          "iosAppId": "ca-app-pub-2371616866592450~9516891462",
-          "userTrackingUsageDescription": "This identifier will be used to deliver personalized ads to you."
+          "color": "#4f46e5"
         }
       ],
       [
@@ -84,8 +68,10 @@
             "compileSdkVersion": 34,
             "targetSdkVersion": 34,
             "buildToolsVersion": "34.0.0",
-            "minSdkVersion": 23,
-            "kotlinVersion": "2.0.0"
+            "minSdkVersion": 21
+          },
+          "ios": {
+            "deploymentTarget": "13.4"
           }
         }
       ]
