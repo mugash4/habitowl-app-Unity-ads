@@ -16,6 +16,9 @@ let LevelPlayRewardedAd = null;
 let AdFormat = null;
 let IronSource = null;
 
+// SDK availability flag
+let sdkAvailable = false;
+
 // Try to import the SDK (only available in production builds)
 try {
   const ironSourceModule = require('ironsource-mediation');
@@ -26,9 +29,11 @@ try {
   LevelPlayRewardedAd = ironSourceModule.LevelPlayRewardedAd;
   AdFormat = ironSourceModule.AdFormat;
   IronSource = ironSourceModule.IronSource;
-  console.log('Unity Ads SDK loaded successfully');
+  sdkAvailable = true;
+  console.log('✅ Unity Ads SDK loaded successfully');
 } catch (error) {
-  console.log('Unity Ads SDK not available in this environment (normal for web/dev)');
+  console.log('ℹ️ Unity Ads SDK not available in this environment (normal for web/dev)');
+  console.log('Error details:', error.message);
 }
 
 class UnityAdsService {
@@ -47,6 +52,10 @@ class UnityAdsService {
     this.interstitialLoaded = false;
     this.rewardedLoaded = false;
     this.rewardCallback = null;
+    
+    // Initialization state
+    this.initializationAttempted = false;
+    this.initializationError = null;
   }
 
   /**
@@ -55,19 +64,30 @@ class UnityAdsService {
    */
   async initialize(userId = null) {
     try {
+      // Prevent multiple initialization attempts
+      if (this.initializationAttempted) {
+        this.log('Initialization already attempted');
+        return this.isInitialized;
+      }
+      
+      this.initializationAttempted = true;
+
       // Don't initialize on web platform
       if (Platform.OS === 'web') {
         this.log('Web platform detected, skipping Unity Ads initialization');
-        return;
+        return false;
       }
 
       // Check if SDK is available
-      if (!LevelPlay || !IronSource) {
-        this.log('Unity Ads SDK not available');
-        return;
+      if (!sdkAvailable || !LevelPlay || !IronSource) {
+        this.log('⚠️ Unity Ads SDK not available - Package may not be installed correctly');
+        this.log('This is normal in Expo Go or development builds');
+        this.log('For production: Build with EAS Build to include native modules');
+        this.initializationError = 'SDK not available';
+        return false;
       }
 
-      this.log('Initializing Unity Ads...');
+      this.log('🚀 Initializing Unity Ads...');
 
       // Load premium status
       await this.loadPremiumStatus();
@@ -81,15 +101,19 @@ class UnityAdsService {
       if (!gameId || gameId.includes('YOUR_')) {
         console.warn('⚠️ Unity Ads Game ID not configured!');
         console.warn('Please update src/config/unityAdsConfig.js with your actual Game IDs from Unity Dashboard');
-        return;
+        this.initializationError = 'Game ID not configured';
+        return false;
       }
+
+      this.log(`Game ID: ${gameId}`);
 
       // Enable debug mode in development
       if (UNITY_ADS_CONFIG.DEBUG_MODE && IronSource) {
         try {
-          IronSource.setAdaptersDebug(true);
+          await IronSource.setAdaptersDebug(true);
+          this.log('Debug mode enabled');
         } catch (e) {
-          this.log('Could not enable adapters debug:', e);
+          this.log('Could not enable adapters debug:', e.message);
         }
       }
 
@@ -104,6 +128,7 @@ class UnityAdsService {
       // Add user ID if provided
       if (userId) {
         initRequestBuilder.withUserId(userId);
+        this.log(`User ID: ${userId}`);
       }
 
       const initRequest = initRequestBuilder.build();
@@ -111,26 +136,40 @@ class UnityAdsService {
       // Set up initialization listener
       const initListener = {
         onInitFailed: (error) => {
-          this.log('Unity Ads initialization failed:', error);
+          this.log('❌ Unity Ads initialization failed:', error);
           this.isInitialized = false;
+          this.initializationError = error;
         },
         onInitSuccess: (configuration) => {
-          this.log('Unity Ads initialized successfully!', configuration);
+          this.log('✅ Unity Ads initialized successfully!');
+          this.log('Configuration:', JSON.stringify(configuration));
           this.isInitialized = true;
+          this.initializationError = null;
           
           // Setup ad units if not premium
           if (!this.isPremium) {
+            this.log('Setting up ad units (non-premium user)');
             this.setupAdUnits();
+          } else {
+            this.log('Premium user detected - ads disabled');
           }
         }
       };
 
       // Initialize the SDK
       await LevelPlay.init(initRequest, initListener);
+      
+      // Wait a bit for initialization to complete
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      return this.isInitialized;
 
     } catch (error) {
-      this.log('Error initializing Unity Ads:', error);
+      this.log('❌ Error initializing Unity Ads:', error);
+      this.log('Error stack:', error.stack);
       this.isInitialized = false;
+      this.initializationError = error.message;
+      return false;
     }
   }
 
@@ -139,8 +178,14 @@ class UnityAdsService {
    */
   setupAdUnits() {
     this.log('Setting up ad units...');
-    this.setupInterstitialAd();
-    this.setupRewardedAd();
+    
+    try {
+      this.setupInterstitialAd();
+      this.setupRewardedAd();
+      this.log('✅ Ad units setup complete');
+    } catch (error) {
+      this.log('❌ Error setting up ad units:', error);
+    }
   }
 
   /**
@@ -148,13 +193,16 @@ class UnityAdsService {
    */
   setupInterstitialAd() {
     try {
-      if (!LevelPlayInterstitialAd) return;
+      if (!LevelPlayInterstitialAd) {
+        this.log('⚠️ LevelPlayInterstitialAd not available');
+        return;
+      }
 
       const placementId = Platform.OS === 'ios'
         ? UNITY_ADS_CONFIG.IOS_INTERSTITIAL
         : UNITY_ADS_CONFIG.ANDROID_INTERSTITIAL;
 
-      this.log('Setting up interstitial ad with placement:', placementId);
+      this.log(`Setting up interstitial ad with placement: ${placementId}`);
 
       // Create interstitial ad instance
       this.interstitialAd = LevelPlayInterstitialAd.createInterstitialAd(placementId);
@@ -162,30 +210,33 @@ class UnityAdsService {
       // Set up listeners
       this.interstitialAd.setListener({
         onAdLoaded: (adInfo) => {
-          this.log('Interstitial ad loaded', adInfo);
+          this.log('✅ Interstitial ad loaded', adInfo);
           this.interstitialLoaded = true;
         },
         onAdLoadFailed: (error) => {
-          this.log('Interstitial ad failed to load:', error);
+          this.log('❌ Interstitial ad failed to load:', error);
           this.interstitialLoaded = false;
           // Try to reload after delay
-          setTimeout(() => this.loadInterstitialAd(), 5000);
+          setTimeout(() => {
+            this.log('Retrying interstitial ad load...');
+            this.loadInterstitialAd();
+          }, 10000);
         },
         onAdDisplayed: (adInfo) => {
-          this.log('Interstitial ad displayed', adInfo);
+          this.log('👁️ Interstitial ad displayed', adInfo);
           this.trackAdImpression('interstitial');
         },
         onAdDisplayFailed: (error) => {
-          this.log('Interstitial ad display failed:', error);
+          this.log('❌ Interstitial ad display failed:', error);
           this.interstitialLoaded = false;
           // Load next ad
           this.loadInterstitialAd();
         },
         onAdClicked: (adInfo) => {
-          this.log('Interstitial ad clicked', adInfo);
+          this.log('👆 Interstitial ad clicked', adInfo);
         },
         onAdClosed: (adInfo) => {
-          this.log('Interstitial ad closed', adInfo);
+          this.log('🚪 Interstitial ad closed', adInfo);
           this.interstitialLoaded = false;
           // Load next ad
           setTimeout(() => this.loadInterstitialAd(), 1000);
@@ -196,7 +247,7 @@ class UnityAdsService {
       this.loadInterstitialAd();
 
     } catch (error) {
-      this.log('Error setting up interstitial ad:', error);
+      this.log('❌ Error setting up interstitial ad:', error);
     }
   }
 
@@ -205,13 +256,16 @@ class UnityAdsService {
    */
   setupRewardedAd() {
     try {
-      if (!LevelPlayRewardedAd) return;
+      if (!LevelPlayRewardedAd) {
+        this.log('⚠️ LevelPlayRewardedAd not available');
+        return;
+      }
 
       const placementId = Platform.OS === 'ios'
         ? UNITY_ADS_CONFIG.IOS_REWARDED
         : UNITY_ADS_CONFIG.ANDROID_REWARDED;
 
-      this.log('Setting up rewarded ad with placement:', placementId);
+      this.log(`Setting up rewarded ad with placement: ${placementId}`);
 
       // Create rewarded ad instance
       this.rewardedAd = LevelPlayRewardedAd.createRewardedAd(placementId);
@@ -219,35 +273,38 @@ class UnityAdsService {
       // Set up listeners
       this.rewardedAd.setListener({
         onAdLoaded: (adInfo) => {
-          this.log('Rewarded ad loaded', adInfo);
+          this.log('✅ Rewarded ad loaded', adInfo);
           this.rewardedLoaded = true;
         },
         onAdLoadFailed: (error) => {
-          this.log('Rewarded ad failed to load:', error);
+          this.log('❌ Rewarded ad failed to load:', error);
           this.rewardedLoaded = false;
           // Try to reload after delay
-          setTimeout(() => this.loadRewardedAd(), 5000);
+          setTimeout(() => {
+            this.log('Retrying rewarded ad load...');
+            this.loadRewardedAd();
+          }, 10000);
         },
         onAdDisplayed: (adInfo) => {
-          this.log('Rewarded ad displayed', adInfo);
+          this.log('👁️ Rewarded ad displayed', adInfo);
         },
         onAdDisplayFailed: (error) => {
-          this.log('Rewarded ad display failed:', error);
+          this.log('❌ Rewarded ad display failed:', error);
           this.rewardedLoaded = false;
           // Load next ad
           this.loadRewardedAd();
         },
         onAdClicked: (adInfo) => {
-          this.log('Rewarded ad clicked', adInfo);
+          this.log('👆 Rewarded ad clicked', adInfo);
         },
         onAdClosed: (adInfo) => {
-          this.log('Rewarded ad closed', adInfo);
+          this.log('🚪 Rewarded ad closed', adInfo);
           this.rewardedLoaded = false;
           // Load next ad
           setTimeout(() => this.loadRewardedAd(), 1000);
         },
         onAdRewarded: (placement, reward) => {
-          this.log('User rewarded:', reward);
+          this.log('🎁 User rewarded:', reward);
           this.trackAdImpression('rewarded');
           
           // Call reward callback if set
@@ -262,7 +319,7 @@ class UnityAdsService {
       this.loadRewardedAd();
 
     } catch (error) {
-      this.log('Error setting up rewarded ad:', error);
+      this.log('❌ Error setting up rewarded ad:', error);
     }
   }
 
@@ -270,13 +327,16 @@ class UnityAdsService {
    * Load Interstitial Ad
    */
   loadInterstitialAd() {
-    if (!this.shouldShowAds() || !this.interstitialAd) return;
+    if (!this.shouldShowAds() || !this.interstitialAd) {
+      this.log('Skipping interstitial load - ads disabled or instance not available');
+      return;
+    }
 
     try {
-      this.log('Loading interstitial ad...');
+      this.log('📥 Loading interstitial ad...');
       this.interstitialAd.loadAd();
     } catch (error) {
-      this.log('Error loading interstitial ad:', error);
+      this.log('❌ Error loading interstitial ad:', error);
     }
   }
 
@@ -285,36 +345,45 @@ class UnityAdsService {
    */
   async showInterstitialAd(context = 'general') {
     if (!this.shouldShowAds()) {
-      this.log('Ads disabled (premium user or web platform)');
+      this.log('Ads disabled (premium user, web platform, or not initialized)');
       return false;
     }
 
-    if (!this.interstitialAd || !this.interstitialLoaded) {
-      this.log('Interstitial ad not ready');
+    if (!this.interstitialAd) {
+      this.log('⚠️ Interstitial ad instance not available');
+      return false;
+    }
+
+    if (!this.interstitialLoaded) {
+      this.log('⚠️ Interstitial ad not ready yet');
+      // Try to load it
+      this.loadInterstitialAd();
       return false;
     }
 
     // Check cooldown
     const now = Date.now();
     if (now - this.lastInterstitialTime < UNITY_ADS_CONFIG.INTERSTITIAL_COOLDOWN) {
-      this.log('Interstitial ad on cooldown');
+      const remainingTime = Math.ceil((UNITY_ADS_CONFIG.INTERSTITIAL_COOLDOWN - (now - this.lastInterstitialTime)) / 1000);
+      this.log(`⏳ Interstitial ad on cooldown (${remainingTime}s remaining)`);
       return false;
     }
 
     // Check session limit
     if (this.sessionInterstitialCount >= UNITY_ADS_CONFIG.MAX_INTERSTITIALS_PER_SESSION) {
-      this.log('Max interstitials per session reached');
+      this.log('⚠️ Max interstitials per session reached');
       return false;
     }
 
     try {
-      this.log('Showing interstitial ad...');
+      this.log(`📺 Showing interstitial ad (context: ${context})...`);
       await this.interstitialAd.showAd(context);
       this.lastInterstitialTime = now;
       this.sessionInterstitialCount++;
+      this.log(`✅ Interstitial ad shown (${this.sessionInterstitialCount}/${UNITY_ADS_CONFIG.MAX_INTERSTITIALS_PER_SESSION} this session)`);
       return true;
     } catch (error) {
-      this.log('Error showing interstitial ad:', error);
+      this.log('❌ Error showing interstitial ad:', error);
       return false;
     }
   }
@@ -323,13 +392,16 @@ class UnityAdsService {
    * Load Rewarded Ad
    */
   loadRewardedAd() {
-    if (!this.isInitialized || !this.rewardedAd) return;
+    if (!this.isInitialized || !this.rewardedAd) {
+      this.log('Skipping rewarded load - not initialized or instance not available');
+      return;
+    }
 
     try {
-      this.log('Loading rewarded ad...');
+      this.log('📥 Loading rewarded ad...');
       this.rewardedAd.loadAd();
     } catch (error) {
-      this.log('Error loading rewarded ad:', error);
+      this.log('❌ Error loading rewarded ad:', error);
     }
   }
 
@@ -338,12 +410,19 @@ class UnityAdsService {
    */
   async showRewardedAd(onReward = null) {
     if (!this.isInitialized) {
-      this.log('Unity Ads not initialized');
+      this.log('⚠️ Unity Ads not initialized');
       return false;
     }
 
-    if (!this.rewardedAd || !this.rewardedLoaded) {
-      this.log('Rewarded ad not ready');
+    if (!this.rewardedAd) {
+      this.log('⚠️ Rewarded ad instance not available');
+      return false;
+    }
+
+    if (!this.rewardedLoaded) {
+      this.log('⚠️ Rewarded ad not ready yet');
+      // Try to load it
+      this.loadRewardedAd();
       return false;
     }
 
@@ -351,11 +430,12 @@ class UnityAdsService {
       // Store reward callback
       this.rewardCallback = onReward;
       
-      this.log('Showing rewarded ad...');
+      this.log('📺 Showing rewarded ad...');
       await this.rewardedAd.showAd('reward_screen');
+      this.log('✅ Rewarded ad shown');
       return true;
     } catch (error) {
-      this.log('Error showing rewarded ad:', error);
+      this.log('❌ Error showing rewarded ad:', error);
       this.rewardCallback = null;
       return false;
     }
@@ -418,7 +498,16 @@ class UnityAdsService {
    * Check if ads should be shown
    */
   shouldShowAds() {
-    return this.isInitialized && !this.isPremium && Platform.OS !== 'web';
+    const should = this.isInitialized && !this.isPremium && Platform.OS !== 'web' && sdkAvailable;
+    if (!should) {
+      const reasons = [];
+      if (!this.isInitialized) reasons.push('not initialized');
+      if (this.isPremium) reasons.push('premium user');
+      if (Platform.OS === 'web') reasons.push('web platform');
+      if (!sdkAvailable) reasons.push('SDK not available');
+      this.log(`Ads disabled: ${reasons.join(', ')}`);
+    }
+    return should;
   }
 
   /**
@@ -443,7 +532,7 @@ class UnityAdsService {
       }
 
       await AsyncStorage.setItem('ad_impressions', JSON.stringify(impressionArray));
-      this.log(`Ad impression tracked: ${adType}`);
+      this.log(`📊 Ad impression tracked: ${adType}`);
     } catch (error) {
       this.log('Error tracking ad impression:', error);
     }
@@ -476,6 +565,30 @@ class UnityAdsService {
   }
 
   /**
+   * Get initialization status and diagnostics
+   */
+  getStatus() {
+    return {
+      isInitialized: this.isInitialized,
+      initializationAttempted: this.initializationAttempted,
+      initializationError: this.initializationError,
+      isPremium: this.isPremium,
+      sdkAvailable: sdkAvailable,
+      platform: Platform.OS,
+      interstitialLoaded: this.interstitialLoaded,
+      rewardedLoaded: this.rewardedLoaded,
+      shouldShowAds: this.shouldShowAds(),
+      sessionInterstitialCount: this.sessionInterstitialCount,
+      config: {
+        gameId: Platform.OS === 'ios' ? UNITY_ADS_CONFIG.IOS_GAME_ID : UNITY_ADS_CONFIG.ANDROID_GAME_ID,
+        bannerPlacement: Platform.OS === 'ios' ? UNITY_ADS_CONFIG.IOS_BANNER : UNITY_ADS_CONFIG.ANDROID_BANNER,
+        interstitialPlacement: Platform.OS === 'ios' ? UNITY_ADS_CONFIG.IOS_INTERSTITIAL : UNITY_ADS_CONFIG.ANDROID_INTERSTITIAL,
+        rewardedPlacement: Platform.OS === 'ios' ? UNITY_ADS_CONFIG.IOS_REWARDED : UNITY_ADS_CONFIG.ANDROID_REWARDED,
+      }
+    };
+  }
+
+  /**
    * Logging helper
    */
   log(...args) {
@@ -485,7 +598,7 @@ class UnityAdsService {
   }
 
   /**
-   * Get initialization status
+   * Get initialization status (legacy)
    */
   getInitializationStatus() {
     return this.isInitialized;

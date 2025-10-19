@@ -3,37 +3,87 @@
  * This plugin configures the native iOS and Android projects for Unity Ads
  */
 
-const { withAppBuildGradle, withProjectBuildGradle, withInfoPlist } = require('@expo/config-plugins');
+const { 
+  withAppBuildGradle, 
+  withProjectBuildGradle, 
+  withInfoPlist,
+  withMainApplication 
+} = require('@expo/config-plugins');
 
 /**
- * Main plugin function
+ * Add IronSource to Android app/build.gradle
  */
-const withIronSource = (config) => {
-  // Configure Android
-  config = withProjectBuildGradle(config, (config) => {
-    if (!config.modResults.contents.includes('maven { url "https://android-sdk.is.com/" }')) {
-      config.modResults.contents = config.modResults.contents.replace(
-        /allprojects\s*{[\s\S]*?repositories\s*{/,
-        `$&
-        maven { url "https://android-sdk.is.com/" }`
-      );
-    }
-    return config;
-  });
+const withAppBuildGradleConfig = (config) => {
+  return withAppBuildGradle(config, (config) => {
+    let buildGradle = config.modResults.contents;
 
-  config = withAppBuildGradle(config, (config) => {
-    if (!config.modResults.contents.includes('multiDexEnabled true')) {
-      config.modResults.contents = config.modResults.contents.replace(
+    // Add multiDex if not present
+    if (!buildGradle.includes('multiDexEnabled true')) {
+      buildGradle = buildGradle.replace(
         /defaultConfig\s*{/,
         `defaultConfig {
         multiDexEnabled true`
       );
     }
+
+    // Add IronSource dependencies in dependencies block if not present
+    if (!buildGradle.includes('com.ironsource.sdk:mediationsdk')) {
+      const dependenciesMatch = buildGradle.match(/dependencies\s*{/);
+      if (dependenciesMatch) {
+        const insertPosition = buildGradle.indexOf(dependenciesMatch[0]) + dependenciesMatch[0].length;
+        const ironSourceDeps = `
+    // IronSource SDK
+    implementation 'com.ironsource.sdk:mediationsdk:8.5.0'
+    
+    // Google Play Services (required for IronSource)
+    implementation 'com.google.android.gms:play-services-appset:16.1.0'
+    implementation 'com.google.android.gms:play-services-ads-identifier:18.1.0'
+    implementation 'com.google.android.gms:play-services-basement:18.4.0'
+`;
+        buildGradle = 
+          buildGradle.slice(0, insertPosition) + 
+          ironSourceDeps + 
+          buildGradle.slice(insertPosition);
+      }
+    }
+
+    config.modResults.contents = buildGradle;
     return config;
   });
+};
 
-  // Configure iOS
-  config = withInfoPlist(config, (config) => {
+/**
+ * Add IronSource Maven repository to Android project/build.gradle
+ */
+const withProjectBuildGradleConfig = (config) => {
+  return withProjectBuildGradle(config, (config) => {
+    let buildGradle = config.modResults.contents;
+
+    // Add IronSource Maven repository if not present
+    if (!buildGradle.includes('android-sdk.is.com')) {
+      // Find allprojects > repositories block
+      const allProjectsMatch = buildGradle.match(/allprojects\s*{[\s\S]*?repositories\s*{/);
+      if (allProjectsMatch) {
+        const insertPosition = buildGradle.indexOf(allProjectsMatch[0]) + allProjectsMatch[0].length;
+        const ironSourceRepo = `
+        maven { url "https://android-sdk.is.com/" }`;
+        buildGradle = 
+          buildGradle.slice(0, insertPosition) + 
+          ironSourceRepo + 
+          buildGradle.slice(insertPosition);
+      }
+    }
+
+    config.modResults.contents = buildGradle;
+    return config;
+  });
+};
+
+/**
+ * Configure iOS Info.plist
+ */
+const withInfoPlistConfig = (config) => {
+  return withInfoPlist(config, (config) => {
     // Add SKAdNetwork identifiers for Unity Ads
     if (!config.modResults.SKAdNetworkItems) {
       config.modResults.SKAdNetworkItems = [];
@@ -124,7 +174,22 @@ const withIronSource = (config) => {
 
     return config;
   });
+};
 
+/**
+ * Main plugin function
+ */
+const withIronSource = (config) => {
+  console.log('🔧 Applying IronSource configuration...');
+  
+  // Configure Android
+  config = withProjectBuildGradleConfig(config);
+  config = withAppBuildGradleConfig(config);
+  
+  // Configure iOS
+  config = withInfoPlistConfig(config);
+  
+  console.log('✅ IronSource configuration applied');
   return config;
 };
 
