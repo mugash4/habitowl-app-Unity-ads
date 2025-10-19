@@ -160,19 +160,40 @@ const AuthScreen = ({ navigation }) => {
       console.log('Google loading state set to true');
       
       // Check if Google Play Services are available
+      console.log('Checking Google Play Services...');
       await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      console.log('Google Play Services available!');
       
       // Sign in with Google
+      console.log('Initiating Google Sign-In...');
       const userInfo = await GoogleSignin.signIn();
-      console.log('Google Sign-In successful:', userInfo);
+      console.log('Google Sign-In successful!');
+      console.log('User Info:', JSON.stringify(userInfo, null, 2));
       
-      // Get the ID token
-      const idToken = userInfo.idToken;
+      // Get the ID token - try multiple sources
+      const idToken = userInfo.idToken || userInfo.data?.idToken;
+      
+      console.log('ID Token extracted:', idToken ? 'Yes (length: ' + idToken.length + ')' : 'No - NULL or UNDEFINED');
       
       if (!idToken) {
-        throw new Error('Failed to get ID token from Google');
+        console.error('CRITICAL ERROR: No ID Token received from Google');
+        console.error('This usually means:');
+        console.error('1. SHA-1 certificate is not registered in Firebase Console');
+        console.error('2. Wrong webClientId is configured');
+        console.error('3. Google Services JSON file is outdated');
+        console.error('User Info Object:', userInfo);
+        
+        throw new Error(
+          'Failed to get ID token from Google.\n\n' +
+          'SOLUTION:\n' +
+          '1. Get your APK SHA-1 certificate\n' +
+          '2. Add it to Firebase Console\n' +
+          '3. Download new google-services.json\n' +
+          '4. Rebuild your app'
+        );
       }
       
+      console.log('Authenticating with Firebase...');
       // Sign in to Firebase with the Google credential
       await FirebaseService.signInWithGoogleCredential(idToken);
       console.log('Firebase authentication successful!');
@@ -180,7 +201,10 @@ const AuthScreen = ({ navigation }) => {
       Alert.alert('Success', 'Signed in with Google successfully!');
       
     } catch (error) {
-      console.error('Google auth error:', error);
+      console.error('=== Google Auth Error ===');
+      console.error('Error Code:', error.code);
+      console.error('Error Message:', error.message);
+      console.error('Full Error:', error);
       
       // Handle specific error cases
       if (error.code === 'SIGN_IN_CANCELLED') {
