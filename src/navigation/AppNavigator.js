@@ -108,15 +108,12 @@ const AppNavigator = () => {
 
   const initializeApp = async () => {
     try {
-      // Initialize services
       await AdService.initialize();
       await NotificationService.initialize();
 
-      // Listen for auth state changes
       const unsubscribe = FirebaseService.onAuthStateChanged(async (user) => {
         setIsAuthenticated(!!user);
         
-        // Check admin status
         if (user) {
           const adminStatus = await AdminService.checkAdminStatus(user.email);
           setIsAdmin(adminStatus);
@@ -135,7 +132,6 @@ const AppNavigator = () => {
   };
 
   if (!isInitialized) {
-    // You could show a splash screen here
     return null;
   }
 
@@ -149,18 +145,18 @@ const AppNavigator = () => {
           }}
         >
           {isAuthenticated ? (
-            // User is signed in
             <>
               <Stack.Screen 
                 name="Main" 
                 component={MainTabNavigator}
                 options={{ headerShown: false }}
               />
+              {/* FIXED: headerShown set to false to prevent double back button */}
               <Stack.Screen 
                 name="CreateHabit" 
                 component={CreateHabitScreen}
                 options={{
-                  headerShown: true,
+                  headerShown: false,
                   presentation: 'modal',
                   gestureEnabled: true,
                   cardOverlayEnabled: true,
@@ -170,7 +166,7 @@ const AppNavigator = () => {
                 name="EditHabit" 
                 component={EditHabitScreen}
                 options={{
-                  headerShown: true,
+                  headerShown: false,
                   presentation: 'modal',
                   gestureEnabled: true,
                   cardOverlayEnabled: true,
@@ -180,7 +176,7 @@ const AppNavigator = () => {
                 name="Premium" 
                 component={PremiumScreen}
                 options={{
-                  headerShown: true,
+                  headerShown: false,
                   presentation: 'modal',
                   gestureEnabled: true,
                   cardOverlayEnabled: true,
@@ -191,7 +187,7 @@ const AppNavigator = () => {
                   name="Admin" 
                   component={AdminScreen}
                   options={{
-                    headerShown: true,
+                    headerShown: false,
                     presentation: 'modal',
                     gestureEnabled: true,
                     cardOverlayEnabled: true,
@@ -202,7 +198,7 @@ const AppNavigator = () => {
                 name="About" 
                 component={AboutScreen}
                 options={{
-                  headerShown: true,
+                  headerShown: false,
                   presentation: 'modal',
                   gestureEnabled: true,
                   cardOverlayEnabled: true,
@@ -210,7 +206,6 @@ const AppNavigator = () => {
               />
             </>
           ) : (
-            // User is signed out
             <Stack.Screen name="Auth" component={AuthScreen} />
           )}
         </Stack.Navigator>

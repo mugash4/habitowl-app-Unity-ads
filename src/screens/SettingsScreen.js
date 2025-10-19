@@ -28,7 +28,7 @@ import SecureAIService from '../services/SecureAIService';
 import NotificationService from '../services/NotificationService';
 import ContactSupport from '../components/ContactSupport';
 import PromoOfferBanner from '../components/PromoOfferBanner';
-import AdminService from '../services/AdminService'; // Fixed import path
+import AdminService from '../services/AdminService';
 
 const SettingsScreen = ({ navigation }) => {
   const [userStats, setUserStats] = useState(null);
@@ -53,7 +53,6 @@ const SettingsScreen = ({ navigation }) => {
         const adminStatus = await AdminService.checkAdminStatus(user.email);
         setIsAdmin(adminStatus);
         
-        // Auto-set premium for admin users
         if (adminStatus && !isPremium) {
           await FirebaseService.updateUserPremiumStatus(true);
           setIsPremium(true);
@@ -119,7 +118,6 @@ const SettingsScreen = ({ navigation }) => {
         title: 'Join me on HabitOwl!'
       });
 
-      // Track sharing
       await FirebaseService.trackEvent('app_shared', {
         method: 'native_share',
         referral_code: referralCode
@@ -140,7 +138,7 @@ const SettingsScreen = ({ navigation }) => {
       setShowReferralDialog(false);
       setReferralCode('');
       Alert.alert('Success!', 'Referral code applied successfully!');
-      loadUserData(); // Refresh user data
+      loadUserData();
     } catch (error) {
       Alert.alert('Error', error.message);
     }
@@ -170,12 +168,16 @@ const SettingsScreen = ({ navigation }) => {
     Linking.openURL('https://habitowl-app.web.app/terms');
   };
 
+  // FIXED: Navigate to Statistics tab instead of pushing new screen
+  const handleStatisticsPress = () => {
+    navigation.navigate('Statistics');
+  };
+
   const toggleNotifications = async (enabled) => {
     setNotifications(enabled);
     if (!enabled) {
       await NotificationService.cancelAllNotifications();
     }
-    // You would typically save this preference
   };
 
   const renderUserInfo = () => {
@@ -234,17 +236,15 @@ const SettingsScreen = ({ navigation }) => {
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       {renderUserInfo()}
 
-      {/* Promo Offers */}
       <PromoOfferBanner />
 
-      {/* Premium Section */}
       {!isPremium && !isAdmin && (
         <Card style={styles.card}>
           <List.Item
             title="Upgrade to Premium"
             description="Remove ads, unlimited habits, AI coaching"
             left={(props) => <List.Icon {...props} icon="crown" color="#f59e0b" />}
-            right={(props) => <List.Icon {...props} icon="chevron-right" color="#ffffff" />}
+            right={(props) => <List.Icon {...props} icon="chevron-right" />}
             onPress={handlePremiumUpgrade}
             titleStyle={styles.listItemTitle}
             descriptionStyle={styles.listItemDescription}
@@ -252,14 +252,13 @@ const SettingsScreen = ({ navigation }) => {
         </Card>
       )}
 
-      {/* AI Settings */}
       <Card style={styles.card}>
         <List.Subheader style={styles.subheader}>AI & Personalization</List.Subheader>
         
         <List.Item
           title="AI Provider"
           description={`Currently using: ${apiProvider.toUpperCase()}`}
-          left={(props) => <List.Icon {...props} icon="robot" color="#ffffff" />}
+          left={(props) => <List.Icon {...props} icon="robot" />}
           titleStyle={styles.listItemTitle}
           descriptionStyle={styles.listItemDescription}
         />
@@ -267,7 +266,7 @@ const SettingsScreen = ({ navigation }) => {
         <List.Item
           title="Smart Coaching"
           description="Powered by advanced AI"
-          left={(props) => <List.Icon {...props} icon="brain" color="#ffffff" />}
+          left={(props) => <List.Icon {...props} icon="brain" />}
           titleStyle={styles.listItemTitle}
           descriptionStyle={styles.listItemDescription}
         />
@@ -277,7 +276,7 @@ const SettingsScreen = ({ navigation }) => {
             title="Admin Panel"
             description="Manage app settings and API keys"
             left={(props) => <List.Icon {...props} icon="shield-account" color="#ef4444" />}
-            right={(props) => <List.Icon {...props} icon="chevron-right" color="#ffffff" />}
+            right={(props) => <List.Icon {...props} icon="chevron-right" />}
             onPress={handleAdminPress}
             titleStyle={styles.listItemTitle}
             descriptionStyle={styles.listItemDescription}
@@ -285,14 +284,13 @@ const SettingsScreen = ({ navigation }) => {
         )}
       </Card>
 
-      {/* Social Features */}
       <Card style={styles.card}>
         <List.Subheader style={styles.subheader}>Social & Sharing</List.Subheader>
         
         <List.Item
           title="Share HabitOwl"
           description="Invite friends and earn rewards"
-          left={(props) => <List.Icon {...props} icon="share" color="#ffffff" />}
+          left={(props) => <List.Icon {...props} icon="share" />}
           onPress={handleShareApp}
           titleStyle={styles.listItemTitle}
           descriptionStyle={styles.listItemDescription}
@@ -301,7 +299,7 @@ const SettingsScreen = ({ navigation }) => {
         <List.Item
           title="Enter Referral Code"
           description="Got a code from a friend?"
-          left={(props) => <List.Icon {...props} icon="ticket" color="#ffffff" />}
+          left={(props) => <List.Icon {...props} icon="ticket" />}
           onPress={() => setShowReferralDialog(true)}
           titleStyle={styles.listItemTitle}
           descriptionStyle={styles.listItemDescription}
@@ -311,7 +309,7 @@ const SettingsScreen = ({ navigation }) => {
           <List.Item
             title="Your Referral Code"
             description={userStats.referralCode}
-            left={(props) => <List.Icon {...props} icon="card-text" color="#ffffff" />}
+            left={(props) => <List.Icon {...props} icon="card-text" />}
             right={(props) => (
               <Button
                 compact
@@ -328,14 +326,13 @@ const SettingsScreen = ({ navigation }) => {
         )}
       </Card>
 
-      {/* App Settings */}
       <Card style={styles.card}>
         <List.Subheader style={styles.subheader}>App Settings</List.Subheader>
         
         <List.Item
           title="Notifications"
           description="Habit reminders and motivational messages"
-          left={(props) => <List.Icon {...props} icon="bell" color="#ffffff" />}
+          left={(props) => <List.Icon {...props} icon="bell" />}
           right={() => (
             <Switch
               value={notifications}
@@ -347,26 +344,26 @@ const SettingsScreen = ({ navigation }) => {
           descriptionStyle={styles.listItemDescription}
         />
 
+        {/* FIXED: Changed navigation to use tab navigation */}
         <List.Item
           title="Statistics"
           description="View your habit analytics"
-          left={(props) => <List.Icon {...props} icon="chart-line" color="#ffffff" />}
-          right={(props) => <List.Icon {...props} icon="chevron-right" color="#ffffff" />}
-          onPress={() => navigation.navigate('Statistics')}
+          left={(props) => <List.Icon {...props} icon="chart-line" />}
+          right={(props) => <List.Icon {...props} icon="chevron-right" />}
+          onPress={handleStatisticsPress}
           titleStyle={styles.listItemTitle}
           descriptionStyle={styles.listItemDescription}
         />
       </Card>
 
-      {/* Support & Legal */}
       <Card style={styles.card}>
         <List.Subheader style={styles.subheader}>Support & Legal</List.Subheader>
         
         <List.Item
           title="Contact Support"
           description="Get help or report issues"
-          left={(props) => <List.Icon {...props} icon="help-circle" color="#ffffff" />}
-          right={(props) => <List.Icon {...props} icon="chevron-right" color="#ffffff" />}
+          left={(props) => <List.Icon {...props} icon="help-circle" />}
+          right={(props) => <List.Icon {...props} icon="chevron-right" />}
           onPress={handleContactSupport}
           titleStyle={styles.listItemTitle}
           descriptionStyle={styles.listItemDescription}
@@ -375,8 +372,8 @@ const SettingsScreen = ({ navigation }) => {
         <List.Item
           title="About HabitOwl"
           description="Learn more about the app"
-          left={(props) => <List.Icon {...props} icon="information" color="#ffffff" />}
-          right={(props) => <List.Icon {...props} icon="chevron-right" color="#ffffff" />}
+          left={(props) => <List.Icon {...props} icon="information" />}
+          right={(props) => <List.Icon {...props} icon="chevron-right" />}
           onPress={handleAboutPress}
           titleStyle={styles.listItemTitle}
           descriptionStyle={styles.listItemDescription}
@@ -384,14 +381,14 @@ const SettingsScreen = ({ navigation }) => {
 
         <List.Item
           title="Privacy Policy"
-          left={(props) => <List.Icon {...props} icon="shield-account" color="#ffffff" />}
+          left={(props) => <List.Icon {...props} icon="shield-account" />}
           onPress={handlePrivacyPolicy}
           titleStyle={styles.listItemTitle}
         />
 
         <List.Item
           title="Terms of Service"
-          left={(props) => <List.Icon {...props} icon="file-document" color="#ffffff" />}
+          left={(props) => <List.Icon {...props} icon="file-document" />}
           onPress={handleTermsOfService}
           titleStyle={styles.listItemTitle}
         />
@@ -399,13 +396,12 @@ const SettingsScreen = ({ navigation }) => {
         <List.Item
           title="App Version"
           description="2.3.0"
-          left={(props) => <List.Icon {...props} icon="information" color="#ffffff" />}
+          left={(props) => <List.Icon {...props} icon="information" />}
           titleStyle={styles.listItemTitle}
           descriptionStyle={styles.listItemDescription}
         />
       </Card>
 
-      {/* Sign Out */}
       <Card style={styles.card}>
         <List.Item
           title="Sign Out"
@@ -415,14 +411,12 @@ const SettingsScreen = ({ navigation }) => {
         />
       </Card>
 
-      {/* Contact Support Modal */}
       <Portal>
         <Dialog visible={showContactSupport} onDismiss={() => setShowContactSupport(false)}>
           <ContactSupport onClose={() => setShowContactSupport(false)} />
         </Dialog>
       </Portal>
 
-      {/* Referral Code Dialog */}
       <Portal>
         <Dialog visible={showReferralDialog} onDismiss={() => setShowReferralDialog(false)}>
           <Dialog.Title>Enter Referral Code</Dialog.Title>

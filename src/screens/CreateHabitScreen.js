@@ -54,7 +54,6 @@ const CreateHabitScreen = ({ navigation, route }) => {
   const timeOptions = ['5 min', '10 min', '15 min', '30 min', '45 min', '1 hour', '2 hours'];
 
   useEffect(() => {
-    // Load AI suggestions when screen loads
     loadAISuggestions();
   }, []);
 
@@ -69,7 +68,7 @@ const CreateHabitScreen = ({ navigation, route }) => {
         userHabits || []
       );
       
-      setAiSuggestions(suggestions.slice(0, 3)); // Show top 3 suggestions
+      setAiSuggestions(suggestions.slice(0, 3));
     } catch (error) {
       console.error('Error loading AI suggestions:', error);
     } finally {
@@ -124,12 +123,10 @@ const CreateHabitScreen = ({ navigation, route }) => {
 
       const newHabit = await FirebaseService.createHabit(habitData);
 
-      // Schedule notification if enabled
       if (reminderEnabled) {
         await NotificationService.scheduleHabitReminder(newHabit);
       }
 
-      // Track analytics
       await FirebaseService.trackEvent('habit_created', {
         category,
         difficulty,
@@ -148,7 +145,8 @@ const CreateHabitScreen = ({ navigation, route }) => {
       );
 
     } catch (error) {
-      Alert.alert('Error', error.message || 'Failed to create habit');
+      console.error('Create habit error:', error);
+      Alert.alert('Error', error.message || 'Failed to create habit. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -163,7 +161,7 @@ const CreateHabitScreen = ({ navigation, route }) => {
 
   return (
     <View style={styles.container}>
-      {/* Only ONE back button in header */}
+      {/* FIXED: Only ONE back button */}
       <Appbar.Header style={styles.appbar}>
         <Appbar.BackAction onPress={() => navigation.goBack()} color="#ffffff" />
         <Appbar.Content title="Create New Habit" titleStyle={styles.headerTitle} />
@@ -175,18 +173,20 @@ const CreateHabitScreen = ({ navigation, route }) => {
         />
       </Appbar.Header>
 
+      {/* FIXED: Improved scroll behavior */}
       <KeyboardAvoidingView 
         style={styles.keyboardView} 
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <ScrollView 
           style={styles.content} 
           contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={true}
           keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled={true}
+          bounces={true}
         >
-          {/* AI Suggestions */}
           {aiSuggestions.length > 0 && (
             <Card style={styles.card}>
               <Card.Content>
@@ -219,7 +219,6 @@ const CreateHabitScreen = ({ navigation, route }) => {
             </Card>
           )}
 
-          {/* Basic Information */}
           <Card style={styles.card}>
             <Card.Content>
               <Text style={styles.sectionTitle}>Basic Information</Text>
@@ -254,7 +253,6 @@ const CreateHabitScreen = ({ navigation, route }) => {
             </Card.Content>
           </Card>
 
-          {/* Category Selection */}
           <Card style={styles.card}>
             <Card.Content>
               <Text style={styles.sectionTitle}>Category</Text>
@@ -285,7 +283,6 @@ const CreateHabitScreen = ({ navigation, route }) => {
             </Card.Content>
           </Card>
 
-          {/* Difficulty & Time */}
           <Card style={styles.card}>
             <Card.Content>
               <Text style={styles.sectionTitle}>Difficulty & Time</Text>
@@ -335,7 +332,6 @@ const CreateHabitScreen = ({ navigation, route }) => {
             </Card.Content>
           </Card>
 
-          {/* Reminders */}
           <Card style={styles.card}>
             <Card.Content>
               <View style={styles.reminderHeader}>
@@ -381,7 +377,6 @@ const CreateHabitScreen = ({ navigation, route }) => {
             </Card.Content>
           </Card>
 
-          {/* Create Button */}
           <Button
             mode="contained"
             onPress={handleCreateHabit}
@@ -430,7 +425,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 20,
+    paddingBottom: 40,
   },
   card: {
     margin: 16,
@@ -549,7 +544,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   bottomPadding: {
-    height: 20,
+    height: 40,
   },
 });
 
