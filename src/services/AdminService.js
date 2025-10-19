@@ -8,14 +8,14 @@ import {
   where,
   getDocs
 } from 'firebase/firestore';
-import { db } from '../../firebase';
+import { db, auth } from '../config/firebase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 class AdminService {
   constructor() {
     this.isAdmin = false;
     this.adminEmails = [
-      'augustinemwathi96@gmail.com', // Replace with your actual email
+      'augustinemwathi96@gmail.com', // Your admin email
       // Add more admin emails if needed
     ];
   }
@@ -28,6 +28,19 @@ class AdminService {
       return this.isAdmin;
     } catch (error) {
       console.error('Error checking admin status:', error);
+      return false;
+    }
+  }
+
+  async isCurrentUserAdmin() {
+    try {
+      const user = auth.currentUser;
+      if (!user || !user.email) {
+        return false;
+      }
+      return await this.checkAdminStatus(user.email);
+    } catch (error) {
+      console.error('Error checking current user admin status:', error);
       return false;
     }
   }
@@ -201,4 +214,9 @@ class AdminService {
   }
 }
 
-export default new AdminService();
+// Export as singleton instance (default export)
+const adminServiceInstance = new AdminService();
+export default adminServiceInstance;
+
+// Also export the class itself as named export (for flexibility)
+export { AdminService };
