@@ -1,15 +1,24 @@
 /**
  * Unity Banner Ad Component
- * Displays banner ads at the bottom of screens
+ * Displays banner ads at the bottom of screens using IronSource SDK
  */
 
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet, Platform, Text } from 'react-native';
 import unityAdsService from '../services/UnityAdsService';
 
+// Import banner component
+let LevelPlayBannerAdView = null;
+try {
+  const ironSourceModule = require('ironsource-mediation');
+  LevelPlayBannerAdView = ironSourceModule.LevelPlayBannerAdView;
+} catch (error) {
+  console.log('IronSource banner not available');
+}
+
 const UnityBannerAd = ({ style = {} }) => {
-  const [BannerComponent, setBannerComponent] = useState(null);
   const [shouldShow, setShouldShow] = useState(false);
+  const [placementId, setPlacementId] = useState(null);
 
   useEffect(() => {
     initializeBanner();
@@ -23,75 +32,67 @@ const UnityBannerAd = ({ style = {} }) => {
 
     // Check if ads should be shown
     if (!unityAdsService.shouldShowAds()) {
+      console.log('Banner ads disabled (premium or not initialized)');
       return;
     }
 
     // Get banner configuration
     const bannerConfig = unityAdsService.getBannerConfig();
     if (!bannerConfig || !bannerConfig.Component) {
-      console.log('Banner ad not available');
+      console.log('Banner ad configuration not available');
       return;
     }
 
-    try {
-      // Create banner instance
-      const banner = new bannerConfig.Component({
-        placementId: bannerConfig.placementId,
-        size: bannerConfig.size,
-      });
-
-      // Set up listeners
-      banner.setListener({
-        onAdLoaded: () => {
-          console.log('Banner ad loaded successfully');
-          setShouldShow(true);
-        },
-        onAdLoadFailed: (error) => {
-          console.log('Banner ad failed to load:', error);
-          setShouldShow(false);
-        },
-        onAdClicked: () => {
-          console.log('Banner ad clicked');
-          unityAdsService.trackAdImpression('banner', 'click');
-        },
-        onAdDisplayed: () => {
-          console.log('Banner ad displayed');
-          unityAdsService.trackAdImpression('banner', 'impression');
-        },
-        onAdDisplayFailed: (error) => {
-          console.log('Banner ad display failed:', error);
-          setShouldShow(false);
-        }
-      });
-
-      setBannerComponent(() => banner);
-      
-      // Load the ad
-      banner.loadAd();
-
-      // Cleanup on unmount
-      return () => {
-        try {
-          if (banner && banner.destroy) {
-            banner.destroy();
-          }
-        } catch (error) {
-          console.log('Error destroying banner ad:', error);
-        }
-      };
-    } catch (error) {
-      console.log('Error initializing banner ad:', error);
-    }
+    setPlacementId(bannerConfig.placementId);
+    setShouldShow(true);
   };
 
-  // Don't render if we shouldn't show ads or banner not ready
-  if (!shouldShow || !BannerComponent || Platform.OS === 'web') {
+  const handleAdLoaded = (adInfo) => {
+    console.log('Banner ad loaded:', adInfo);
+    unityAdsService.trackAdImpression('banner', 'loaded');
+  };
+
+  const handleAdLoadFailed = (error) => {
+    console.log('Banner ad failed to load:', error);
+    setShouldShow(false);
+  };
+
+  const handleAdClicked = (adInfo) => {
+    console.log('Banner ad clicked:', adInfo);
+    unityAdsService.trackAdImpression('banner', 'click');
+  };
+
+  const handleAdDisplayed = (adInfo) => {
+    console.log('Banner ad displayed:', adInfo);
+  };
+
+  const handleAdDisplayFailed = (error) => {
+    console.log('Banner ad display failed:', error);
+    setShouldShow(false);
+  };
+
+  const handleAdLeftApplication = (adInfo) => {
+    console.log('Banner ad left application:', adInfo);
+  };
+
+  // Don't render if we shouldn't show ads
+  if (!shouldShow || !LevelPlayBannerAdView || Platform.OS === 'web' || !placementId) {
     return null;
   }
 
   return (
     <View style={[styles.container, style]}>
-      {BannerComponent}
+      <LevelPlayBannerAdView
+        placementName={placementId}
+        adSize="BANNER"
+        onAdLoaded={handleAdLoaded}
+        onAdLoadFailed={handleAdLoadFailed}
+        onAdClicked={handleAdClicked}
+        onAdDisplayed={handleAdDisplayed}
+        onAdDisplayFailed={handleAdDisplayFailed}
+        onAdLeftApplication={handleAdLeftApplication}
+        style={styles.banner}
+      />
     </View>
   );
 };
@@ -103,6 +104,10 @@ const styles = StyleSheet.create({
     width: '100%',
     backgroundColor: 'transparent',
     paddingVertical: 10,
+  },
+  banner: {
+    width: '100%',
+    height: 50,
   },
 });
 
