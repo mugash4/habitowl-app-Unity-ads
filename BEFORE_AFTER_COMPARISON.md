@@ -3,6 +3,7 @@
 ## Visual Overview of What Changed
 
 ---
+com
 
 ## 🔴 BEFORE (v2.0.0) - With Errors
 
