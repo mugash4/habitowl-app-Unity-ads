@@ -507,6 +507,36 @@ class FirebaseService {
     const message = errorMessages[error.code] || error.message || 'An unexpected error occurred';
     return new Error(message);
   }
+  async updateUserPremiumStatus(isPremium) {
+    try {
+      if (!this.currentUser) {
+        throw new Error('No user logged in');
+      }
+
+      const userQuery = query(
+        collection(db, 'users'),
+        where('uid', '==', this.currentUser.uid)
+      );
+    
+      const querySnapshot = await getDocs(userQuery);
+    
+      if (!querySnapshot.empty) {
+        const userDoc = querySnapshot.docs[0];
+        await updateDoc(userDoc.ref, {
+          isPremium: isPremium,
+          premiumUpdatedAt: new Date().toISOString()
+        });
+      
+        console.log(`Premium status updated to: ${isPremium}`);
+        return true;
+      }
+    
+      return false;
+    } catch (error) {
+      console.error('Error updating premium status:', error);
+      throw error;
+    }
+  }
 }
 
 export default new FirebaseService();

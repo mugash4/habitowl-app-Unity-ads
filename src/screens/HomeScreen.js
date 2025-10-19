@@ -175,20 +175,26 @@ const HomeScreen = ({ navigation }) => {
   const renderHeader = () => {
     const completionRate = getCompletionRate();
     const streakStats = getStreakStats();
+    const user = FirebaseService.currentUser;
+    const displayName = user?.displayName || 'there';
     
     return (
       <LinearGradient colors={['#4f46e5', '#7c3aed']} style={styles.header}>
         <StatusBar barStyle="light-content" backgroundColor="#4f46e5" />
         
         <View style={styles.headerContent}>
-          <Text style={styles.greeting}>
-            Good {getTimeOfDay()}, {FirebaseService.currentUser?.displayName || 'there'}! 
-          </Text>
+          <View style={styles.greetingContainer}>
+            <Text style={styles.greeting}>
+              Good {getTimeOfDay()}, {displayName}! 
+            </Text>
+          </View>
           
           {motivationalMessage && (
-            <Text style={styles.motivationalMessage}>
-              {motivationalMessage}
-            </Text>
+            <View style={styles.messageContainer}>
+              <Text style={styles.motivationalMessage}>
+                {motivationalMessage}
+              </Text>
+            </View>
           )}
           
           <View style={styles.statsRow}>
@@ -224,13 +230,7 @@ const HomeScreen = ({ navigation }) => {
       <Text style={styles.emptySubtitle}>
         Create your first habit and start building a better you
       </Text>
-      <Button
-        mode="contained"
-        onPress={handleCreateHabit}
-        style={styles.emptyButton}
-      >
-        Create Your First Habit
-      </Button>
+      {/* Removed duplicate button - only FAB button remains */}
     </View>
   );
 
@@ -249,6 +249,7 @@ const HomeScreen = ({ navigation }) => {
       
       <ScrollView
         style={styles.content}
+        contentContainerStyle={styles.contentContainer}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
@@ -306,9 +307,11 @@ const HomeScreen = ({ navigation }) => {
         <View style={styles.bottomPadding} />
       </ScrollView>
 
+      {/* Only ONE FAB button */}
       <FAB
         style={styles.fab}
         icon="plus"
+        color="#ffffff"
         onPress={handleCreateHabit}
         label={habits.length === 0 ? "Add Habit" : undefined}
       />
@@ -322,27 +325,34 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
   header: {
-    paddingTop: 20,
-    paddingBottom: 20,
+    paddingTop: 40,
+    paddingBottom: 24,
   },
   headerContent: {
     paddingHorizontal: 20,
+  },
+  greetingContainer: {
+    marginBottom: 8,
+    minHeight: 32,
   },
   greeting: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#ffffff',
-    marginBottom: 8,
+  },
+  messageContainer: {
+    marginBottom: 20,
+    minHeight: 24,
   },
   motivationalMessage: {
     fontSize: 16,
     color: '#e0e7ff',
-    marginBottom: 20,
     fontStyle: 'italic',
   },
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginTop: 4,
   },
   statItem: {
     alignItems: 'center',
@@ -360,6 +370,9 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  contentContainer: {
+    paddingBottom: 80,
   },
   progressCard: {
     margin: 16,
@@ -425,15 +438,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 32,
   },
-  emptyButton: {
-    paddingHorizontal: 20,
-  },
   adBanner: {
     marginTop: 20,
     marginBottom: 10,
   },
   bottomPadding: {
-    height: 100,
+    height: 20,
   },
   fab: {
     position: 'absolute',

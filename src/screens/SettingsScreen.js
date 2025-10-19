@@ -28,7 +28,7 @@ import SecureAIService from '../services/SecureAIService';
 import NotificationService from '../services/NotificationService';
 import ContactSupport from '../components/ContactSupport';
 import PromoOfferBanner from '../components/PromoOfferBanner';
-import { AdminService } from '../services/AdminService';
+import AdminService from '../services/AdminService'; // Fixed import path
 
 const SettingsScreen = ({ navigation }) => {
   const [userStats, setUserStats] = useState(null);
@@ -48,8 +48,17 @@ const SettingsScreen = ({ navigation }) => {
 
   const checkAdminStatus = async () => {
     try {
-      const adminStatus = await AdminService.isCurrentUserAdmin();
-      setIsAdmin(adminStatus);
+      const user = FirebaseService.currentUser;
+      if (user && user.email) {
+        const adminStatus = await AdminService.checkAdminStatus(user.email);
+        setIsAdmin(adminStatus);
+        
+        // Auto-set premium for admin users
+        if (adminStatus && !isPremium) {
+          await FirebaseService.updateUserPremiumStatus(true);
+          setIsPremium(true);
+        }
+      }
     } catch (error) {
       console.error('Error checking admin status:', error);
     }
@@ -144,6 +153,8 @@ const SettingsScreen = ({ navigation }) => {
   const handleAdminPress = () => {
     if (isAdmin) {
       navigation.navigate('Admin');
+    } else {
+      Alert.alert('Access Denied', 'Admin access only');
     }
   };
 
@@ -181,12 +192,20 @@ const SettingsScreen = ({ navigation }) => {
             <View style={styles.userDetails}>
               <Text style={styles.userName}>{user.displayName || 'User'}</Text>
               <Text style={styles.userEmail}>{user.email}</Text>
-              {isPremium && (
-                <View style={styles.premiumBadge}>
-                  <Icon name="crown" size={16} color="#f59e0b" />
-                  <Text style={styles.premiumText}>Premium</Text>
-                </View>
-              )}
+              <View style={styles.badgeContainer}>
+                {isPremium && (
+                  <View style={styles.premiumBadge}>
+                    <Icon name="crown" size={16} color="#f59e0b" />
+                    <Text style={styles.premiumText}>Premium</Text>
+                  </View>
+                )}
+                {isAdmin && (
+                  <View style={styles.adminBadge}>
+                    <Icon name="shield-check" size={16} color="#ef4444" />
+                    <Text style={styles.adminText}>Admin</Text>
+                  </View>
+                )}
+              </View>
             </View>
           </View>
 
@@ -219,32 +238,38 @@ const SettingsScreen = ({ navigation }) => {
       <PromoOfferBanner />
 
       {/* Premium Section */}
-      {!isPremium && (
+      {!isPremium && !isAdmin && (
         <Card style={styles.card}>
           <List.Item
             title="Upgrade to Premium"
             description="Remove ads, unlimited habits, AI coaching"
             left={(props) => <List.Icon {...props} icon="crown" color="#f59e0b" />}
-            right={(props) => <List.Icon {...props} icon="chevron-right" />}
+            right={(props) => <List.Icon {...props} icon="chevron-right" color="#ffffff" />}
             onPress={handlePremiumUpgrade}
+            titleStyle={styles.listItemTitle}
+            descriptionStyle={styles.listItemDescription}
           />
         </Card>
       )}
 
       {/* AI Settings */}
       <Card style={styles.card}>
-        <List.Subheader>AI & Personalization</List.Subheader>
+        <List.Subheader style={styles.subheader}>AI & Personalization</List.Subheader>
         
         <List.Item
           title="AI Provider"
           description={`Currently using: ${apiProvider.toUpperCase()}`}
-          left={(props) => <List.Icon {...props} icon="robot" />}
+          left={(props) => <List.Icon {...props} icon="robot" color="#ffffff" />}
+          titleStyle={styles.listItemTitle}
+          descriptionStyle={styles.listItemDescription}
         />
 
         <List.Item
           title="Smart Coaching"
           description="Powered by advanced AI"
-          left={(props) => <List.Icon {...props} icon="brain" />}
+          left={(props) => <List.Icon {...props} icon="brain" color="#ffffff" />}
+          titleStyle={styles.listItemTitle}
+          descriptionStyle={styles.listItemDescription}
         />
         
         {isAdmin && (
@@ -252,109 +277,131 @@ const SettingsScreen = ({ navigation }) => {
             title="Admin Panel"
             description="Manage app settings and API keys"
             left={(props) => <List.Icon {...props} icon="shield-account" color="#ef4444" />}
-            right={(props) => <List.Icon {...props} icon="chevron-right" />}
+            right={(props) => <List.Icon {...props} icon="chevron-right" color="#ffffff" />}
             onPress={handleAdminPress}
+            titleStyle={styles.listItemTitle}
+            descriptionStyle={styles.listItemDescription}
           />
         )}
       </Card>
 
       {/* Social Features */}
       <Card style={styles.card}>
-        <List.Subheader>Social & Sharing</List.Subheader>
+        <List.Subheader style={styles.subheader}>Social & Sharing</List.Subheader>
         
         <List.Item
           title="Share HabitOwl"
           description="Invite friends and earn rewards"
-          left={(props) => <List.Icon {...props} icon="share" />}
+          left={(props) => <List.Icon {...props} icon="share" color="#ffffff" />}
           onPress={handleShareApp}
+          titleStyle={styles.listItemTitle}
+          descriptionStyle={styles.listItemDescription}
         />
 
         <List.Item
           title="Enter Referral Code"
           description="Got a code from a friend?"
-          left={(props) => <List.Icon {...props} icon="ticket" />}
+          left={(props) => <List.Icon {...props} icon="ticket" color="#ffffff" />}
           onPress={() => setShowReferralDialog(true)}
+          titleStyle={styles.listItemTitle}
+          descriptionStyle={styles.listItemDescription}
         />
 
         {userStats?.referralCode && (
           <List.Item
             title="Your Referral Code"
             description={userStats.referralCode}
-            left={(props) => <List.Icon {...props} icon="card-text" />}
+            left={(props) => <List.Icon {...props} icon="card-text" color="#ffffff" />}
             right={(props) => (
               <Button
                 compact
                 mode="outlined"
                 onPress={() => Share.share({ message: userStats.referralCode })}
+                labelStyle={styles.buttonLabel}
               >
                 Share
               </Button>
             )}
+            titleStyle={styles.listItemTitle}
+            descriptionStyle={styles.listItemDescription}
           />
         )}
       </Card>
 
       {/* App Settings */}
       <Card style={styles.card}>
-        <List.Subheader>App Settings</List.Subheader>
+        <List.Subheader style={styles.subheader}>App Settings</List.Subheader>
         
         <List.Item
           title="Notifications"
           description="Habit reminders and motivational messages"
-          left={(props) => <List.Icon {...props} icon="bell" />}
+          left={(props) => <List.Icon {...props} icon="bell" color="#ffffff" />}
           right={() => (
             <Switch
               value={notifications}
               onValueChange={toggleNotifications}
+              color="#4f46e5"
             />
           )}
+          titleStyle={styles.listItemTitle}
+          descriptionStyle={styles.listItemDescription}
         />
 
         <List.Item
           title="Statistics"
           description="View your habit analytics"
-          left={(props) => <List.Icon {...props} icon="chart-line" />}
-          right={(props) => <List.Icon {...props} icon="chevron-right" />}
+          left={(props) => <List.Icon {...props} icon="chart-line" color="#ffffff" />}
+          right={(props) => <List.Icon {...props} icon="chevron-right" color="#ffffff" />}
           onPress={() => navigation.navigate('Statistics')}
+          titleStyle={styles.listItemTitle}
+          descriptionStyle={styles.listItemDescription}
         />
       </Card>
 
       {/* Support & Legal */}
       <Card style={styles.card}>
-        <List.Subheader>Support & Legal</List.Subheader>
+        <List.Subheader style={styles.subheader}>Support & Legal</List.Subheader>
         
         <List.Item
           title="Contact Support"
           description="Get help or report issues"
-          left={(props) => <List.Icon {...props} icon="help-circle" />}
-          right={(props) => <List.Icon {...props} icon="chevron-right" />}
+          left={(props) => <List.Icon {...props} icon="help-circle" color="#ffffff" />}
+          right={(props) => <List.Icon {...props} icon="chevron-right" color="#ffffff" />}
           onPress={handleContactSupport}
+          titleStyle={styles.listItemTitle}
+          descriptionStyle={styles.listItemDescription}
         />
 
         <List.Item
           title="About HabitOwl"
           description="Learn more about the app"
-          left={(props) => <List.Icon {...props} icon="information" />}
-          right={(props) => <List.Icon {...props} icon="chevron-right" />}
+          left={(props) => <List.Icon {...props} icon="information" color="#ffffff" />}
+          right={(props) => <List.Icon {...props} icon="chevron-right" color="#ffffff" />}
           onPress={handleAboutPress}
+          titleStyle={styles.listItemTitle}
+          descriptionStyle={styles.listItemDescription}
         />
 
         <List.Item
           title="Privacy Policy"
-          left={(props) => <List.Icon {...props} icon="shield-account" />}
+          left={(props) => <List.Icon {...props} icon="shield-account" color="#ffffff" />}
           onPress={handlePrivacyPolicy}
+          titleStyle={styles.listItemTitle}
         />
 
         <List.Item
           title="Terms of Service"
-          left={(props) => <List.Icon {...props} icon="file-document" />}
+          left={(props) => <List.Icon {...props} icon="file-document" color="#ffffff" />}
           onPress={handleTermsOfService}
+          titleStyle={styles.listItemTitle}
         />
 
         <List.Item
           title="App Version"
-          description="1.0.0"
-          left={(props) => <List.Icon {...props} icon="information" />}
+          description="2.3.0"
+          left={(props) => <List.Icon {...props} icon="information" color="#ffffff" />}
+          titleStyle={styles.listItemTitle}
+          descriptionStyle={styles.listItemDescription}
         />
       </Card>
 
@@ -394,8 +441,8 @@ const SettingsScreen = ({ navigation }) => {
             />
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setShowReferralDialog(false)}>Cancel</Button>
-            <Button onPress={handleReferralSubmit}>Apply</Button>
+            <Button onPress={() => setShowReferralDialog(false)} labelStyle={styles.buttonLabel}>Cancel</Button>
+            <Button onPress={handleReferralSubmit} labelStyle={styles.buttonLabel}>Apply</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
@@ -446,6 +493,10 @@ const styles = StyleSheet.create({
     color: '#e0e7ff',
     marginBottom: 8,
   },
+  badgeContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
   premiumBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -453,10 +504,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
-    alignSelf: 'flex-start',
   },
   premiumText: {
     color: '#f59e0b',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginLeft: 4,
+  },
+  adminBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  adminText: {
+    color: '#ef4444',
     fontSize: 12,
     fontWeight: 'bold',
     marginLeft: 4,
@@ -478,18 +542,24 @@ const styles = StyleSheet.create({
     color: '#c7d2fe',
     marginTop: 4,
   },
-  chipContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-    gap: 8,
+  subheader: {
+    color: '#1f2937',
+    fontWeight: 'bold',
   },
-  chip: {
-    marginBottom: 4,
+  listItemTitle: {
+    color: '#1f2937',
+    fontWeight: '600',
+  },
+  listItemDescription: {
+    color: '#6b7280',
+  },
+  buttonLabel: {
+    color: '#4f46e5',
+    fontWeight: '600',
   },
   signOutText: {
     color: '#ef4444',
+    fontWeight: '600',
   },
   dialogDescription: {
     fontSize: 16,
@@ -498,11 +568,6 @@ const styles = StyleSheet.create({
   },
   dialogInput: {
     marginBottom: 16,
-  },
-  helpText: {
-    fontSize: 12,
-    color: '#9ca3af',
-    fontStyle: 'italic',
   },
   bottomPadding: {
     height: 20,
