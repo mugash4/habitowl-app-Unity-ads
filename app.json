@@ -46,7 +46,7 @@
         "android.permission.INTERNET",
         "android.permission.ACCESS_NETWORK_STATE"
       ],
-      "versionCode": 2,
+      "versionCode": 3,
       "googleServicesFile": "./google-services.json"
     },
     "web": {
@@ -57,13 +57,7 @@
       "color": "#4f46e5"
     },
     "plugins": [
-      [
-        "expo-notifications",
-        {
-          "icon": "./assets/notification-icon.png",
-          "color": "#4f46e5"
-        }
-      ],
+      "./plugins/withIronSource",
       [
         "expo-build-properties",
         {
@@ -76,6 +70,13 @@
           "ios": {
             "deploymentTarget": "13.4"
           }
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#4f46e5"
         }
       ],
       [
