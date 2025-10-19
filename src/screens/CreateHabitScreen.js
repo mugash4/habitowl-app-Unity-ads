@@ -119,6 +119,8 @@ const CreateHabitScreen = ({ navigation, route }) => {
         reminderTime: reminderEnabled ? reminderTime.toTimeString().slice(0, 5) : null,
         reminderMessage: customMessage.trim() || null,
         createdAt: new Date().toISOString(),
+        // FIXED: Explicitly add userId to the habit data
+        userId: FirebaseService.currentUser.uid,
       };
 
       const newHabit = await FirebaseService.createHabit(habitData);
@@ -161,7 +163,7 @@ const CreateHabitScreen = ({ navigation, route }) => {
 
   return (
     <View style={styles.container}>
-      {/* FIXED: Only ONE back button */}
+      {/* FIXED: Header bar with proper back button */}
       <Appbar.Header style={styles.appbar}>
         <Appbar.BackAction onPress={() => navigation.goBack()} color="#ffffff" />
         <Appbar.Content title="Create New Habit" titleStyle={styles.headerTitle} />
@@ -173,10 +175,10 @@ const CreateHabitScreen = ({ navigation, route }) => {
         />
       </Appbar.Header>
 
-      {/* FIXED: Improved scroll behavior */}
+      {/* FIXED: Improved scroll and keyboard handling */}
       <KeyboardAvoidingView 
         style={styles.keyboardView} 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <ScrollView 
@@ -186,7 +188,9 @@ const CreateHabitScreen = ({ navigation, route }) => {
           keyboardShouldPersistTaps="handled"
           nestedScrollEnabled={true}
           bounces={true}
+          scrollEventThrottle={16}
         >
+          {/* AI Suggestions */}
           {aiSuggestions.length > 0 && (
             <Card style={styles.card}>
               <Card.Content>
@@ -219,6 +223,7 @@ const CreateHabitScreen = ({ navigation, route }) => {
             </Card>
           )}
 
+          {/* Basic Information */}
           <Card style={styles.card}>
             <Card.Content>
               <Text style={styles.sectionTitle}>Basic Information</Text>
@@ -253,6 +258,7 @@ const CreateHabitScreen = ({ navigation, route }) => {
             </Card.Content>
           </Card>
 
+          {/* Category */}
           <Card style={styles.card}>
             <Card.Content>
               <Text style={styles.sectionTitle}>Category</Text>
@@ -283,6 +289,7 @@ const CreateHabitScreen = ({ navigation, route }) => {
             </Card.Content>
           </Card>
 
+          {/* Difficulty & Time */}
           <Card style={styles.card}>
             <Card.Content>
               <Text style={styles.sectionTitle}>Difficulty & Time</Text>
@@ -332,6 +339,7 @@ const CreateHabitScreen = ({ navigation, route }) => {
             </Card.Content>
           </Card>
 
+          {/* Daily Reminder */}
           <Card style={styles.card}>
             <Card.Content>
               <View style={styles.reminderHeader}>
@@ -377,6 +385,7 @@ const CreateHabitScreen = ({ navigation, route }) => {
             </Card.Content>
           </Card>
 
+          {/* Create Button */}
           <Button
             mode="contained"
             onPress={handleCreateHabit}
@@ -389,10 +398,12 @@ const CreateHabitScreen = ({ navigation, route }) => {
             Create Habit
           </Button>
 
+          {/* Bottom padding for better scrolling */}
           <View style={styles.bottomPadding} />
         </ScrollView>
       </KeyboardAvoidingView>
 
+      {/* Time Picker */}
       {showTimePicker && (
         <DateTimePicker
           value={reminderTime}
@@ -544,7 +555,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   bottomPadding: {
-    height: 40,
+    height: 60,
   },
 });
 

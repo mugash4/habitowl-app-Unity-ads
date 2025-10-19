@@ -75,10 +75,15 @@ const SettingsScreen = ({ navigation }) => {
 
   const loadSettings = async () => {
     try {
-      const provider = await SecureAIService.getCurrentProvider();
+      // FIXED: Changed from getCurrentProvider() to getActiveProvider()
+      const stats = await FirebaseService.getUserStats();
+      const isPremiumUser = stats?.isPremium || false;
+      const provider = await SecureAIService.getActiveProvider(isPremiumUser);
       setApiProvider(provider);
     } catch (error) {
       console.error('Error loading settings:', error);
+      // Set default provider if error occurs
+      setApiProvider('deepseek');
     }
   };
 
@@ -168,9 +173,16 @@ const SettingsScreen = ({ navigation }) => {
     Linking.openURL('https://habitowl-app.web.app/terms');
   };
 
-  // FIXED: Navigate to Statistics tab instead of pushing new screen
+  // FIXED: Use getParent() to navigate to Statistics tab properly
   const handleStatisticsPress = () => {
-    navigation.navigate('Statistics');
+    try {
+      const parentNavigation = navigation.getParent();
+      if (parentNavigation) {
+        parentNavigation.navigate('Statistics');
+      }
+    } catch (error) {
+      console.error('Navigation error:', error);
+    }
   };
 
   const toggleNotifications = async (enabled) => {
@@ -344,7 +356,6 @@ const SettingsScreen = ({ navigation }) => {
           descriptionStyle={styles.listItemDescription}
         />
 
-        {/* FIXED: Changed navigation to use tab navigation */}
         <List.Item
           title="Statistics"
           description="View your habit analytics"
