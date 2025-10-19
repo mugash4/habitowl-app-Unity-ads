@@ -21,8 +21,13 @@ import {
 } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import * as Google from 'expo-auth-session/providers/google';
+import * as WebBrowser from 'expo-web-browser';
 
 import FirebaseService from '../services/FirebaseService';
+
+// Required for Expo AuthSession
+WebBrowser.maybeCompleteAuthSession();
 
 const { height } = Dimensions.get('window');
 
@@ -36,6 +41,12 @@ const AuthScreen = ({ navigation }) => {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [fadeAnim] = useState(new Animated.Value(0));
   const [slideAnim] = useState(new Animated.Value(50));
+
+  // Google Sign-In configuration - React Hook (must be at component level)
+  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
+    clientId: '387609126713-1vpqhjkaha1ku86srq7lla63vqbpj98j.apps.googleusercontent.com', // Web client ID from Firebase
+    androidClientId: '387609126713-1vpqhjkaha1ku86srq7lla63vqbpj98j.apps.googleusercontent.com', // Use web client ID for APK
+  });
 
   useEffect(() => {
     // Animate screen entrance
@@ -62,6 +73,34 @@ const AuthScreen = ({ navigation }) => {
 
     return unsubscribe;
   }, []);
+
+  // Handle Google Sign-In response
+  useEffect(() => {
+    if (response?.type === 'success') {
+      const { id_token } = response.params;
+      console.log('Google sign in success, id_token received');
+      
+      setGoogleLoading(true);
+      
+      // Sign in with the credential
+      FirebaseService.signInWithGoogleCredential(id_token)
+        .then(() => {
+          console.log('Google authentication successful!');
+          // Navigation handled by auth state listener
+        })
+        .catch((error) => {
+          console.error('Google authentication error:', error);
+          Alert.alert('Google Sign In Error', error.message);
+        })
+        .finally(() => {
+          setGoogleLoading(false);
+        });
+    } else if (response?.type === 'error') {
+      console.error('Google sign in error:', response.error);
+      Alert.alert('Google Sign In Error', 'Failed to sign in with Google');
+      setGoogleLoading(false);
+    }
+  }, [response]);
 
   const validateEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -151,18 +190,16 @@ const AuthScreen = ({ navigation }) => {
       setGoogleLoading(true);
       console.log('Google loading state set to true');
       
-      await FirebaseService.signInWithGoogle();
-      // Navigation is handled by the auth state listener
+      // Use promptAsync which triggers the Google sign-in flow
+      await promptAsync();
       
     } catch (error) {
-      console.error('Google auth error:', error);
+      console.error('Google auth initiation error:', error);
       Alert.alert(
         'Google Sign In', 
-        error.message || 'Failed to sign in with Google. Please try again.'
+        'Failed to initiate Google sign in. Please try again.'
       );
-    } finally {
       setGoogleLoading(false);
-      console.log('Google loading state set to false');
     }
   };
 
@@ -308,7 +345,7 @@ const AuthScreen = ({ navigation }) => {
                 {/* Debug info (remove in production) */}
                 {__DEV__ && (
                   <Text style={styles.debugText}>
-                    Status: {loading ? 'Loading...' : 'Ready'}
+                    Status: {loading || googleLoading ? 'Loading...' : 'Ready'}
                   </Text>
                 )}
 
@@ -324,7 +361,7 @@ const AuthScreen = ({ navigation }) => {
                   mode="outlined"
                   onPress={handleGoogleAuth}
                   loading={googleLoading}
-                  disabled={loading || googleLoading}
+                  disabled={loading || googleLoading || !request}
                   style={styles.googleButton}
                   contentStyle={styles.googleButtonContent}
                   labelStyle={styles.googleButtonLabel}

@@ -21,19 +21,11 @@ import {
   updateProfile,
   GoogleAuthProvider,
   signInWithCredential,
-  signInWithPopup,
-  signInWithRedirect,
-  getRedirectResult
+  signInWithPopup
 } from 'firebase/auth';
 import { db, auth } from '../config/firebase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Google from 'expo-auth-session/providers/google';
-import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
-import { makeRedirectUri } from 'expo-auth-session';
-
-// Required for Expo AuthSession
-WebBrowser.maybeCompleteAuthSession();
 
 class FirebaseService {
   constructor() {
@@ -90,63 +82,48 @@ class FirebaseService {
     }
   }
 
-  async signInWithGoogle() {
+  // Google Sign In - Web version only (works in APK)
+  async signInWithGoogleWeb() {
     try {
-      console.log('Starting Google sign in...');
-      console.log('Platform:', Platform.OS);
-
-      if (Platform.OS === 'web') {
-        // Web implementation
-        console.log('Using web sign in...');
-        const provider = new GoogleAuthProvider();
-        provider.addScope('email');
-        provider.addScope('profile');
-        
-        const result = await signInWithPopup(auth, provider);
-        
-        if (result && result.user) {
-          await this.createUserDocument(result.user);
-          console.log('Web sign in successful!');
-          return result.user;
-        }
-      } else {
-        // Mobile implementation using expo-auth-session/providers/google
-        console.log('Using mobile sign in...');
-        
-        // Configure the redirect URI
-        const redirectUri = makeRedirectUri({
-          scheme: 'habitowl',
-          path: 'redirect'
-        });
-
-        console.log('Redirect URI:', redirectUri);
-
-        // Use expo-google-sign-in for better mobile support
-        const config = {
-          androidClientId: '387609126713-YOUR_ANDROID_CLIENT_ID.apps.googleusercontent.com',
-          iosClientId: '387609126713-YOUR_IOS_CLIENT_ID.apps.googleusercontent.com',
-          webClientId: '387609126713-1vpqhjkaha1ku86srq7lla63vqbpj98j.apps.googleusercontent.com',
-        };
-
-        // Use Expo's Google Auth
-        const [request, response, promptAsync] = Google.useIdTokenAuthRequest(config);
-        
-        // For standalone apps, we need a different approach
-        // Show informative error with instructions
-        throw new Error(
-          'Google Sign-In Setup Required:\n\n' +
-          '1. Go to Firebase Console > Authentication > Sign-in method\n' +
-          '2. Enable Google Sign-In\n' +
-          '3. Download google-services.json for Android\n' +
-          '4. Add SHA-1 fingerprint from your keystore\n' +
-          '5. Rebuild your APK\n\n' +
-          'For now, please use Email/Password sign in.'
-        );
+      console.log('Starting Google sign in for web/APK...');
+      
+      const provider = new GoogleAuthProvider();
+      provider.addScope('email');
+      provider.addScope('profile');
+      
+      // This works in both web browser and Android APK
+      const result = await signInWithPopup(auth, provider);
+      
+      if (result && result.user) {
+        await this.createUserDocument(result.user);
+        console.log('Google sign in successful!');
+        return result.user;
       }
       
       return null;
     } catch (error) {
       console.error('Google sign in error:', error);
+      throw this.handleFirebaseError(error);
+    }
+  }
+
+  // Google Sign In - Native implementation using credential
+  async signInWithGoogleCredential(idToken) {
+    try {
+      console.log('Starting Google sign in with credential...');
+      
+      const credential = GoogleAuthProvider.credential(idToken);
+      const result = await signInWithCredential(auth, credential);
+      
+      if (result && result.user) {
+        await this.createUserDocument(result.user);
+        console.log('Google credential sign in successful!');
+        return result.user;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Google credential sign in error:', error);
       throw this.handleFirebaseError(error);
     }
   }
