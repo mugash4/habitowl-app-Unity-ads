@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "387609126713-3goroik2d50jts7cg19h54s50flcf8go.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.habitowl.app",
+            "certificate_hash": "e83f734f0d4dfe98a22e8644d29728293988bba1"
+          }
+        },
+        {
           "client_id": "387609126713-1vpqhjkaha1ku86srq7lla63vqbpj98j.apps.googleusercontent.com",
           "client_type": 3
         }
