@@ -14,11 +14,16 @@ class SecureAIService {
       const defaultProvider = userIsPremium ? this.premiumProvider : this.defaultProvider;
       
       // Admin can override default provider
-      const adminDefault = await AdminService.getDefaultAiProvider();
-      
-      return adminDefault || defaultProvider;
+      try {
+        const adminDefault = await AdminService.getDefaultAiProvider();
+        return adminDefault || defaultProvider;
+      } catch (adminError) {
+        console.error('Error getting admin default provider:', adminError);
+        return defaultProvider;
+      }
     } catch (error) {
       console.error('Error getting active provider:', error);
+      // Always return a valid provider, never throw
       return userIsPremium ? this.premiumProvider : this.defaultProvider;
     }
   }
@@ -47,6 +52,7 @@ class SecureAIService {
       const response = await this.callSecureAI(prompt);
       return response.trim();
     } catch (error) {
+      console.error('Error generating motivational message:', error);
       return this.getFallbackMotivationalMessage(habit, streak);
     }
   }
@@ -62,6 +68,7 @@ class SecureAIService {
       const response = await this.callSecureAI(prompt);
       return response;
     } catch (error) {
+      console.error('Error analyzing habit progress:', error);
       return "Your progress looks good! Keep maintaining consistency for better results.";
     }
   }
@@ -169,11 +176,11 @@ class SecureAIService {
 
   getFallbackMotivationalMessage(habit, streak) {
     const messages = [
-      `Amazing! ${streak} days strong with ${habit.name}! 🔥`,
+      `Amazing! ${streak} days strong with ${habit.name}! 🎉`,
       `You're crushing it! Day ${streak} of ${habit.name}! Keep going! 💪`,
       `${streak} days of consistency! You're building something great! 🌟`,
       `Day ${streak}! Your future self will thank you for ${habit.name}! 🚀`,
-      `${streak} days in a row! You're proving habits can stick! 🎯`
+      `${streak} days in a row! You're proving habits can stick! 🔥`
     ];
     return messages[Math.floor(Math.random() * messages.length)];
   }

@@ -39,12 +39,37 @@ const SettingsScreen = ({ navigation }) => {
   const [referralCode, setReferralCode] = useState('');
   const [notifications, setNotifications] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    loadUserData();
-    loadSettings();
-    checkAdminStatus();
+    // FIXED: Properly handle async initialization
+    initializeSettings();
   }, []);
+
+  // FIXED: Single initialization function with proper error handling
+  const initializeSettings = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Load all data sequentially with individual error handling
+      await loadUserData().catch(err => {
+        console.error('Error loading user data:', err);
+      });
+      
+      await loadSettings().catch(err => {
+        console.error('Error loading settings:', err);
+      });
+      
+      await checkAdminStatus().catch(err => {
+        console.error('Error checking admin status:', err);
+      });
+      
+    } catch (error) {
+      console.error('Error initializing settings screen:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const checkAdminStatus = async () => {
     try {
@@ -60,6 +85,7 @@ const SettingsScreen = ({ navigation }) => {
       }
     } catch (error) {
       console.error('Error checking admin status:', error);
+      // Don't throw - just log the error
     }
   };
 
@@ -70,16 +96,21 @@ const SettingsScreen = ({ navigation }) => {
       setIsPremium(stats?.isPremium || false);
     } catch (error) {
       console.error('Error loading user data:', error);
+      // Set defaults if loading fails
+      setUserStats({});
+      setIsPremium(false);
     }
   };
 
   const loadSettings = async () => {
     try {
-      // FIXED: Changed from getCurrentProvider() to getActiveProvider()
+      // Get user stats first
       const stats = await FirebaseService.getUserStats();
       const isPremiumUser = stats?.isPremium || false;
+      
+      // Get active provider with fallback
       const provider = await SecureAIService.getActiveProvider(isPremiumUser);
-      setApiProvider(provider);
+      setApiProvider(provider || 'deepseek');
     } catch (error) {
       console.error('Error loading settings:', error);
       // Set default provider if error occurs
@@ -88,7 +119,12 @@ const SettingsScreen = ({ navigation }) => {
   };
 
   const handlePremiumUpgrade = () => {
-    navigation.navigate('Premium');
+    try {
+      navigation.navigate('Premium');
+    } catch (error) {
+      console.error('Navigation error:', error);
+      Alert.alert('Error', 'Unable to open Premium screen');
+    }
   };
 
   const handleSignOut = () => {
@@ -105,7 +141,8 @@ const SettingsScreen = ({ navigation }) => {
               await FirebaseService.signOut();
               navigation.replace('Auth');
             } catch (error) {
-              Alert.alert('Error', 'Failed to sign out');
+              console.error('Sign out error:', error);
+              Alert.alert('Error', 'Failed to sign out. Please try again.');
             }
           }
         }
@@ -115,7 +152,7 @@ const SettingsScreen = ({ navigation }) => {
 
   const handleShareApp = async () => {
     try {
-      const referralCode = userStats?.referralCode;
+      const referralCode = userStats?.referralCode || 'HABITOWL';
       const message = `Check out HabitOwl - the smart habit tracker that actually works! 🦉\n\nUse my referral code: ${referralCode}\n\nDownload: https://habitowl-app.web.app`;
       
       await Share.share({
@@ -126,9 +163,10 @@ const SettingsScreen = ({ navigation }) => {
       await FirebaseService.trackEvent('app_shared', {
         method: 'native_share',
         referral_code: referralCode
-      });
+      }).catch(err => console.error('Error tracking event:', err));
     } catch (error) {
       console.error('Error sharing app:', error);
+      // Share dialog cancelled is not an error - just ignore
     }
   };
 
@@ -143,19 +181,30 @@ const SettingsScreen = ({ navigation }) => {
       setShowReferralDialog(false);
       setReferralCode('');
       Alert.alert('Success!', 'Referral code applied successfully!');
-      loadUserData();
+      await loadUserData();
     } catch (error) {
-      Alert.alert('Error', error.message);
+      console.error('Error processing referral:', error);
+      Alert.alert('Error', error.message || 'Failed to process referral code');
     }
   };
 
   const handleAboutPress = () => {
-    navigation.navigate('About');
+    try {
+      navigation.navigate('About');
+    } catch (error) {
+      console.error('Navigation error:', error);
+      Alert.alert('Error', 'Unable to open About screen');
+    }
   };
 
   const handleAdminPress = () => {
     if (isAdmin) {
-      navigation.navigate('Admin');
+      try {
+        navigation.navigate('Admin');
+      } catch (error) {
+        console.error('Navigation error:', error);
+        Alert.alert('Error', 'Unable to open Admin screen');
+      }
     } else {
       Alert.alert('Access Denied', 'Admin access only');
     }
@@ -166,29 +215,51 @@ const SettingsScreen = ({ navigation }) => {
   };
 
   const handlePrivacyPolicy = () => {
-    Linking.openURL('https://habitowl-app.web.app/privacy');
+    Linking.openURL('https://habitowl-app.web.app/privacy').catch(err => {
+      console.error('Error opening privacy policy:', err);
+      Alert.alert('Error', 'Unable to open privacy policy');
+    });
   };
 
   const handleTermsOfService = () => {
-    Linking.openURL('https://habitowl-app.web.app/terms');
+    Linking.openURL('https://habitowl-app.web.app/terms').catch(err => {
+      console.error('Error opening terms:', err);
+      Alert.alert('Error', 'Unable to open terms of service');
+    });
   };
 
-  // FIXED: Use getParent() to navigate to Statistics tab properly
+  // FIXED: Safe navigation with proper null checks
   const handleStatisticsPress = () => {
     try {
+      // Method 1: Use getParent() with null check
       const parentNavigation = navigation.getParent();
-      if (parentNavigation) {
+      if (parentNavigation && parentNavigation.navigate) {
         parentNavigation.navigate('Statistics');
+      } 
+      // Method 2: Fallback to direct navigation
+      else if (navigation.navigate) {
+        navigation.navigate('Statistics');
+      }
+      // Method 3: Last resort - try to go back and let user click statistics
+      else {
+        Alert.alert('Info', 'Please use the Statistics tab at the bottom of the screen');
       }
     } catch (error) {
       console.error('Navigation error:', error);
+      Alert.alert('Info', 'Please use the Statistics tab at the bottom of the screen');
     }
   };
 
   const toggleNotifications = async (enabled) => {
-    setNotifications(enabled);
-    if (!enabled) {
-      await NotificationService.cancelAllNotifications();
+    try {
+      setNotifications(enabled);
+      if (!enabled) {
+        await NotificationService.cancelAllNotifications();
+      }
+    } catch (error) {
+      console.error('Error toggling notifications:', error);
+      // Revert the change if it failed
+      setNotifications(!enabled);
     }
   };
 
@@ -243,6 +314,16 @@ const SettingsScreen = ({ navigation }) => {
       </Card>
     );
   };
+
+  // FIXED: Show loading state while initializing
+  if (isLoading) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <Icon name="loading" size={48} color="#4f46e5" />
+        <Text style={styles.loadingText}>Loading settings...</Text>
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -461,6 +542,15 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8fafc',
+  },
+  centerContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6b7280',
   },
   card: {
     margin: 16,
