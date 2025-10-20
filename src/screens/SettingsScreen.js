@@ -51,32 +51,44 @@ const SettingsScreen = ({ navigation }) => {
     }, [])
   );
 
-  // Single initialization function with proper error handling
+  // FIXED: Better error handling with timeout protection
   const initializeSettings = async () => {
     try {
       setIsLoading(true);
       console.log('Initializing settings...');
       
+      // Set a timeout to prevent infinite loading
+      const timeoutId = setTimeout(() => {
+        console.log('Settings loading timeout - using defaults');
+        setIsLoading(false);
+      }, 10000); // 10 second timeout
+      
       // Load all data with individual error handling
-      const results = await Promise.allSettled([
-        loadUserData(),
-        loadSettings(),
-        checkAdminStatus()
+      await Promise.all([
+        loadUserData().catch(err => {
+          console.error('Error loading user data:', err);
+          setUserStats({});
+          setIsPremium(false);
+        }),
+        loadSettings().catch(err => {
+          console.error('Error loading settings:', err);
+          setApiProvider('deepseek');
+        }),
+        checkAdminStatus().catch(err => {
+          console.error('Error checking admin status:', err);
+          setIsAdmin(false);
+        })
       ]);
       
-      // Log any failures
-      results.forEach((result, index) => {
-        if (result.status === 'rejected') {
-          console.error(`Settings initialization error at step ${index}:`, result.reason);
-        }
-      });
+      // Clear the timeout since we finished successfully
+      clearTimeout(timeoutId);
       
       console.log('Settings initialization complete');
+      setIsLoading(false);
     } catch (error) {
       console.error('Error initializing settings screen:', error);
-      Alert.alert('Notice', 'Some settings could not be loaded. Please try refreshing.');
-    } finally {
       setIsLoading(false);
+      // Don't show alert, just log the error
     }
   };
 
@@ -94,7 +106,8 @@ const SettingsScreen = ({ navigation }) => {
       }
     } catch (error) {
       console.error('Error checking admin status:', error);
-      // Don't show alert for admin check failure
+      setIsAdmin(false);
+      // Don't throw error for admin check failure
     }
   };
 
@@ -108,6 +121,7 @@ const SettingsScreen = ({ navigation }) => {
       console.error('Error loading user data:', error);
       setUserStats({});
       setIsPremium(false);
+      throw error; // Re-throw to be caught by Promise.all
     }
   };
 
@@ -121,6 +135,7 @@ const SettingsScreen = ({ navigation }) => {
     } catch (error) {
       console.error('Error loading settings:', error);
       setApiProvider('deepseek');
+      throw error; // Re-throw to be caught by Promise.all
     }
   };
 

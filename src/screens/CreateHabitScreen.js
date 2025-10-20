@@ -5,7 +5,8 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
-  Platform
+  Platform,
+  KeyboardAvoidingView
 } from 'react-native';
 import {
   TextInput,
@@ -138,7 +139,7 @@ const CreateHabitScreen = ({ navigation, route }) => {
       // FIXED: Navigate back and force refresh
       console.log('Navigating back to Home screen...');
       
-      // Use goBack() instead of navigate to ensure proper return
+      // Use goBack() to return to Home
       navigation.goBack();
       
       // Show success message after a small delay
@@ -166,7 +167,11 @@ const CreateHabitScreen = ({ navigation, route }) => {
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView 
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+    >
       <Appbar.Header style={styles.appbar}>
         <Appbar.BackAction onPress={() => navigation.goBack()} color="#ffffff" />
         <Appbar.Content title="Create New Habit" titleStyle={styles.headerTitle} />
@@ -178,7 +183,7 @@ const CreateHabitScreen = ({ navigation, route }) => {
         />
       </Appbar.Header>
 
-      {/* FIXED: Proper ScrollView with flex container */}
+      {/* FIXED: ScrollView with proper configuration for scrolling */}
       <ScrollView 
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -410,7 +415,7 @@ const CreateHabitScreen = ({ navigation, route }) => {
           onChange={handleTimeChange}
         />
       )}
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -432,8 +437,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 150, // FIXED: Extra padding for scroll access
-    flexGrow: 1, // FIXED: Ensure content can grow
+    paddingBottom: 200, // FIXED: Increased padding for scroll access
   },
   card: {
     margin: 16,
@@ -552,7 +556,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   bottomPadding: {
-    height: 150, // FIXED: Increased for better scroll access
+    height: 200, // FIXED: Increased for better scroll access
   },
 });
 

@@ -34,7 +34,6 @@ const HomeScreen = ({ navigation, route }) => {
     useCallback(() => {
       console.log('HomeScreen focused, loading habits...');
       loadHabits();
-      loadMotivationalMessage();
       
       // Animate in the screen
       Animated.timing(fadeAnim, {
@@ -45,9 +44,12 @@ const HomeScreen = ({ navigation, route }) => {
     }, [])
   );
 
+  // FIXED: Better error handling for habit loading
   const loadHabits = async () => {
     try {
       console.log('Loading habits from Firebase...');
+      setLoading(true);
+      
       const userHabits = await FirebaseService.getUserHabits();
       console.log('Successfully loaded', userHabits.length, 'habits');
       
@@ -64,39 +66,52 @@ const HomeScreen = ({ navigation, route }) => {
       });
       
       setTodayCompletions(completedToday);
+      
+      // Load motivational message after habits are loaded
+      if (userHabits.length > 0) {
+        loadMotivationalMessage(userHabits, completedToday);
+      }
+      
     } catch (error) {
       console.error('Error loading habits:', error);
-      // FIXED: More specific error message
-      Alert.alert(
-        'Error Loading Habits', 
-        'Could not load your habits. Please check your internet connection and try again.',
-        [
-          { text: 'Retry', onPress: () => loadHabits() },
-          { text: 'Cancel', style: 'cancel' }
-        ]
-      );
+      
+      // FIXED: More user-friendly error handling
+      // Don't show alert immediately - just log and set empty state
+      setHabits([]);
+      setTodayCompletions(new Set());
+      
+      // Only show error alert if it's a network issue
+      if (error.message && error.message.includes('network')) {
+        Alert.alert(
+          'Connection Issue', 
+          'Please check your internet connection and try again.',
+          [
+            { text: 'Retry', onPress: () => loadHabits() },
+            { text: 'Cancel', style: 'cancel' }
+          ]
+        );
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const loadMotivationalMessage = async () => {
+  const loadMotivationalMessage = async (userHabits, completedToday) => {
     try {
       const timeOfDay = getTimeOfDay();
-      const totalHabits = habits.length;
-      const completedHabits = todayCompletions.size;
+      const totalHabits = userHabits.length;
+      const completedHabits = completedToday.size;
       
-      if (totalHabits > 0) {
-        const message = await AIService.generateMotivationalMessage(
-          { name: 'daily routine', totalHabits, completedHabits },
-          Math.max(...habits.map(h => h.currentStreak || 0)),
-          timeOfDay
-        );
-        setMotivationalMessage(message);
-      }
+      const message = await AIService.generateMotivationalMessage(
+        { name: 'daily routine', totalHabits, completedHabits },
+        Math.max(...userHabits.map(h => h.currentStreak || 0)),
+        timeOfDay
+      );
+      setMotivationalMessage(message);
     } catch (error) {
       console.error('Error loading motivational message:', error);
       // Don't show error for motivational message failure
+      setMotivationalMessage('');
     }
   };
 
@@ -110,7 +125,6 @@ const HomeScreen = ({ navigation, route }) => {
   const onRefresh = async () => {
     setRefreshing(true);
     await loadHabits();
-    await loadMotivationalMessage();
     setRefreshing(false);
   };
 
@@ -243,6 +257,15 @@ const HomeScreen = ({ navigation, route }) => {
       <Text style={styles.emptySubtitle}>
         Create your first habit and start building a better you
       </Text>
+      <Button
+        mode="contained"
+        onPress={handleCreateHabit}
+        style={styles.emptyButton}
+        labelStyle={styles.emptyButtonLabel}
+        icon="plus"
+      >
+        Create Your First Habit
+      </Button>
     </View>
   );
 
@@ -449,6 +472,15 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     textAlign: 'center',
     marginBottom: 32,
+  },
+  emptyButton: {
+    backgroundColor: '#4f46e5',
+    paddingHorizontal: 24,
+  },
+  emptyButtonLabel: {
+    color: '#ffffff',
+    fontWeight: '600',
+    fontSize: 16,
   },
   adBanner: {
     marginTop: 20,
