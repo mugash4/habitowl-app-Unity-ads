@@ -29,41 +29,28 @@ const HomeScreen = ({ navigation, route }) => {
   const [motivationalMessage, setMotivationalMessage] = useState('');
   const [fadeAnim] = useState(new Animated.Value(0));
 
-  // FIXED: Better focus effect that triggers on route params changes
+  // FIXED: Reload habits every time screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      console.log('HomeScreen focused, reloading habits...');
-      loadHabits();
-      loadMotivationalMessage();
-    }, [])
-  );
-
-  // FIXED: Also reload when route params change (when coming back from CreateHabit)
-  useEffect(() => {
-    if (route.params?.refresh || route.params?.newHabitCreated) {
-      console.log('Refreshing due to route params...');
+      console.log('HomeScreen focused, loading habits...');
       loadHabits();
       loadMotivationalMessage();
       
-      // Clear the params to avoid repeated refreshes
-      navigation.setParams({ refresh: false, newHabitCreated: false });
-    }
-  }, [route.params]);
-
-  useEffect(() => {
-    // Animate in the screen
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 500,
-      useNativeDriver: true,
-    }).start();
-  }, []);
+      // Animate in the screen
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true,
+      }).start();
+    }, [])
+  );
 
   const loadHabits = async () => {
     try {
       console.log('Loading habits from Firebase...');
       const userHabits = await FirebaseService.getUserHabits();
-      console.log('Loaded', userHabits.length, 'habits');
+      console.log('Successfully loaded', userHabits.length, 'habits');
+      
       setHabits(userHabits);
       
       // Check which habits are completed today
@@ -79,7 +66,15 @@ const HomeScreen = ({ navigation, route }) => {
       setTodayCompletions(completedToday);
     } catch (error) {
       console.error('Error loading habits:', error);
-      Alert.alert('Error', 'Failed to load habits');
+      // FIXED: More specific error message
+      Alert.alert(
+        'Error Loading Habits', 
+        'Could not load your habits. Please check your internet connection and try again.',
+        [
+          { text: 'Retry', onPress: () => loadHabits() },
+          { text: 'Cancel', style: 'cancel' }
+        ]
+      );
     } finally {
       setLoading(false);
     }
@@ -101,6 +96,7 @@ const HomeScreen = ({ navigation, route }) => {
       }
     } catch (error) {
       console.error('Error loading motivational message:', error);
+      // Don't show error for motivational message failure
     }
   };
 

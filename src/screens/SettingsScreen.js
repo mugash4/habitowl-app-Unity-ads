@@ -22,6 +22,7 @@ import {
 } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { useFocusEffect } from '@react-navigation/native';
 
 import FirebaseService from '../services/FirebaseService';
 import AdService from '../services/AdService';
@@ -42,25 +43,38 @@ const SettingsScreen = ({ navigation }) => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    // Initialize settings when component mounts
-    initializeSettings();
-  }, []);
+  // FIXED: Use useFocusEffect to reload settings when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      console.log('Settings screen focused, loading data...');
+      initializeSettings();
+    }, [])
+  );
 
   // Single initialization function with proper error handling
   const initializeSettings = async () => {
     try {
       setIsLoading(true);
+      console.log('Initializing settings...');
       
       // Load all data with individual error handling
-      await Promise.allSettled([
+      const results = await Promise.allSettled([
         loadUserData(),
         loadSettings(),
         checkAdminStatus()
       ]);
       
+      // Log any failures
+      results.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          console.error(`Settings initialization error at step ${index}:`, result.reason);
+        }
+      });
+      
+      console.log('Settings initialization complete');
     } catch (error) {
       console.error('Error initializing settings screen:', error);
+      Alert.alert('Notice', 'Some settings could not be loaded. Please try refreshing.');
     } finally {
       setIsLoading(false);
     }
@@ -80,12 +94,14 @@ const SettingsScreen = ({ navigation }) => {
       }
     } catch (error) {
       console.error('Error checking admin status:', error);
+      // Don't show alert for admin check failure
     }
   };
 
   const loadUserData = async () => {
     try {
       const stats = await FirebaseService.getUserStats();
+      console.log('User stats loaded:', stats);
       setUserStats(stats || {});
       setIsPremium(stats?.isPremium || false);
     } catch (error) {
@@ -314,7 +330,7 @@ const SettingsScreen = ({ navigation }) => {
     );
   };
 
-  // Show loading state while initializing
+  // FIXED: Show loading state properly while initializing
   if (isLoading) {
     return (
       <View style={[styles.container, styles.centerContent]}>
@@ -324,183 +340,193 @@ const SettingsScreen = ({ navigation }) => {
     );
   }
 
+  // FIXED: Render full content after loading completes
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {renderUserInfo()}
+    <View style={styles.container}>
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        bounces={true}
+      >
+        {renderUserInfo()}
 
-      <PromoOfferBanner />
+        <PromoOfferBanner />
 
-      {!isPremium && !isAdmin && (
-        <Card style={styles.card}>
-          <List.Item
-            title="Upgrade to Premium"
-            description="Remove ads, unlimited habits, AI coaching"
-            left={(props) => <List.Icon {...props} icon="crown" color="#f59e0b" />}
-            right={(props) => <List.Icon {...props} icon="chevron-right" />}
-            onPress={handlePremiumUpgrade}
-            titleStyle={styles.listItemTitle}
-            descriptionStyle={styles.listItemDescription}
-          />
-        </Card>
-      )}
-
-      <Card style={styles.card}>
-        <List.Subheader style={styles.subheader}>AI & Personalization</List.Subheader>
-        
-        <List.Item
-          title="AI Provider"
-          description={`Currently using: ${apiProvider.toUpperCase()}`}
-          left={(props) => <List.Icon {...props} icon="robot" />}
-          titleStyle={styles.listItemTitle}
-          descriptionStyle={styles.listItemDescription}
-        />
-
-        <List.Item
-          title="Smart Coaching"
-          description="Powered by advanced AI"
-          left={(props) => <List.Icon {...props} icon="brain" />}
-          titleStyle={styles.listItemTitle}
-          descriptionStyle={styles.listItemDescription}
-        />
-        
-        {isAdmin && (
-          <List.Item
-            title="Admin Panel"
-            description="Manage app settings and API keys"
-            left={(props) => <List.Icon {...props} icon="shield-account" color="#ef4444" />}
-            right={(props) => <List.Icon {...props} icon="chevron-right" />}
-            onPress={handleAdminPress}
-            titleStyle={styles.listItemTitle}
-            descriptionStyle={styles.listItemDescription}
-          />
+        {!isPremium && !isAdmin && (
+          <Card style={styles.card}>
+            <List.Item
+              title="Upgrade to Premium"
+              description="Remove ads, unlimited habits, AI coaching"
+              left={(props) => <List.Icon {...props} icon="crown" color="#f59e0b" />}
+              right={(props) => <List.Icon {...props} icon="chevron-right" />}
+              onPress={handlePremiumUpgrade}
+              titleStyle={styles.listItemTitle}
+              descriptionStyle={styles.listItemDescription}
+            />
+          </Card>
         )}
-      </Card>
 
-      <Card style={styles.card}>
-        <List.Subheader style={styles.subheader}>Social & Sharing</List.Subheader>
-        
-        <List.Item
-          title="Share HabitOwl"
-          description="Invite friends and earn rewards"
-          left={(props) => <List.Icon {...props} icon="share" />}
-          onPress={handleShareApp}
-          titleStyle={styles.listItemTitle}
-          descriptionStyle={styles.listItemDescription}
-        />
-
-        <List.Item
-          title="Enter Referral Code"
-          description="Got a code from a friend?"
-          left={(props) => <List.Icon {...props} icon="ticket" />}
-          onPress={() => setShowReferralDialog(true)}
-          titleStyle={styles.listItemTitle}
-          descriptionStyle={styles.listItemDescription}
-        />
-
-        {userStats?.referralCode && (
+        <Card style={styles.card}>
+          <List.Subheader style={styles.subheader}>AI & Personalization</List.Subheader>
+          
           <List.Item
-            title="Your Referral Code"
-            description={userStats.referralCode}
-            left={(props) => <List.Icon {...props} icon="card-text" />}
-            right={(props) => (
-              <Button
-                compact
-                mode="outlined"
-                onPress={() => Share.share({ message: userStats.referralCode })}
-                labelStyle={styles.buttonLabel}
-              >
-                Share
-              </Button>
+            title="AI Provider"
+            description={`Currently using: ${apiProvider.toUpperCase()}`}
+            left={(props) => <List.Icon {...props} icon="robot" />}
+            titleStyle={styles.listItemTitle}
+            descriptionStyle={styles.listItemDescription}
+          />
+
+          <List.Item
+            title="Smart Coaching"
+            description="Powered by advanced AI"
+            left={(props) => <List.Icon {...props} icon="brain" />}
+            titleStyle={styles.listItemTitle}
+            descriptionStyle={styles.listItemDescription}
+          />
+          
+          {isAdmin && (
+            <List.Item
+              title="Admin Panel"
+              description="Manage app settings and API keys"
+              left={(props) => <List.Icon {...props} icon="shield-account" color="#ef4444" />}
+              right={(props) => <List.Icon {...props} icon="chevron-right" />}
+              onPress={handleAdminPress}
+              titleStyle={styles.listItemTitle}
+              descriptionStyle={styles.listItemDescription}
+            />
+          )}
+        </Card>
+
+        <Card style={styles.card}>
+          <List.Subheader style={styles.subheader}>Social & Sharing</List.Subheader>
+          
+          <List.Item
+            title="Share HabitOwl"
+            description="Invite friends and earn rewards"
+            left={(props) => <List.Icon {...props} icon="share" />}
+            onPress={handleShareApp}
+            titleStyle={styles.listItemTitle}
+            descriptionStyle={styles.listItemDescription}
+          />
+
+          <List.Item
+            title="Enter Referral Code"
+            description="Got a code from a friend?"
+            left={(props) => <List.Icon {...props} icon="ticket" />}
+            onPress={() => setShowReferralDialog(true)}
+            titleStyle={styles.listItemTitle}
+            descriptionStyle={styles.listItemDescription}
+          />
+
+          {userStats?.referralCode && (
+            <List.Item
+              title="Your Referral Code"
+              description={userStats.referralCode}
+              left={(props) => <List.Icon {...props} icon="card-text" />}
+              right={(props) => (
+                <Button
+                  compact
+                  mode="outlined"
+                  onPress={() => Share.share({ message: userStats.referralCode })}
+                  labelStyle={styles.buttonLabel}
+                >
+                  Share
+                </Button>
+              )}
+              titleStyle={styles.listItemTitle}
+              descriptionStyle={styles.listItemDescription}
+            />
+          )}
+        </Card>
+
+        <Card style={styles.card}>
+          <List.Subheader style={styles.subheader}>App Settings</List.Subheader>
+          
+          <List.Item
+            title="Notifications"
+            description="Habit reminders and motivational messages"
+            left={(props) => <List.Icon {...props} icon="bell" />}
+            right={() => (
+              <Switch
+                value={notifications}
+                onValueChange={toggleNotifications}
+                color="#4f46e5"
+              />
             )}
             titleStyle={styles.listItemTitle}
             descriptionStyle={styles.listItemDescription}
           />
-        )}
-      </Card>
 
-      <Card style={styles.card}>
-        <List.Subheader style={styles.subheader}>App Settings</List.Subheader>
-        
-        <List.Item
-          title="Notifications"
-          description="Habit reminders and motivational messages"
-          left={(props) => <List.Icon {...props} icon="bell" />}
-          right={() => (
-            <Switch
-              value={notifications}
-              onValueChange={toggleNotifications}
-              color="#4f46e5"
-            />
-          )}
-          titleStyle={styles.listItemTitle}
-          descriptionStyle={styles.listItemDescription}
-        />
+          <List.Item
+            title="Statistics"
+            description="View your habit analytics"
+            left={(props) => <List.Icon {...props} icon="chart-line" />}
+            right={(props) => <List.Icon {...props} icon="chevron-right" />}
+            onPress={handleStatisticsPress}
+            titleStyle={styles.listItemTitle}
+            descriptionStyle={styles.listItemDescription}
+          />
+        </Card>
 
-        <List.Item
-          title="Statistics"
-          description="View your habit analytics"
-          left={(props) => <List.Icon {...props} icon="chart-line" />}
-          right={(props) => <List.Icon {...props} icon="chevron-right" />}
-          onPress={handleStatisticsPress}
-          titleStyle={styles.listItemTitle}
-          descriptionStyle={styles.listItemDescription}
-        />
-      </Card>
+        <Card style={styles.card}>
+          <List.Subheader style={styles.subheader}>Support & Legal</List.Subheader>
+          
+          <List.Item
+            title="Contact Support"
+            description="Get help or report issues"
+            left={(props) => <List.Icon {...props} icon="help-circle" />}
+            right={(props) => <List.Icon {...props} icon="chevron-right" />}
+            onPress={handleContactSupport}
+            titleStyle={styles.listItemTitle}
+            descriptionStyle={styles.listItemDescription}
+          />
 
-      <Card style={styles.card}>
-        <List.Subheader style={styles.subheader}>Support & Legal</List.Subheader>
-        
-        <List.Item
-          title="Contact Support"
-          description="Get help or report issues"
-          left={(props) => <List.Icon {...props} icon="help-circle" />}
-          right={(props) => <List.Icon {...props} icon="chevron-right" />}
-          onPress={handleContactSupport}
-          titleStyle={styles.listItemTitle}
-          descriptionStyle={styles.listItemDescription}
-        />
+          <List.Item
+            title="About HabitOwl"
+            description="Learn more about the app"
+            left={(props) => <List.Icon {...props} icon="information" />}
+            right={(props) => <List.Icon {...props} icon="chevron-right" />}
+            onPress={handleAboutPress}
+            titleStyle={styles.listItemTitle}
+            descriptionStyle={styles.listItemDescription}
+          />
 
-        <List.Item
-          title="About HabitOwl"
-          description="Learn more about the app"
-          left={(props) => <List.Icon {...props} icon="information" />}
-          right={(props) => <List.Icon {...props} icon="chevron-right" />}
-          onPress={handleAboutPress}
-          titleStyle={styles.listItemTitle}
-          descriptionStyle={styles.listItemDescription}
-        />
+          <List.Item
+            title="Privacy Policy"
+            left={(props) => <List.Icon {...props} icon="shield-account" />}
+            onPress={handlePrivacyPolicy}
+            titleStyle={styles.listItemTitle}
+          />
 
-        <List.Item
-          title="Privacy Policy"
-          left={(props) => <List.Icon {...props} icon="shield-account" />}
-          onPress={handlePrivacyPolicy}
-          titleStyle={styles.listItemTitle}
-        />
+          <List.Item
+            title="Terms of Service"
+            left={(props) => <List.Icon {...props} icon="file-document" />}
+            onPress={handleTermsOfService}
+            titleStyle={styles.listItemTitle}
+          />
 
-        <List.Item
-          title="Terms of Service"
-          left={(props) => <List.Icon {...props} icon="file-document" />}
-          onPress={handleTermsOfService}
-          titleStyle={styles.listItemTitle}
-        />
+          <List.Item
+            title="App Version"
+            description="2.3.0"
+            left={(props) => <List.Icon {...props} icon="information" />}
+            titleStyle={styles.listItemTitle}
+            descriptionStyle={styles.listItemDescription}
+          />
+        </Card>
 
-        <List.Item
-          title="App Version"
-          description="2.3.0"
-          left={(props) => <List.Icon {...props} icon="information" />}
-          titleStyle={styles.listItemTitle}
-          descriptionStyle={styles.listItemDescription}
-        />
-      </Card>
+        <Card style={styles.card}>
+          <List.Item
+            title="Sign Out"
+            titleStyle={styles.signOutText}
+            left={(props) => <List.Icon {...props} icon="logout" color="#ef4444" />}
+            onPress={handleSignOut}
+          />
+        </Card>
 
-      <Card style={styles.card}>
-        <List.Item
-          title="Sign Out"
-          titleStyle={styles.signOutText}
-          left={(props) => <List.Icon {...props} icon="logout" color="#ef4444" />}
-          onPress={handleSignOut}
-        />
-      </Card>
+        <View style={styles.bottomPadding} />
+      </ScrollView>
 
       <Portal>
         <Dialog visible={showContactSupport} onDismiss={() => setShowContactSupport(false)}>
@@ -531,9 +557,7 @@ const SettingsScreen = ({ navigation }) => {
           </Dialog.Actions>
         </Dialog>
       </Portal>
-
-      <View style={styles.bottomPadding} />
-    </ScrollView>
+    </View>
   );
 };
 
@@ -541,6 +565,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8fafc',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 20,
   },
   centerContent: {
     justifyContent: 'center',

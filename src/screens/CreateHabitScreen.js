@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
-  KeyboardAvoidingView,
   Platform
 } from 'react-native';
 import {
@@ -122,7 +121,9 @@ const CreateHabitScreen = ({ navigation, route }) => {
         userId: FirebaseService.currentUser.uid,
       };
 
+      console.log('Creating habit with data:', habitData);
       const newHabit = await FirebaseService.createHabit(habitData);
+      console.log('Habit created successfully:', newHabit);
 
       if (reminderEnabled) {
         await NotificationService.scheduleHabitReminder(newHabit);
@@ -134,18 +135,18 @@ const CreateHabitScreen = ({ navigation, route }) => {
         has_reminder: reminderEnabled
       });
 
-      // FIXED: Navigate back first, then show success alert
-      // This ensures the HomeScreen refreshes before the alert appears
-      navigation.navigate('Main', { 
-        screen: 'Home',
-        params: { refresh: true, newHabitCreated: true }
-      });
-
-      // Small delay to ensure navigation completes
+      // FIXED: Navigate back and force refresh
+      console.log('Navigating back to Home screen...');
+      
+      // Use goBack() instead of navigate to ensure proper return
+      navigation.goBack();
+      
+      // Show success message after a small delay
       setTimeout(() => {
         Alert.alert(
           'Success!',
-          `"${habitName}" has been added to your habits!`
+          `"${habitName}" has been added to your habits!`,
+          [{ text: 'OK' }]
         );
       }, 300);
 
@@ -177,7 +178,7 @@ const CreateHabitScreen = ({ navigation, route }) => {
         />
       </Appbar.Header>
 
-      {/* FIXED: Better scroll handling */}
+      {/* FIXED: Proper ScrollView with flex container */}
       <ScrollView 
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -186,6 +187,7 @@ const CreateHabitScreen = ({ navigation, route }) => {
         nestedScrollEnabled={true}
         bounces={true}
         scrollEnabled={true}
+        alwaysBounceVertical={true}
       >
         {/* AI Suggestions */}
         {aiSuggestions.length > 0 && (
@@ -395,7 +397,7 @@ const CreateHabitScreen = ({ navigation, route }) => {
           Create Habit
         </Button>
 
-        {/* Bottom padding for better scrolling */}
+        {/* FIXED: Extra padding for better scroll access */}
         <View style={styles.bottomPadding} />
       </ScrollView>
 
@@ -425,12 +427,13 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontWeight: 'bold',
   },
-  // FIXED: Removed KeyboardAvoidingView, using direct ScrollView
+  // FIXED: Proper flex for ScrollView
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 100, // FIXED: Extra padding for scroll access
+    paddingBottom: 150, // FIXED: Extra padding for scroll access
+    flexGrow: 1, // FIXED: Ensure content can grow
   },
   card: {
     margin: 16,
@@ -549,7 +552,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   bottomPadding: {
-    height: 120, // FIXED: Increased padding for better scroll
+    height: 150, // FIXED: Increased for better scroll access
   },
 });
 
