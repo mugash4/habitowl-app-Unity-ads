@@ -59,7 +59,6 @@
     },
     "plugins": [
       "./plugins/withIronSource",
-      "./plugins/withAndroidManifestFix",
       [
         "expo-build-properties",
         {
@@ -92,9 +91,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "5cd7e496-1424-4048-96f5-860d01792a22"
+        "projectId": "23c5ef29-d6d8-4b8a-b4dc-030ec059e3f0"
       }
     },
-    "owner": "augustine1"
+    "owner": "augustinemwathi6"
   }
 }
