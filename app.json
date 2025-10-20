@@ -59,6 +59,7 @@
     },
     "plugins": [
       "./plugins/withIronSource",
+      "./plugins/withAndroidManifestFix",
       [
         "expo-build-properties",
         {
