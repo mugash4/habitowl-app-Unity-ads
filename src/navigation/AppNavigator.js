@@ -108,15 +108,24 @@ const AppNavigator = () => {
 
   const initializeApp = async () => {
     try {
-      await AdService.initialize();
-      await NotificationService.initialize();
+      // Initialize services
+      await Promise.allSettled([
+        AdService.initialize(),
+        NotificationService.initialize()
+      ]);
 
+      // Listen for auth state changes
       const unsubscribe = FirebaseService.onAuthStateChanged(async (user) => {
         setIsAuthenticated(!!user);
         
         if (user) {
-          const adminStatus = await AdminService.checkAdminStatus(user.email);
-          setIsAdmin(adminStatus);
+          try {
+            const adminStatus = await AdminService.checkAdminStatus(user.email);
+            setIsAdmin(adminStatus);
+          } catch (error) {
+            console.error('Error checking admin status:', error);
+            setIsAdmin(false);
+          }
         } else {
           setIsAdmin(false);
         }
@@ -151,7 +160,6 @@ const AppNavigator = () => {
                 component={MainTabNavigator}
                 options={{ headerShown: false }}
               />
-              {/* FIXED: headerShown set to false to prevent double back button */}
               <Stack.Screen 
                 name="CreateHabit" 
                 component={CreateHabitScreen}

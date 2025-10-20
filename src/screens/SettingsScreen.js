@@ -6,7 +6,8 @@ import {
   ScrollView,
   Alert,
   Share,
-  Linking
+  Linking,
+  ActivityIndicator
 } from 'react-native';
 import {
   List,
@@ -42,27 +43,21 @@ const SettingsScreen = ({ navigation }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // FIXED: Properly handle async initialization
+    // Initialize settings when component mounts
     initializeSettings();
   }, []);
 
-  // FIXED: Single initialization function with proper error handling
+  // Single initialization function with proper error handling
   const initializeSettings = async () => {
     try {
       setIsLoading(true);
       
-      // Load all data sequentially with individual error handling
-      await loadUserData().catch(err => {
-        console.error('Error loading user data:', err);
-      });
-      
-      await loadSettings().catch(err => {
-        console.error('Error loading settings:', err);
-      });
-      
-      await checkAdminStatus().catch(err => {
-        console.error('Error checking admin status:', err);
-      });
+      // Load all data with individual error handling
+      await Promise.allSettled([
+        loadUserData(),
+        loadSettings(),
+        checkAdminStatus()
+      ]);
       
     } catch (error) {
       console.error('Error initializing settings screen:', error);
@@ -85,18 +80,16 @@ const SettingsScreen = ({ navigation }) => {
       }
     } catch (error) {
       console.error('Error checking admin status:', error);
-      // Don't throw - just log the error
     }
   };
 
   const loadUserData = async () => {
     try {
       const stats = await FirebaseService.getUserStats();
-      setUserStats(stats);
+      setUserStats(stats || {});
       setIsPremium(stats?.isPremium || false);
     } catch (error) {
       console.error('Error loading user data:', error);
-      // Set defaults if loading fails
       setUserStats({});
       setIsPremium(false);
     }
@@ -104,23 +97,26 @@ const SettingsScreen = ({ navigation }) => {
 
   const loadSettings = async () => {
     try {
-      // Get user stats first
       const stats = await FirebaseService.getUserStats();
       const isPremiumUser = stats?.isPremium || false;
       
-      // Get active provider with fallback
       const provider = await SecureAIService.getActiveProvider(isPremiumUser);
       setApiProvider(provider || 'deepseek');
     } catch (error) {
       console.error('Error loading settings:', error);
-      // Set default provider if error occurs
       setApiProvider('deepseek');
     }
   };
 
   const handlePremiumUpgrade = () => {
     try {
-      navigation.navigate('Premium');
+      // Get the parent navigator to navigate to Premium screen
+      const parentNav = navigation.getParent();
+      if (parentNav && parentNav.navigate) {
+        parentNav.navigate('Premium');
+      } else {
+        Alert.alert('Info', 'Premium upgrade coming soon!');
+      }
     } catch (error) {
       console.error('Navigation error:', error);
       Alert.alert('Error', 'Unable to open Premium screen');
@@ -139,7 +135,11 @@ const SettingsScreen = ({ navigation }) => {
           onPress: async () => {
             try {
               await FirebaseService.signOut();
-              navigation.replace('Auth');
+              // Navigate to Auth screen - use replace to prevent going back
+              const parentNav = navigation.getParent();
+              if (parentNav && parentNav.replace) {
+                parentNav.replace('Auth');
+              }
             } catch (error) {
               console.error('Sign out error:', error);
               Alert.alert('Error', 'Failed to sign out. Please try again.');
@@ -165,8 +165,10 @@ const SettingsScreen = ({ navigation }) => {
         referral_code: referralCode
       }).catch(err => console.error('Error tracking event:', err));
     } catch (error) {
-      console.error('Error sharing app:', error);
       // Share dialog cancelled is not an error - just ignore
+      if (error.message !== 'User did not share') {
+        console.error('Error sharing app:', error);
+      }
     }
   };
 
@@ -190,7 +192,12 @@ const SettingsScreen = ({ navigation }) => {
 
   const handleAboutPress = () => {
     try {
-      navigation.navigate('About');
+      const parentNav = navigation.getParent();
+      if (parentNav && parentNav.navigate) {
+        parentNav.navigate('About');
+      } else {
+        Alert.alert('Info', 'About section coming soon!');
+      }
     } catch (error) {
       console.error('Navigation error:', error);
       Alert.alert('Error', 'Unable to open About screen');
@@ -200,7 +207,12 @@ const SettingsScreen = ({ navigation }) => {
   const handleAdminPress = () => {
     if (isAdmin) {
       try {
-        navigation.navigate('Admin');
+        const parentNav = navigation.getParent();
+        if (parentNav && parentNav.navigate) {
+          parentNav.navigate('Admin');
+        } else {
+          Alert.alert('Info', 'Admin panel coming soon!');
+        }
       } catch (error) {
         console.error('Navigation error:', error);
         Alert.alert('Error', 'Unable to open Admin screen');
@@ -228,22 +240,10 @@ const SettingsScreen = ({ navigation }) => {
     });
   };
 
-  // FIXED: Safe navigation with proper null checks
   const handleStatisticsPress = () => {
     try {
-      // Method 1: Use getParent() with null check
-      const parentNavigation = navigation.getParent();
-      if (parentNavigation && parentNavigation.navigate) {
-        parentNavigation.navigate('Statistics');
-      } 
-      // Method 2: Fallback to direct navigation
-      else if (navigation.navigate) {
-        navigation.navigate('Statistics');
-      }
-      // Method 3: Last resort - try to go back and let user click statistics
-      else {
-        Alert.alert('Info', 'Please use the Statistics tab at the bottom of the screen');
-      }
+      // Navigate within the tab navigator to Statistics tab
+      navigation.navigate('Statistics');
     } catch (error) {
       console.error('Navigation error:', error);
       Alert.alert('Info', 'Please use the Statistics tab at the bottom of the screen');
@@ -258,7 +258,6 @@ const SettingsScreen = ({ navigation }) => {
       }
     } catch (error) {
       console.error('Error toggling notifications:', error);
-      // Revert the change if it failed
       setNotifications(!enabled);
     }
   };
@@ -315,11 +314,11 @@ const SettingsScreen = ({ navigation }) => {
     );
   };
 
-  // FIXED: Show loading state while initializing
+  // Show loading state while initializing
   if (isLoading) {
     return (
       <View style={[styles.container, styles.centerContent]}>
-        <Icon name="loading" size={48} color="#4f46e5" />
+        <ActivityIndicator size="large" color="#4f46e5" />
         <Text style={styles.loadingText}>Loading settings...</Text>
       </View>
     );
@@ -487,7 +486,7 @@ const SettingsScreen = ({ navigation }) => {
 
         <List.Item
           title="App Version"
-          description="2.3.1"
+          description="2.3.0"
           left={(props) => <List.Icon {...props} icon="information" />}
           titleStyle={styles.listItemTitle}
           descriptionStyle={styles.listItemDescription}
