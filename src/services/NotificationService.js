@@ -2,6 +2,7 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
 // Configure notification behavior
 Notifications.setNotificationHandler({
@@ -20,61 +21,129 @@ class NotificationService {
   }
 
   async initialize() {
-    // Request permissions and get push token
-    this.expoPushToken = await this.registerForPushNotificationsAsync();
+    try {
+      console.log('Initializing NotificationService...');
+      
+      // Request permissions and get push token
+      this.expoPushToken = await this.registerForPushNotificationsAsync();
 
-    // Listen for incoming notifications
-    this.notificationListener = Notifications.addNotificationReceivedListener(
-      this.handleNotificationReceived.bind(this)
-    );
+      // Listen for incoming notifications
+      this.notificationListener = Notifications.addNotificationReceivedListener(
+        this.handleNotificationReceived.bind(this)
+      );
 
-    // Listen for notification responses (when user taps notification)
-    this.responseListener = Notifications.addNotificationResponseReceivedListener(
-      this.handleNotificationResponse.bind(this)
-    );
+      // Listen for notification responses (when user taps notification)
+      this.responseListener = Notifications.addNotificationResponseReceivedListener(
+        this.handleNotificationResponse.bind(this)
+      );
 
-    return this.expoPushToken;
+      console.log('NotificationService initialized successfully');
+      return this.expoPushToken;
+    } catch (error) {
+      console.error('Error initializing NotificationService:', error);
+      throw error;
+    }
   }
 
   async registerForPushNotificationsAsync() {
     let token;
 
-    if (Device.isDevice) {
-      const { status: existingStatus } = await Notifications.getPermissionsAsync();
-      let finalStatus = existingStatus;
+    // Only proceed if running on a physical device
+    if (!Device.isDevice) {
+      console.log('Must use physical device for Push Notifications');
+      return null;
+    }
 
-      if (existingStatus !== 'granted') {
-        const { status } = await Notifications.requestPermissionsAsync();
-        finalStatus = status;
+    try {
+      // Step 1: Configure Android notification channels BEFORE requesting permissions
+      // This is CRITICAL for Android 13+ to show the permission prompt
+      if (Platform.OS === 'android') {
+        console.log('Configuring Android notification channels...');
+        
+        await Notifications.setNotificationChannelAsync('habit-reminders', {
+          name: 'Habit Reminders',
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#6366f1',
+          sound: 'default',
+          enableVibrate: true,
+          showBadge: true,
+        });
+
+        await Notifications.setNotificationChannelAsync('motivational', {
+          name: 'Motivational Messages',
+          importance: Notifications.AndroidImportance.DEFAULT,
+          vibrationPattern: [0, 250],
+          lightColor: '#10b981',
+          sound: 'default',
+          enableVibrate: true,
+          showBadge: true,
+        });
+
+        await Notifications.setNotificationChannelAsync('streak-celebrations', {
+          name: 'Streak Celebrations',
+          importance: Notifications.AndroidImportance.HIGH,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#f59e0b',
+          sound: 'default',
+          enableVibrate: true,
+          showBadge: true,
+        });
+
+        console.log('Android notification channels configured successfully');
       }
 
+      // Step 2: Check existing permissions
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      console.log('Existing notification permission status:', existingStatus);
+      
+      let finalStatus = existingStatus;
+
+      // Step 3: Request permissions if not already granted
+      if (existingStatus !== 'granted') {
+        console.log('Requesting notification permissions...');
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+        console.log('Permission request result:', finalStatus);
+      }
+
+      // Step 4: Handle permission denial
       if (finalStatus !== 'granted') {
-        console.log('Failed to get push token for push notification!');
+        console.log('❌ Notification permission denied by user');
+        console.log('App will function but notifications will not be shown');
         return null;
       }
 
-      token = (await Notifications.getExpoPushTokenAsync({
-        projectId: Constants.expoConfig?.extra?.eas?.projectId,
-      })).data;
-    } else {
-      console.log('Must use physical device for Push Notifications');
-    }
+      console.log('✅ Notification permission granted');
 
-    // Configure notification channel for Android
-    if (Device.osName === 'Android') {
-      await Notifications.setNotificationChannelAsync('habit-reminders', {
-        name: 'Habit Reminders',
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#6366f1',
-      });
+      // Step 5: Get Expo Push Token (for remote notifications)
+      try {
+        const projectId =
+          Constants?.expoConfig?.extra?.eas?.projectId ?? 
+          Constants?.easConfig?.projectId;
+        
+        if (!projectId) {
+          console.warn('⚠️ Project ID not found - push notifications may not work');
+          console.warn('Local notifications will still work');
+          return null;
+        }
 
-      await Notifications.setNotificationChannelAsync('motivational', {
-        name: 'Motivational Messages',
-        importance: Notifications.AndroidImportance.DEFAULT,
-        vibrationPattern: [0, 250],
-        lightColor: '#10b981',
-      });
+        token = (
+          await Notifications.getExpoPushTokenAsync({
+            projectId,
+          })
+        ).data;
+        
+        console.log('✅ Expo Push Token obtained:', token);
+      } catch (tokenError) {
+        console.error('Error getting Expo Push Token:', tokenError);
+        console.log('Local notifications will still work');
+        token = null;
+      }
+
+    } catch (error) {
+      console.error('Error in registerForPushNotificationsAsync:', error);
+      throw error;
     }
 
     return token;
@@ -82,10 +151,13 @@ class NotificationService {
 
   async scheduleHabitReminder(habit) {
     try {
+      console.log(`Scheduling reminder for habit: ${habit.name}`);
+      
       // Cancel existing notifications for this habit
       await this.cancelHabitNotifications(habit.id);
 
       if (!habit.reminderEnabled || !habit.reminderTime) {
+        console.log('Reminder not enabled or time not set for this habit');
         return;
       }
 
@@ -111,10 +183,15 @@ class NotificationService {
         },
       });
 
+      console.log(`✅ Reminder scheduled with ID: ${notificationId}`);
+
       // Store notification ID for later cancellation
       await this.storeNotificationId(habit.id, 'reminder', notificationId);
 
       // Schedule motivational follow-up (30 minutes later)
+      const followUpHour = minutes + 30 >= 60 ? hours + 1 : hours;
+      const followUpMinute = minutes + 30 >= 60 ? minutes + 30 - 60 : minutes + 30;
+
       const followUpId = await Notifications.scheduleNotificationAsync({
         content: {
           title: `Still time for ${habit.name}! 💪`,
@@ -128,12 +205,13 @@ class NotificationService {
           priority: Notifications.AndroidNotificationPriority.DEFAULT,
         },
         trigger: {
-          hour: hours,
-          minute: minutes + 30 >= 60 ? minutes + 30 - 60 : minutes + 30,
+          hour: followUpHour,
+          minute: followUpMinute,
           repeats: true,
         },
       });
 
+      console.log(`✅ Follow-up scheduled with ID: ${followUpId}`);
       await this.storeNotificationId(habit.id, 'followup', followUpId);
 
       return { reminderId: notificationId, followUpId };
@@ -158,6 +236,8 @@ class NotificationService {
         100: `100 days of ${habit.name}! You're a habit master! 👑`,
         365: `One full year of ${habit.name}! Incredible achievement! 🎊`
       };
+
+      console.log(`🎯 Scheduling streak celebration: ${streak} days`);
 
       await Notifications.scheduleNotificationAsync({
         content: {
@@ -208,6 +288,7 @@ class NotificationService {
       if (storedIds) {
         for (const [type, notificationId] of Object.entries(storedIds)) {
           await Notifications.cancelScheduledNotificationAsync(notificationId);
+          console.log(`Cancelled ${type} notification: ${notificationId}`);
         }
         
         // Remove from storage
@@ -221,6 +302,7 @@ class NotificationService {
   async cancelAllNotifications() {
     try {
       await Notifications.cancelAllScheduledNotificationsAsync();
+      console.log('All scheduled notifications cancelled');
       
       // Clear all stored notification IDs
       const keys = await AsyncStorage.getAllKeys();
@@ -256,12 +338,12 @@ class NotificationService {
   }
 
   handleNotificationReceived(notification) {
-    console.log('Notification received:', notification);
+    console.log('📩 Notification received:', notification.request.content.title);
     // You can add custom logic here when a notification is received
   }
 
   handleNotificationResponse(response) {
-    console.log('Notification response:', response);
+    console.log('👆 Notification tapped:', response.notification.request.content.title);
     
     const data = response.notification.request.content.data;
     
@@ -286,7 +368,9 @@ class NotificationService {
 
   async getScheduledNotifications() {
     try {
-      return await Notifications.getAllScheduledNotificationsAsync();
+      const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+      console.log(`Currently scheduled notifications: ${scheduled.length}`);
+      return scheduled;
     } catch (error) {
       console.error('Error getting scheduled notifications:', error);
       return [];
@@ -295,6 +379,17 @@ class NotificationService {
 
   async getPushToken() {
     return this.expoPushToken;
+  }
+
+  async checkPermissionStatus() {
+    try {
+      const { status, ios, android } = await Notifications.getPermissionsAsync();
+      console.log('Current permission status:', { status, ios, android });
+      return { status, ios, android };
+    } catch (error) {
+      console.error('Error checking permission status:', error);
+      return null;
+    }
   }
 
   cleanup() {
