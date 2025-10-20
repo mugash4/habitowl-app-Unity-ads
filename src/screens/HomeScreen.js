@@ -21,7 +21,7 @@ import NotificationService from '../services/NotificationService';
 import unityAdsService from '../services/UnityAdsService';
 import AIService from '../services/AIService';
 
-const HomeScreen = ({ navigation }) => {
+const HomeScreen = ({ navigation, route }) => {
   const [habits, setHabits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -29,12 +29,26 @@ const HomeScreen = ({ navigation }) => {
   const [motivationalMessage, setMotivationalMessage] = useState('');
   const [fadeAnim] = useState(new Animated.Value(0));
 
+  // FIXED: Better focus effect that triggers on route params changes
   useFocusEffect(
     useCallback(() => {
+      console.log('HomeScreen focused, reloading habits...');
       loadHabits();
       loadMotivationalMessage();
     }, [])
   );
+
+  // FIXED: Also reload when route params change (when coming back from CreateHabit)
+  useEffect(() => {
+    if (route.params?.refresh || route.params?.newHabitCreated) {
+      console.log('Refreshing due to route params...');
+      loadHabits();
+      loadMotivationalMessage();
+      
+      // Clear the params to avoid repeated refreshes
+      navigation.setParams({ refresh: false, newHabitCreated: false });
+    }
+  }, [route.params]);
 
   useEffect(() => {
     // Animate in the screen
@@ -47,7 +61,9 @@ const HomeScreen = ({ navigation }) => {
 
   const loadHabits = async () => {
     try {
+      console.log('Loading habits from Firebase...');
       const userHabits = await FirebaseService.getUserHabits();
+      console.log('Loaded', userHabits.length, 'habits');
       setHabits(userHabits);
       
       // Check which habits are completed today
@@ -62,6 +78,7 @@ const HomeScreen = ({ navigation }) => {
       
       setTodayCompletions(completedToday);
     } catch (error) {
+      console.error('Error loading habits:', error);
       Alert.alert('Error', 'Failed to load habits');
     } finally {
       setLoading(false);
@@ -230,7 +247,6 @@ const HomeScreen = ({ navigation }) => {
       <Text style={styles.emptySubtitle}>
         Create your first habit and start building a better you
       </Text>
-      {/* Removed duplicate button - only FAB button remains */}
     </View>
   );
 
@@ -307,7 +323,7 @@ const HomeScreen = ({ navigation }) => {
         <View style={styles.bottomPadding} />
       </ScrollView>
 
-      {/* Only ONE FAB button */}
+      {/* FAB button */}
       <FAB
         style={styles.fab}
         icon="plus"
