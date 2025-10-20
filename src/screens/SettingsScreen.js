@@ -153,7 +153,7 @@ const SettingsScreen = ({ navigation }) => {
   const handleShareApp = async () => {
     try {
       const referralCode = userStats?.referralCode || 'HABITOWL';
-      const message = `Check out HabitOwl - the smart habit tracker that actually works! 🦉\n\nUse my referral code: ${referralCode}\n\nDownload: https://habitowl-app.web.app`;
+      const message = `Check out HabitOwl - the smart habit tracker that actually works! \n\nUse my referral code: ${referralCode}\n\nDownload: https://habitowl-app.web.app`;
       
       await Share.share({
         message,
@@ -487,7 +487,7 @@ const SettingsScreen = ({ navigation }) => {
 
         <List.Item
           title="App Version"
-          description="2.3.0"
+          description="2.3.1"
           left={(props) => <List.Icon {...props} icon="information" />}
           titleStyle={styles.listItemTitle}
           descriptionStyle={styles.listItemDescription}

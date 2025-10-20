@@ -2,24 +2,43 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Users can only access their own user document
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    // Users collection - query by uid field
+    match /users/{document} {
+      // Allow read if authenticated user is querying their own data
+      allow read: if request.auth != null && 
+        (resource.data.uid == request.auth.uid || request.auth.uid == document);
+      
+      // Allow create if authenticated
+      allow create: if request.auth != null && 
+        request.resource.data.uid == request.auth.uid;
+      
+      // Allow update if user owns the document
+      allow update: if request.auth != null && 
+        resource.data.uid == request.auth.uid;
+      
+      // Allow delete if user owns the document
+      allow delete: if request.auth != null && 
+        resource.data.uid == request.auth.uid;
     }
     
-    // FIXED: Habits security rules
+    // CRITICAL FIX: Habits security rules
     match /habits/{habitId} {
-      // For reading - check existing document
+      // For reading existing habit - check the stored userId
       allow read: if request.auth != null && 
-        request.auth.uid == resource.data.userId;
+        resource.data.userId == request.auth.uid;
       
-      // For creating NEW habit - check the data being written
+      // FIXED: For creating NEW habit - check the data being written (request.resource)
+      // During create, resource doesn't exist yet, so we MUST use request.resource
       allow create: if request.auth != null && 
-        request.auth.uid == request.resource.data.userId;
+        request.resource.data.userId == request.auth.uid;
       
-      // For updating/deleting - check existing document
-      allow update, delete: if request.auth != null && 
-        request.auth.uid == resource.data.userId;
+      // For updating existing habit - check the stored userId
+      allow update: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+      
+      // For deleting existing habit - check the stored userId  
+      allow delete: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
     }
     
     // Admin configuration

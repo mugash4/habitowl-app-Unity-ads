@@ -109,6 +109,7 @@ const CreateHabitScreen = ({ navigation, route }) => {
     try {
       setIsLoading(true);
 
+      // FIXED: Ensure userId is included in habit data
       const habitData = {
         name: habitName.trim(),
         description: description.trim(),
@@ -119,7 +120,7 @@ const CreateHabitScreen = ({ navigation, route }) => {
         reminderTime: reminderEnabled ? reminderTime.toTimeString().slice(0, 5) : null,
         reminderMessage: customMessage.trim() || null,
         createdAt: new Date().toISOString(),
-        // FIXED: Explicitly add userId to the habit data
+        // CRITICAL FIX: Explicitly add userId to match Firestore security rule
         userId: FirebaseService.currentUser.uid,
       };
 
@@ -178,8 +179,8 @@ const CreateHabitScreen = ({ navigation, route }) => {
       {/* FIXED: Improved scroll and keyboard handling */}
       <KeyboardAvoidingView 
         style={styles.keyboardView} 
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
       >
         <ScrollView 
           style={styles.content} 
@@ -189,6 +190,8 @@ const CreateHabitScreen = ({ navigation, route }) => {
           nestedScrollEnabled={true}
           bounces={true}
           scrollEventThrottle={16}
+          // CRITICAL FIX: Remove any height constraints from parent
+          removeClippedSubviews={false}
         >
           {/* AI Suggestions */}
           {aiSuggestions.length > 0 && (
@@ -437,6 +440,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 40,
+    flexGrow: 1, // FIXED: Allow content to grow beyond screen
   },
   card: {
     margin: 16,
@@ -555,7 +559,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   bottomPadding: {
-    height: 60,
+    height: 80, // FIXED: Increased padding for better scroll access
   },
 });
 
