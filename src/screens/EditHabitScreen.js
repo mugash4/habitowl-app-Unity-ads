@@ -193,12 +193,10 @@ const EditHabitScreen = ({ navigation, route }) => {
         nestedScrollEnabled={true}
         bounces={true}
         scrollEnabled={true}
-        // CRITICAL FIX: Android APK scroll properties
+        // CRITICAL: These props fix Android APK scrolling
         removeClippedSubviews={false}
         overScrollMode="always"
         persistentScrollbar={true}
-        scrollEventThrottle={16}
-        alwaysBounceVertical={true}
       >
         {/* Habit Stats */}
         <Card style={styles.card}>
@@ -403,7 +401,7 @@ const EditHabitScreen = ({ navigation, route }) => {
           Update Habit
         </Button>
 
-        {/* FIXED: Massive bottom padding for scrolling on Android APK */}
+        {/* CRITICAL FIX: Extra padding for Android APK scrolling */}
         <View style={styles.bottomPadding} />
       </ScrollView>
 
@@ -436,9 +434,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 150, // CRITICAL FIX: Massive padding for Android APK
-    flexGrow: 1,
-    minHeight: 1200, // CRITICAL FIX: Force scroll container height
+    paddingBottom: 200, // CRITICAL FIX: Extra padding for Android APK
   },
   card: {
     margin: 16,
@@ -548,7 +544,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   bottomPadding: {
-    height: 150, // CRITICAL FIX: Extra padding for Android scrolling
+    height: 200, // CRITICAL FIX: Extra padding for Android scrolling
   },
 });
 

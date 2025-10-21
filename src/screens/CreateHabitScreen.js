@@ -135,7 +135,7 @@ const CreateHabitScreen = ({ navigation, route }) => {
         has_reminder: reminderEnabled
       });
 
-      // Show success message
+      // CRITICAL FIX: Show success and navigate back immediately
       Alert.alert(
         'Success! ✅',
         `"${habitName}" has been added to your habits!`,
@@ -144,7 +144,7 @@ const CreateHabitScreen = ({ navigation, route }) => {
             text: 'OK', 
             onPress: () => {
               console.log('✅ Habit saved! Navigating back to Home...');
-              // FIXED: Navigate back with refresh parameter
+              // Navigate back to Home screen which will auto-refresh
               navigation.goBack();
             }
           }
@@ -179,6 +179,7 @@ const CreateHabitScreen = ({ navigation, route }) => {
         />
       </Appbar.Header>
 
+      {/* CRITICAL FIX: Proper ScrollView for Android APK */}
       <ScrollView 
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -187,12 +188,10 @@ const CreateHabitScreen = ({ navigation, route }) => {
         nestedScrollEnabled={true}
         bounces={true}
         scrollEnabled={true}
-        // CRITICAL FIX: Android APK scroll properties
+        // CRITICAL: These props fix Android APK scrolling
         removeClippedSubviews={false}
         overScrollMode="always"
         persistentScrollbar={true}
-        scrollEventThrottle={16}
-        alwaysBounceVertical={true}
       >
         {/* AI Suggestions */}
         {aiSuggestions.length > 0 && (
@@ -403,7 +402,7 @@ const CreateHabitScreen = ({ navigation, route }) => {
           Create Habit
         </Button>
 
-        {/* FIXED: Massive bottom padding for scrolling on Android APK */}
+        {/* CRITICAL FIX: Extra padding for Android APK scrolling */}
         <View style={styles.bottomPadding} />
       </ScrollView>
 
@@ -437,9 +436,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 150, // CRITICAL FIX: Massive padding for Android APK
-    flexGrow: 1,
-    minHeight: 1200, // CRITICAL FIX: Force scroll container height
+    paddingBottom: 200, // CRITICAL FIX: Extra padding for Android APK
   },
   card: {
     margin: 16,
@@ -559,7 +556,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   bottomPadding: {
-    height: 150, // CRITICAL FIX: Extra padding for Android scrolling
+    height: 200, // CRITICAL FIX: Extra padding for Android scrolling
   },
 });
 

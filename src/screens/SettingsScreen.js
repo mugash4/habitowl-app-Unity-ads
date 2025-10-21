@@ -57,33 +57,31 @@ const SettingsScreen = ({ navigation }) => {
 
   const loadSettingsData = async () => {
     console.log('SettingsScreen: Starting data load...');
-    setIsLoading(true);
+    
+    // CRITICAL FIX: Force loading to stop after 3 seconds no matter what
+    const loadingTimeout = setTimeout(() => {
+      console.log('SettingsScreen: Loading timeout - forcing stop');
+      setIsLoading(false);
+    }, 3000);
 
     try {
-      // FIXED: Load with timeout to prevent infinite loading
-      const loadPromise = Promise.allSettled([
-        loadUserData(),
-        loadSettings(),
-        checkAdminStatus()
+      // Try to load data but don't wait forever
+      await Promise.race([
+        Promise.allSettled([
+          loadUserData(),
+          loadSettings(),
+          checkAdminStatus()
+        ]),
+        new Promise(resolve => setTimeout(resolve, 2500))
       ]);
-
-      // Set 5 second timeout
-      const timeoutPromise = new Promise((resolve) => {
-        setTimeout(() => {
-          console.log('SettingsScreen: Loading timeout reached');
-          resolve('timeout');
-        }, 5000);
-      });
-
-      await Promise.race([loadPromise, timeoutPromise]);
 
       console.log('SettingsScreen: Data loaded successfully');
     } catch (error) {
       console.error('SettingsScreen: Error in loadSettingsData:', error);
-      // Set default values on error
       setDefaultUserData();
     } finally {
-      // CRITICAL FIX: Always stop loading after max 5 seconds
+      // CRITICAL FIX: Clear timeout and stop loading
+      clearTimeout(loadingTimeout);
       setIsLoading(false);
     }
   };
@@ -326,7 +324,7 @@ const SettingsScreen = ({ navigation }) => {
     );
   };
 
-  // FIXED: Show loading only briefly, then show content
+  // FIXED: Show loading ONLY for 3 seconds maximum, then show content
   if (isLoading) {
     return (
       <View style={[styles.container, styles.centerContent]}>

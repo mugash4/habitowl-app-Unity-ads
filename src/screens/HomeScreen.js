@@ -32,7 +32,7 @@ const HomeScreen = ({ navigation, route }) => {
   // CRITICAL FIX: Reload habits EVERY time the screen is focused
   useFocusEffect(
     useCallback(() => {
-      console.log(' HomeScreen focused - reloading habits...');
+      console.log('🔄 HomeScreen focused - reloading habits...');
       
       // Force reload immediately on every focus
       loadHabits(true);
@@ -292,7 +292,7 @@ const HomeScreen = ({ navigation, route }) => {
         labelStyle={styles.emptyButtonLabel}
         icon="plus"
       >
-        Create #1 Habit!
+        Create Your First Habit!
       </Button>
     </View>
   );
