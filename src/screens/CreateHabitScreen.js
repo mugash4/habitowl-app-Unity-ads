@@ -123,37 +123,57 @@ const CreateHabitScreen = ({ navigation, route }) => {
         userId: FirebaseService.currentUser.uid,
       };
 
-      console.log('Creating habit with data:', habitData);
+      console.log('✨ Creating habit with data:', habitData);
       const newHabit = await FirebaseService.createHabit(habitData);
-      console.log('Habit created successfully:', newHabit);
+      console.log('✅ Habit created successfully with ID:', newHabit.id);
 
+      // Schedule reminder if enabled
       if (reminderEnabled) {
-        await NotificationService.scheduleHabitReminder(newHabit);
+        try {
+          await NotificationService.scheduleHabitReminder(newHabit);
+          console.log('🔔 Reminder scheduled');
+        } catch (reminderError) {
+          console.error('Reminder error:', reminderError);
+          // Continue even if reminder fails
+        }
       }
 
-      await FirebaseService.trackEvent('habit_created', {
-        category,
-        difficulty,
-        has_reminder: reminderEnabled
-      });
+      // Track event
+      try {
+        await FirebaseService.trackEvent('habit_created', {
+          category,
+          difficulty,
+          has_reminder: reminderEnabled
+        });
+      } catch (trackError) {
+        console.error('Tracking error:', trackError);
+        // Continue even if tracking fails
+      }
 
-      Alert.alert(
-        'Success! ✓',
-        `"${habitName}" has been added to your habits!`,
-        [
-          { 
-            text: 'OK', 
-            onPress: () => {
-              console.log('✓ Habit saved! Navigating back to Home...');
-              navigation.goBack();
-            }
-          }
-        ]
-      );
+      // 🔧 FIX 1: Navigate back FIRST, then show success message
+      console.log('🔄 Navigating back to Home screen...');
+      
+      // Pass a refresh flag to HomeScreen
+      navigation.navigate('Main', {
+        screen: 'Home',
+        params: { refresh: true, newHabitId: newHabit.id }
+      });
+      
+      // 🔧 FIX 2: Show success message AFTER navigation starts
+      setTimeout(() => {
+        Alert.alert(
+          'Success! 🎉',
+          `"${habitName}" has been added to your habits!`,
+          [{ text: 'OK' }]
+        );
+      }, 300);
 
     } catch (error) {
-      console.error('Create habit error:', error);
-      Alert.alert('Error', error.message || 'Failed to create habit. Please try again.');
+      console.error('❌ Create habit error:', error);
+      Alert.alert(
+        'Error', 
+        error.message || 'Failed to create habit. Please try again.'
+      );
     } finally {
       setIsLoading(false);
     }
@@ -166,7 +186,7 @@ const CreateHabitScreen = ({ navigation, route }) => {
     }
   };
 
-  // ✅ AUTO-SCROLL when input is focused (fixes keyboard covering issue)
+  //  AUTO-SCROLL when input is focused (fixes keyboard covering issue)
   const scrollToInput = (yOffset) => {
     setTimeout(() => {
       scrollViewRef.current?.scrollTo({
@@ -203,11 +223,11 @@ const CreateHabitScreen = ({ navigation, route }) => {
         nestedScrollEnabled={true}
         bounces={true}
         scrollEnabled={true}
-        // ✅ CRITICAL: Android APK scroll optimization
+        //  CRITICAL: Android APK scroll optimization
         removeClippedSubviews={false}
         overScrollMode="always"
         persistentScrollbar={Platform.OS === 'android'}
-        // ✅ CRITICAL: Better keyboard handling
+        //  CRITICAL: Better keyboard handling
         keyboardDismissMode="on-drag"
         automaticallyAdjustKeyboardInsets={true}
       >
@@ -426,7 +446,7 @@ const CreateHabitScreen = ({ navigation, route }) => {
           Create Habit
         </Button>
 
-        {/* ✅ CRITICAL: Extra bottom padding for smooth scroll */}
+        {/*  CRITICAL: Extra bottom padding for smooth scroll */}
         <View style={styles.bottomPadding} />
       </ScrollView>
 
@@ -460,8 +480,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 300, // ✅ INCREASED: Better bottom padding for Android APK
-    flexGrow: 1, // ✅ ADDED: Ensures content fills scroll area
+    paddingBottom: 300,
+    flexGrow: 1,
   },
   card: {
     margin: 16,
@@ -581,7 +601,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   bottomPadding: {
-    height: 100, // ✅ ADJUSTED: Better spacing for last element
+    height: 100,
   },
 });
 

@@ -29,7 +29,17 @@ const HomeScreen = ({ navigation, route }) => {
   const [motivationalMessage, setMotivationalMessage] = useState('');
   const [fadeAnim] = useState(new Animated.Value(0));
 
-  // CRITICAL FIX: Reload habits EVERY time the screen is focused
+  // 🔧 FIX 1: Listen for navigation params to trigger refresh
+  useEffect(() => {
+    if (route.params?.refresh) {
+      console.log('🔄 Refresh triggered by navigation param');
+      loadHabits(true);
+      // Clear the param to avoid infinite loops
+      navigation.setParams({ refresh: undefined });
+    }
+  }, [route.params?.refresh]);
+
+  // 🔧 FIX 2: Reload habits EVERY time the screen is focused
   useFocusEffect(
     useCallback(() => {
       console.log('🔄 HomeScreen focused - reloading habits...');
@@ -60,7 +70,7 @@ const HomeScreen = ({ navigation, route }) => {
       
       console.log('📱 Loading habits from Firebase...');
       
-      // Timeout protection
+      // 🔧 FIX 3: Add timeout protection
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => reject(new Error('Loading timeout')), 10000);
       });
@@ -70,7 +80,7 @@ const HomeScreen = ({ navigation, route }) => {
       
       console.log('✅ Successfully loaded', userHabits ? userHabits.length : 0, 'habits');
       
-      // CRITICAL FIX: Always set habits, even if empty
+      // 🔧 FIX 4: Always set habits, even if empty
       if (userHabits && Array.isArray(userHabits)) {
         console.log('📝 Setting habits:', userHabits.map(h => h.name).join(', '));
         setHabits([...userHabits]); // Force new array reference
@@ -103,7 +113,7 @@ const HomeScreen = ({ navigation, route }) => {
     } catch (error) {
       console.error('❌ Error loading habits:', error);
       
-      // CRITICAL FIX: Set empty state on error (don't leave blank)
+      // 🔧 FIX 5: Set empty state on error (don't leave blank)
       setHabits([]);
       setTodayCompletions(new Set());
       setMotivationalMessage('');
