@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,8 @@ import {
   ScrollView,
   Alert,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  Keyboard
 } from 'react-native';
 import {
   TextInput,
@@ -25,6 +26,7 @@ import NotificationService from '../services/NotificationService';
 
 const EditHabitScreen = ({ navigation, route }) => {
   const { habit } = route.params;
+  const scrollViewRef = useRef(null);
   
   const [habitName, setHabitName] = useState(habit.name || '');
   const [description, setDescription] = useState(habit.description || '');
@@ -97,7 +99,6 @@ const EditHabitScreen = ({ navigation, route }) => {
 
       await FirebaseService.updateHabit(habit.id, updates);
 
-      // Update notifications
       if (reminderEnabled) {
         const updatedHabit = { ...habit, ...updates };
         await NotificationService.scheduleHabitReminder(updatedHabit);
@@ -105,7 +106,6 @@ const EditHabitScreen = ({ navigation, route }) => {
         await NotificationService.cancelHabitNotifications(habit.id);
       }
 
-      // Track analytics
       await FirebaseService.trackEvent('habit_updated', {
         category,
         difficulty,
@@ -165,8 +165,23 @@ const EditHabitScreen = ({ navigation, route }) => {
     }
   };
 
+  // ✅ AUTO-SCROLL when input is focused
+  const scrollToInput = (yOffset) => {
+    setTimeout(() => {
+      scrollViewRef.current?.scrollTo({
+        x: 0,
+        y: yOffset,
+        animated: true,
+      });
+    }, 100);
+  };
+
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView 
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+    >
       <Appbar.Header style={styles.appbar}>
         <Appbar.BackAction onPress={() => navigation.goBack()} color="#ffffff" />
         <Appbar.Content title="Edit Habit" titleStyle={styles.headerTitle} />
@@ -184,8 +199,8 @@ const EditHabitScreen = ({ navigation, route }) => {
         />
       </Appbar.Header>
 
-      {/* CRITICAL FIX: Same scroll properties as CreateHabitScreen */}
       <ScrollView 
+        ref={scrollViewRef}
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={true}
@@ -193,10 +208,13 @@ const EditHabitScreen = ({ navigation, route }) => {
         nestedScrollEnabled={true}
         bounces={true}
         scrollEnabled={true}
-        // CRITICAL: These props fix Android APK scrolling
+        // ✅ CRITICAL: Android APK scroll optimization
         removeClippedSubviews={false}
         overScrollMode="always"
-        persistentScrollbar={true}
+        persistentScrollbar={Platform.OS === 'android'}
+        // ✅ CRITICAL: Better keyboard handling
+        keyboardDismissMode="on-drag"
+        automaticallyAdjustKeyboardInsets={true}
       >
         {/* Habit Stats */}
         <Card style={styles.card}>
@@ -239,6 +257,7 @@ const EditHabitScreen = ({ navigation, route }) => {
               placeholder="e.g., Morning meditation"
               maxLength={50}
               theme={{ colors: { primary: '#4f46e5' } }}
+              onFocus={() => scrollToInput(200)}
             />
             
             <HelperText type="info">
@@ -256,6 +275,7 @@ const EditHabitScreen = ({ navigation, route }) => {
               placeholder="What does this habit involve?"
               maxLength={200}
               theme={{ colors: { primary: '#4f46e5' } }}
+              onFocus={() => scrollToInput(300)}
             />
           </Card.Content>
         </Card>
@@ -357,7 +377,10 @@ const EditHabitScreen = ({ navigation, route }) => {
               <>
                 <Button
                   mode="outlined"
-                  onPress={() => setShowTimePicker(true)}
+                  onPress={() => {
+                    setShowTimePicker(true);
+                    scrollToInput(900);
+                  }}
                   style={styles.timeButton}
                   icon="clock"
                   labelStyle={styles.buttonLabel}
@@ -377,6 +400,7 @@ const EditHabitScreen = ({ navigation, route }) => {
                   placeholder="e.g., Time for your daily meditation!"
                   maxLength={100}
                   theme={{ colors: { primary: '#4f46e5' } }}
+                  onFocus={() => scrollToInput(1000)}
                 />
                 
                 <HelperText type="info">
@@ -401,7 +425,7 @@ const EditHabitScreen = ({ navigation, route }) => {
           Update Habit
         </Button>
 
-        {/* CRITICAL FIX: Extra padding for Android APK scrolling */}
+        {/* ✅ CRITICAL: Extra bottom padding */}
         <View style={styles.bottomPadding} />
       </ScrollView>
 
@@ -413,7 +437,7 @@ const EditHabitScreen = ({ navigation, route }) => {
           onChange={handleTimeChange}
         />
       )}
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -434,7 +458,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 200, // CRITICAL FIX: Extra padding for Android APK
+    paddingBottom: 300, // ✅ INCREASED: Better bottom padding
+    flexGrow: 1, // ✅ ADDED: Ensures content fills scroll area
   },
   card: {
     margin: 16,
@@ -544,7 +569,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   bottomPadding: {
-    height: 200, // CRITICAL FIX: Extra padding for Android scrolling
+    height: 100, // ✅ ADJUSTED: Better spacing
   },
 });
 

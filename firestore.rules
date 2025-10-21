@@ -21,20 +21,22 @@ service cloud.firestore {
         resource.data.uid == request.auth.uid;
     }
     
-    // CRITICAL FIX: Habits security rules
+    // ✅ FIXED: Habits security rules
     match /habits/{habitId} {
       // For reading existing habit - check the stored userId
       allow read: if request.auth != null && 
         resource.data.userId == request.auth.uid;
       
-      // FIXED: For creating NEW habit - check the data being written (request.resource)
-      // During create, resource doesn't exist yet, so we MUST use request.resource
+      // ✅ CRITICAL FIX: For creating NEW habit - use request.resource (the data being written)
+      // During create, resource doesn't exist yet, so we MUST check request.resource
       allow create: if request.auth != null && 
-        request.resource.data.userId == request.auth.uid;
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.userId != null;
       
-      // For updating existing habit - check the stored userId
+      // For updating existing habit - check both old and new data
       allow update: if request.auth != null && 
-        resource.data.userId == request.auth.uid;
+        resource.data.userId == request.auth.uid &&
+        request.resource.data.userId == request.auth.uid;
       
       // For deleting existing habit - check the stored userId  
       allow delete: if request.auth != null && 
