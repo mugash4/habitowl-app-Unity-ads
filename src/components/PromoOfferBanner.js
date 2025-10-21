@@ -66,46 +66,70 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
 
   const loadActiveOffer = async () => {
     try {
-      const offers = await AdminService.getActivePromoOffers();
-      if (offers.length > 0) {
+      console.log('PromoOfferBanner: Loading offers...');
+      
+      // Set timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout')), 5000)
+      );
+      
+      const offersPromise = AdminService.getActivePromoOffers();
+      
+      // Race between timeout and actual fetch
+      const offers = await Promise.race([offersPromise, timeoutPromise]);
+      
+      console.log('PromoOfferBanner: Offers loaded:', offers?.length || 0);
+      
+      if (offers && offers.length > 0) {
         const activeOffer = offers[0]; // Get the first active offer
         setOffer(activeOffer);
         setVisible(true);
         
-        // Track offer impression
-        await FirebaseService.trackEvent('promo_offer_shown', {
+        // Track offer impression (don't await to avoid blocking)
+        FirebaseService.trackEvent('promo_offer_shown', {
           offer_id: activeOffer.id,
           offer_title: activeOffer.title
-        });
+        }).catch(err => console.log('Track event failed:', err));
+      } else {
+        console.log('PromoOfferBanner: No active offers');
+        setVisible(false);
       }
     } catch (error) {
-      console.error('Error loading promo offers:', error);
+      console.log('PromoOfferBanner: Error loading offers (gracefully handled):', error.message);
+      // Gracefully fail - just don't show the banner
+      setVisible(false);
+      setOffer(null);
     }
   };
 
   const updateTimeLeft = () => {
     if (!offer) return;
 
-    const now = new Date().getTime();
-    const expiry = new Date(offer.expiresAt).getTime();
-    const difference = expiry - now;
+    try {
+      const now = new Date().getTime();
+      const expiry = new Date(offer.expiresAt).getTime();
+      const difference = expiry - now;
 
-    if (difference > 0) {
-      const days = Math.floor(difference / (1000 * 60 * 60 * 24));
-      const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-      const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((difference % (1000 * 60)) / 1000);
+      if (difference > 0) {
+        const days = Math.floor(difference / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((difference % (1000 * 60)) / 1000);
 
-      if (days > 0) {
-        setTimeLeft(`${days}d ${hours}h ${minutes}m`);
-      } else if (hours > 0) {
-        setTimeLeft(`${hours}h ${minutes}m ${seconds}s`);
+        if (days > 0) {
+          setTimeLeft(`${days}d ${hours}h ${minutes}m`);
+        } else if (hours > 0) {
+          setTimeLeft(`${hours}h ${minutes}m ${seconds}s`);
+        } else {
+          setTimeLeft(`${minutes}m ${seconds}s`);
+        }
       } else {
-        setTimeLeft(`${minutes}m ${seconds}s`);
+        setTimeLeft('Expired');
+        setVisible(false);
       }
-    } else {
-      setTimeLeft('Expired');
-      setVisible(false);
+    } catch (error) {
+      console.log('PromoOfferBanner: Error updating time:', error.message);
+      setTimeLeft('');
     }
   };
 
@@ -113,11 +137,11 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
     if (!offer) return;
 
     try {
-      // Track offer click
-      await FirebaseService.trackEvent('promo_offer_clicked', {
+      // Track offer click (don't await to avoid blocking)
+      FirebaseService.trackEvent('promo_offer_clicked', {
         offer_id: offer.id,
         offer_title: offer.title
-      });
+      }).catch(err => console.log('Track event failed:', err));
 
       // Show offer details
       Alert.alert(
@@ -131,24 +155,26 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
               FirebaseService.trackEvent('promo_offer_converted', {
                 offer_id: offer.id,
                 offer_title: offer.title
-              });
+              }).catch(err => console.log('Track event failed:', err));
               onUpgradePress && onUpgradePress();
             }
           }
         ]
       );
     } catch (error) {
-      console.error('Error handling offer click:', error);
+      console.error('PromoOfferBanner: Error handling offer click:', error);
     }
   };
 
   const handleDismiss = async () => {
     try {
-      // Track dismissal
-      await FirebaseService.trackEvent('promo_offer_dismissed', {
-        offer_id: offer.id,
-        offer_title: offer.title
-      });
+      // Track dismissal (don't await to avoid blocking)
+      if (offer) {
+        FirebaseService.trackEvent('promo_offer_dismissed', {
+          offer_id: offer.id,
+          offer_title: offer.title
+        }).catch(err => console.log('Track event failed:', err));
+      }
 
       // Slide out animation
       Animated.timing(slideAnim, {
@@ -159,10 +185,12 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
         setVisible(false);
       });
     } catch (error) {
-      console.error('Error handling offer dismiss:', error);
+      console.error('PromoOfferBanner: Error handling offer dismiss:', error);
+      setVisible(false);
     }
   };
 
+  // Return null if not visible or no offer (this prevents rendering empty space)
   if (!visible || !offer) {
     return null;
   }

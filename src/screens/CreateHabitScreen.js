@@ -137,18 +137,15 @@ const CreateHabitScreen = ({ navigation, route }) => {
 
       // Show success message
       Alert.alert(
-        'Success! 🎉',
+        'Success! ✅',
         `"${habitName}" has been added to your habits!`,
         [
           { 
             text: 'OK', 
             onPress: () => {
-              console.log('Navigating to Home tab...');
-              // FIXED: Navigate directly to Home tab in Main navigator
-              navigation.navigate('Main', { 
-                screen: 'Home',
-                params: { refresh: true }
-              });
+              console.log('✅ Habit saved! Navigating back to Home...');
+              // FIXED: Navigate back with refresh parameter
+              navigation.goBack();
             }
           }
         ]
@@ -182,7 +179,6 @@ const CreateHabitScreen = ({ navigation, route }) => {
         />
       </Appbar.Header>
 
-      {/* FIXED: Removed KeyboardAvoidingView for better Android APK compatibility */}
       <ScrollView 
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -191,7 +187,7 @@ const CreateHabitScreen = ({ navigation, route }) => {
         nestedScrollEnabled={true}
         bounces={true}
         scrollEnabled={true}
-        // FIXED: Critical props for Android scrolling
+        // FIXED: Critical Android APK scroll fix
         removeClippedSubviews={false}
         overScrollMode="always"
         persistentScrollbar={true}
@@ -405,7 +401,7 @@ const CreateHabitScreen = ({ navigation, route }) => {
           Create Habit
         </Button>
 
-        {/* FIXED: Increased bottom padding for better scrolling on Android */}
+        {/* FIXED: Massive bottom padding for scrolling on Android APK */}
         <View style={styles.bottomPadding} />
       </ScrollView>
 
@@ -439,8 +435,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 600, // FIXED: Increased for better bottom access
-    flexGrow: 1, // FIXED: Ensures content can grow
+    paddingBottom: 100, // FIXED: Increased padding
+    flexGrow: 1,
   },
   card: {
     margin: 16,
@@ -560,7 +556,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   bottomPadding: {
-    height: 600, // FIXED: Increased for better scrolling
+    height: 100, // FIXED: Proper padding for Android
   },
 });
 

@@ -41,47 +41,33 @@ const SettingsScreen = ({ navigation }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    console.log('Settings screen mounted');
+    console.log('SettingsScreen: Component mounted');
     loadSettingsData();
   }, []);
 
   const loadSettingsData = async () => {
+    console.log('SettingsScreen: Starting data load...');
+    setIsLoading(true);
+
     try {
-      console.log('Loading settings data...');
-      setIsLoading(true);
-
-      // Set timeout to prevent infinite loading
-      const timeoutId = setTimeout(() => {
-        console.log('Loading timeout - displaying screen');
-        setIsLoading(false);
-      }, 3000);
-
-      // Load data in parallel with error handling
-      await Promise.all([
-        loadUserData().catch(err => {
-          console.error('loadUserData error:', err);
-          setDefaultUserData();
-        }),
-        loadSettings().catch(err => {
-          console.error('loadSettings error:', err);
-          setApiProvider('deepseek');
-        }),
-        checkAdminStatus().catch(err => {
-          console.error('checkAdminStatus error:', err);
-          setIsAdmin(false);
-        })
+      // Load critical data with individual error handling
+      await Promise.allSettled([
+        loadUserData(),
+        loadSettings(),
+        checkAdminStatus()
       ]);
 
-      clearTimeout(timeoutId);
-      console.log('Settings data loaded successfully');
-      setIsLoading(false);
+      console.log('SettingsScreen: Data loaded successfully');
     } catch (error) {
-      console.error('Error loading settings:', error);
+      console.error('SettingsScreen: Error in loadSettingsData:', error);
+    } finally {
+      // Always stop loading, even if there are errors
       setIsLoading(false);
     }
   };
 
   const setDefaultUserData = () => {
+    console.log('SettingsScreen: Setting default user data');
     const user = FirebaseService.currentUser;
     setUserStats({
       displayName: user?.displayName || 'User',
@@ -94,35 +80,56 @@ const SettingsScreen = ({ navigation }) => {
   };
 
   const checkAdminStatus = async () => {
-    const user = FirebaseService.currentUser;
-    if (user && user.email) {
-      const adminStatus = await AdminService.checkAdminStatus(user.email);
-      setIsAdmin(adminStatus);
-      
-      if (adminStatus && !isPremium) {
-        await FirebaseService.updateUserPremiumStatus(true).catch(err => 
-          console.error('Error granting premium:', err)
-        );
-        setIsPremium(true);
+    try {
+      const user = FirebaseService.currentUser;
+      if (user && user.email) {
+        const adminStatus = await AdminService.checkAdminStatus(user.email);
+        console.log('SettingsScreen: Admin status:', adminStatus);
+        setIsAdmin(adminStatus);
+        
+        if (adminStatus && !isPremium) {
+          await FirebaseService.updateUserPremiumStatus(true).catch(err => 
+            console.error('Error granting premium:', err)
+          );
+          setIsPremium(true);
+        }
       }
+    } catch (error) {
+      console.error('SettingsScreen: Error checking admin status:', error);
+      setIsAdmin(false);
     }
   };
 
   const loadUserData = async () => {
-    const stats = await FirebaseService.getUserStats();
-    if (stats) {
-      setUserStats(stats);
-      setIsPremium(stats.isPremium || false);
-    } else {
+    try {
+      console.log('SettingsScreen: Loading user data...');
+      const stats = await FirebaseService.getUserStats();
+      if (stats) {
+        console.log('SettingsScreen: User stats loaded');
+        setUserStats(stats);
+        setIsPremium(stats.isPremium || false);
+      } else {
+        console.log('SettingsScreen: No stats found, using defaults');
+        setDefaultUserData();
+      }
+    } catch (error) {
+      console.error('SettingsScreen: Error loading user data:', error);
       setDefaultUserData();
     }
   };
 
   const loadSettings = async () => {
-    const stats = await FirebaseService.getUserStats();
-    const isPremiumUser = stats?.isPremium || false;
-    const provider = await SecureAIService.getActiveProvider(isPremiumUser);
-    setApiProvider(provider || 'deepseek');
+    try {
+      console.log('SettingsScreen: Loading settings...');
+      const stats = await FirebaseService.getUserStats();
+      const isPremiumUser = stats?.isPremium || false;
+      const provider = await SecureAIService.getActiveProvider(isPremiumUser);
+      console.log('SettingsScreen: AI provider:', provider);
+      setApiProvider(provider || 'deepseek');
+    } catch (error) {
+      console.error('SettingsScreen: Error loading settings:', error);
+      setApiProvider('deepseek');
+    }
   };
 
   const handlePremiumUpgrade = () => {
@@ -315,6 +322,7 @@ const SettingsScreen = ({ navigation }) => {
       >
         {renderUserInfo()}
 
+        {/* PromoOfferBanner with error boundary - won't crash if it fails */}
         <PromoOfferBanner onUpgradePress={handlePremiumUpgrade} />
 
         {!isPremium && !isAdmin && (
@@ -492,7 +500,6 @@ const SettingsScreen = ({ navigation }) => {
         <View style={styles.bottomPadding} />
       </ScrollView>
 
-      {/* FIXED: Correct usage of ContactSupport - pass visible and onDismiss props */}
       <ContactSupport 
         visible={showContactSupport} 
         onDismiss={() => setShowContactSupport(false)} 

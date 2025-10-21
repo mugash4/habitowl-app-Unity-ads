@@ -28,13 +28,14 @@ const HomeScreen = ({ navigation, route }) => {
   const [todayCompletions, setTodayCompletions] = useState(new Set());
   const [motivationalMessage, setMotivationalMessage] = useState('');
   const [fadeAnim] = useState(new Animated.Value(0));
+  const [forceRefreshKey, setForceRefreshKey] = useState(0);
 
-  // FIXED: Force reload habits on EVERY screen focus
+  // FIXED: Reload habits EVERY time the screen is focused
   useFocusEffect(
     useCallback(() => {
-      console.log('🔄 HomeScreen focused - force reloading habits...');
+      console.log('🔄 HomeScreen focused - reloading habits...');
       
-      // Force reload immediately
+      // Force reload immediately on every focus
       loadHabits(true);
       
       // Animate screen
@@ -48,33 +49,31 @@ const HomeScreen = ({ navigation, route }) => {
         // Cleanup
         fadeAnim.setValue(0);
       };
-    }, []) // Empty array means runs on EVERY focus
+    }, [forceRefreshKey]) // Dependency ensures reload on every focus
   );
 
-  // FIXED: Added forceReload parameter
   const loadHabits = async (forceReload = false) => {
     try {
       if (forceReload) {
-        console.log('📱 Force reload - clearing cache and fetching fresh data...');
+        console.log('📱 Force reload - fetching fresh data...');
         setLoading(true);
       }
       
       console.log('📱 Loading habits from Firebase...');
       
-      // Add timeout protection
+      // Timeout protection
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => reject(new Error('Loading timeout')), 10000);
       });
 
       const loadPromise = FirebaseService.getUserHabits();
-      
       const userHabits = await Promise.race([loadPromise, timeoutPromise]);
       
       console.log('✅ Successfully loaded', userHabits.length, 'habits');
       console.log('📝 Habit names:', userHabits.map(h => h.name).join(', '));
       
-      // FIXED: Always update state with fresh data
-      setHabits([...userHabits]); // Create new array to force re-render
+      // FIXED: Force state update with new array reference
+      setHabits([...userHabits]);
       
       // Check which habits are completed today
       const today = new Date().toDateString();
@@ -144,7 +143,7 @@ const HomeScreen = ({ navigation, route }) => {
   const onRefresh = async () => {
     console.log('🔄 Manual refresh triggered');
     setRefreshing(true);
-    await loadHabits(true); // Force reload
+    await loadHabits(true);
     setRefreshing(false);
   };
 
@@ -176,11 +175,11 @@ const HomeScreen = ({ navigation, route }) => {
       setTodayCompletions(newCompletions);
       
       // Reload habits to get updated data
-      await loadHabits(true); // Force reload
+      await loadHabits(true);
       
     } catch (error) {
       Alert.alert('Error', error.message);
-      await loadHabits(true); // Force reload on error
+      await loadHabits(true);
     }
   };
 
@@ -196,7 +195,7 @@ const HomeScreen = ({ navigation, route }) => {
   const handleDeleteHabit = async (habitId) => {
     try {
       await FirebaseService.deleteHabit(habitId);
-      await loadHabits(true); // Force reload
+      await loadHabits(true);
     } catch (error) {
       Alert.alert('Error', 'Failed to delete habit');
     }
@@ -303,6 +302,7 @@ const HomeScreen = ({ navigation, route }) => {
       {renderHeader()}
       
       <ScrollView
+        key={forceRefreshKey}
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
         refreshControl={
