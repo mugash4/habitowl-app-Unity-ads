@@ -187,10 +187,12 @@ const CreateHabitScreen = ({ navigation, route }) => {
         nestedScrollEnabled={true}
         bounces={true}
         scrollEnabled={true}
-        // FIXED: Critical Android APK scroll fix
+        // CRITICAL FIX: Android APK scroll properties
         removeClippedSubviews={false}
         overScrollMode="always"
         persistentScrollbar={true}
+        scrollEventThrottle={16}
+        alwaysBounceVertical={true}
       >
         {/* AI Suggestions */}
         {aiSuggestions.length > 0 && (
@@ -435,8 +437,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 100, // FIXED: Increased padding
+    paddingBottom: 150, // CRITICAL FIX: Massive padding for Android APK
     flexGrow: 1,
+    minHeight: 1200, // CRITICAL FIX: Force scroll container height
   },
   card: {
     margin: 16,
@@ -556,7 +559,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   bottomPadding: {
-    height: 100, // FIXED: Proper padding for Android
+    height: 150, // CRITICAL FIX: Extra padding for Android scrolling
   },
 });
 

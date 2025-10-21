@@ -28,12 +28,11 @@ const HomeScreen = ({ navigation, route }) => {
   const [todayCompletions, setTodayCompletions] = useState(new Set());
   const [motivationalMessage, setMotivationalMessage] = useState('');
   const [fadeAnim] = useState(new Animated.Value(0));
-  const [forceRefreshKey, setForceRefreshKey] = useState(0);
 
-  // FIXED: Reload habits EVERY time the screen is focused
+  // CRITICAL FIX: Reload habits EVERY time the screen is focused
   useFocusEffect(
     useCallback(() => {
-      console.log('🔄 HomeScreen focused - reloading habits...');
+      console.log(' HomeScreen focused - reloading habits...');
       
       // Force reload immediately on every focus
       loadHabits(true);
@@ -49,7 +48,7 @@ const HomeScreen = ({ navigation, route }) => {
         // Cleanup
         fadeAnim.setValue(0);
       };
-    }, [forceRefreshKey]) // Dependency ensures reload on every focus
+    }, []) // Empty dependency - runs on EVERY focus
   );
 
   const loadHabits = async (forceReload = false) => {
@@ -69,35 +68,45 @@ const HomeScreen = ({ navigation, route }) => {
       const loadPromise = FirebaseService.getUserHabits();
       const userHabits = await Promise.race([loadPromise, timeoutPromise]);
       
-      console.log('✅ Successfully loaded', userHabits.length, 'habits');
-      console.log('📝 Habit names:', userHabits.map(h => h.name).join(', '));
+      console.log('✅ Successfully loaded', userHabits ? userHabits.length : 0, 'habits');
       
-      // FIXED: Force state update with new array reference
-      setHabits([...userHabits]);
+      // CRITICAL FIX: Always set habits, even if empty
+      if (userHabits && Array.isArray(userHabits)) {
+        console.log('📝 Setting habits:', userHabits.map(h => h.name).join(', '));
+        setHabits([...userHabits]); // Force new array reference
+      } else {
+        console.log('⚠️ No habits returned, setting empty array');
+        setHabits([]);
+      }
       
       // Check which habits are completed today
       const today = new Date().toDateString();
       const completedToday = new Set();
       
-      userHabits.forEach(habit => {
-        if (habit.completions && habit.completions.includes(today)) {
-          completedToday.add(habit.id);
-        }
-      });
+      if (userHabits && userHabits.length > 0) {
+        userHabits.forEach(habit => {
+          if (habit.completions && habit.completions.includes(today)) {
+            completedToday.add(habit.id);
+          }
+        });
+      }
       
       setTodayCompletions(completedToday);
       
       // Load motivational message
-      if (userHabits.length > 0) {
+      if (userHabits && userHabits.length > 0) {
         loadMotivationalMessage(userHabits, completedToday);
+      } else {
+        setMotivationalMessage('');
       }
       
     } catch (error) {
       console.error('❌ Error loading habits:', error);
       
-      // Set empty state
+      // CRITICAL FIX: Set empty state on error (don't leave blank)
       setHabits([]);
       setTodayCompletions(new Set());
+      setMotivationalMessage('');
       
       // Show error only for critical issues
       if (error.message && (error.message.includes('network') || error.message.includes('timeout'))) {
@@ -126,7 +135,7 @@ const HomeScreen = ({ navigation, route }) => {
         Math.max(...userHabits.map(h => h.currentStreak || 0)),
         timeOfDay
       );
-      setMotivationalMessage(message);
+      setMotivationalMessage(message || '');
     } catch (error) {
       console.error('Error loading motivational message:', error);
       setMotivationalMessage('');
@@ -302,7 +311,6 @@ const HomeScreen = ({ navigation, route }) => {
       {renderHeader()}
       
       <ScrollView
-        key={forceRefreshKey}
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
         refreshControl={
