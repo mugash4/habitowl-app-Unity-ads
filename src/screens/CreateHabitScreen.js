@@ -135,18 +135,20 @@ const CreateHabitScreen = ({ navigation, route }) => {
         has_reminder: reminderEnabled
       });
 
-      // FIXED: Navigate back properly
-      console.log('Navigating back to Home screen...');
-      navigation.goBack();
-      
-      // Show success after slight delay
-      setTimeout(() => {
-        Alert.alert(
-          'Success! 🎉',
-          `"${habitName}" has been added to your habits!`,
-          [{ text: 'OK' }]
-        );
-      }, 300);
+      // Show success message
+      Alert.alert(
+        'Success! 🎉',
+        `"${habitName}" has been added to your habits!`,
+        [
+          { 
+            text: 'OK', 
+            onPress: () => {
+              console.log('Navigating back to Home screen...');
+              navigation.goBack();
+            }
+          }
+        ]
+      );
 
     } catch (error) {
       console.error('Create habit error:', error);
@@ -176,11 +178,11 @@ const CreateHabitScreen = ({ navigation, route }) => {
         />
       </Appbar.Header>
 
-      {/* FIXED: Improved ScrollView configuration */}
+      {/* FIXED: Better KeyboardAvoidingView and ScrollView configuration */}
       <KeyboardAvoidingView 
         style={styles.keyboardAvoid}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
       >
         <ScrollView 
           style={styles.scrollView}
@@ -190,6 +192,7 @@ const CreateHabitScreen = ({ navigation, route }) => {
           nestedScrollEnabled={true}
           bounces={true}
           scrollEnabled={true}
+          overScrollMode="always"
         >
           {/* AI Suggestions */}
           {aiSuggestions.length > 0 && (
@@ -400,7 +403,7 @@ const CreateHabitScreen = ({ navigation, route }) => {
             Create Habit
           </Button>
 
-          {/* FIXED: Much larger bottom padding for scroll access */}
+          {/* FIXED: Extra large bottom padding for scrolling */}
           <View style={styles.bottomPadding} />
         </ScrollView>
       </KeyboardAvoidingView>
@@ -438,7 +441,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 300, // FIXED: Extra large padding for scroll
+    paddingBottom: 400, // FIXED: Increased from 300 to 400
     flexGrow: 1,
   },
   card: {
@@ -559,7 +562,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   bottomPadding: {
-    height: 300, // FIXED: Large bottom padding
+    height: 400, // FIXED: Increased from 300 to 400
   },
 });
 

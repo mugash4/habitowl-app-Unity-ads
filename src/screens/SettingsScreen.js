@@ -21,7 +21,6 @@ import {
 } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { useFocusEffect } from '@react-navigation/native';
 
 import FirebaseService from '../services/FirebaseService';
 import AdService from '../services/AdService';
@@ -41,85 +40,40 @@ const SettingsScreen = ({ navigation }) => {
   const [notifications, setNotifications] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState(null);
 
-  // FIXED: Use useFocusEffect with proper dependencies
-  useFocusEffect(
-    React.useCallback(() => {
-      console.log('Settings screen focused, loading data...');
-      let isActive = true;
+  // FIXED: Use simple useEffect instead of useFocusEffect to prevent re-render issues
+  useEffect(() => {
+    console.log('Settings screen mounted, loading data...');
+    initializeSettings();
+  }, []);
 
-      const loadData = async () => {
-        if (isActive) {
-          await initializeSettings();
-        }
-      };
-
-      loadData();
-
-      return () => {
-        isActive = false;
-      };
-    }, [])
-  );
-
-  // FIXED: Improved initialization with better error handling and timeout
+  // FIXED: Simplified initialization with better timeout protection
   const initializeSettings = async () => {
     try {
       setIsLoading(true);
-      setLoadError(null);
       console.log('Initializing settings...');
       
-      // Create a promise that rejects after 15 seconds
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Loading timeout')), 15000);
-      });
+      // Set a reasonable timeout to prevent infinite loading
+      const timeoutId = setTimeout(() => {
+        console.log('Loading timeout reached - displaying screen with available data');
+        setIsLoading(false);
+      }, 8000); // 8 seconds timeout
 
-      // Race between loading data and timeout
-      await Promise.race([
-        loadAllSettings(),
-        timeoutPromise
+      // Load all data - each function has its own error handling
+      await Promise.allSettled([
+        loadUserData(),
+        loadSettings(),
+        checkAdminStatus()
       ]);
 
+      // Clear timeout since we finished loading
+      clearTimeout(timeoutId);
       console.log('Settings initialization complete');
+      setIsLoading(false);
     } catch (error) {
       console.error('Error initializing settings screen:', error);
-      setLoadError(error.message);
-      // Set default values so the screen still renders
-      setUserStats({});
-      setIsPremium(false);
-      setApiProvider('deepseek');
-      setIsAdmin(false);
-    } finally {
+      // Always show the screen, even if there were errors
       setIsLoading(false);
-    }
-  };
-
-  // FIXED: Separate function to load all settings with individual error handling
-  const loadAllSettings = async () => {
-    // Load user data
-    try {
-      await loadUserData();
-    } catch (err) {
-      console.error('Error loading user data:', err);
-      setUserStats({});
-      setIsPremium(false);
-    }
-
-    // Load settings
-    try {
-      await loadSettings();
-    } catch (err) {
-      console.error('Error loading settings:', err);
-      setApiProvider('deepseek');
-    }
-
-    // Check admin status
-    try {
-      await checkAdminStatus();
-    } catch (err) {
-      console.error('Error checking admin status:', err);
-      setIsAdmin(false);
     }
   };
 
@@ -162,14 +116,29 @@ const SettingsScreen = ({ navigation }) => {
         setIsPremium(stats.isPremium || false);
       } else {
         console.log('No user stats found, using defaults');
-        setUserStats({});
+        // Set default values
+        const user = FirebaseService.currentUser;
+        setUserStats({
+          displayName: user?.displayName || 'User',
+          email: user?.email || '',
+          totalHabits: 0,
+          longestStreak: 0,
+          referralCount: 0
+        });
         setIsPremium(false);
       }
     } catch (error) {
       console.error('Error loading user data:', error);
-      setUserStats({});
+      // Set default values on error
+      const user = FirebaseService.currentUser;
+      setUserStats({
+        displayName: user?.displayName || 'User',
+        email: user?.email || '',
+        totalHabits: 0,
+        longestStreak: 0,
+        referralCount: 0
+      });
       setIsPremium(false);
-      throw error;
     }
   };
 
@@ -185,7 +154,6 @@ const SettingsScreen = ({ navigation }) => {
     } catch (error) {
       console.error('Error loading settings:', error);
       setApiProvider('deepseek');
-      throw error;
     }
   };
 
@@ -351,7 +319,7 @@ const SettingsScreen = ({ navigation }) => {
               <Icon name="account" size={40} color="#ffffff" />
             </View>
             <View style={styles.userDetails}>
-              <Text style={styles.userName}>{user.displayName || 'User'}</Text>
+              <Text style={styles.userName}>{user.displayName || userStats?.displayName || 'User'}</Text>
               <Text style={styles.userEmail}>{user.email}</Text>
               <View style={styles.badgeContainer}>
                 {isPremium && (
@@ -391,7 +359,7 @@ const SettingsScreen = ({ navigation }) => {
     );
   };
 
-  // FIXED: Better loading and error states
+  // FIXED: Improved loading state
   if (isLoading) {
     return (
       <View style={[styles.container, styles.centerContent]}>
@@ -401,36 +369,17 @@ const SettingsScreen = ({ navigation }) => {
     );
   }
 
-  // FIXED: Show error state with retry option
-  if (loadError) {
-    return (
-      <View style={[styles.container, styles.centerContent]}>
-        <Icon name="alert-circle-outline" size={64} color="#ef4444" />
-        <Text style={styles.errorText}>Failed to load settings</Text>
-        <Text style={styles.errorSubtext}>{loadError}</Text>
-        <Button 
-          mode="contained" 
-          onPress={initializeSettings}
-          style={styles.retryButton}
-          labelStyle={styles.retryButtonLabel}
-        >
-          Retry
-        </Button>
-      </View>
-    );
-  }
-
+  // FIXED: Always render content once loading is complete
   return (
     <View style={styles.container}>
       <ScrollView 
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        bounces={true}
       >
         {renderUserInfo()}
 
-        <PromoOfferBanner />
+        <PromoOfferBanner onUpgradePress={handlePremiumUpgrade} />
 
         {!isPremium && !isAdmin && (
           <Card style={styles.card}>
@@ -660,28 +609,6 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
     color: '#6b7280',
-  },
-  errorText: {
-    marginTop: 16,
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1f2937',
-    textAlign: 'center',
-  },
-  errorSubtext: {
-    marginTop: 8,
-    fontSize: 14,
-    color: '#6b7280',
-    textAlign: 'center',
-    paddingHorizontal: 20,
-  },
-  retryButton: {
-    marginTop: 20,
-    backgroundColor: '#4f46e5',
-  },
-  retryButtonLabel: {
-    color: '#ffffff',
-    fontWeight: '600',
   },
   card: {
     margin: 16,

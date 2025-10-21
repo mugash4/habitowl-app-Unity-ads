@@ -11,7 +11,8 @@ import {
   orderBy,
   onSnapshot,
   serverTimestamp,
-  increment
+  increment,
+  Timestamp
 } from 'firebase/firestore';
 import { 
   createUserWithEmailAndPassword, 
@@ -171,7 +172,7 @@ class FirebaseService {
           email: user.email,
           displayName: user.displayName || user.email.split('@')[0],
           photoURL: user.photoURL || null,
-          createdAt: serverTimestamp(),
+          createdAt: new Date().toISOString(), // FIXED: Use ISO string instead of serverTimestamp
           isPremium: false,
           totalHabits: 0,
           longestStreak: 0,
@@ -201,7 +202,7 @@ class FirebaseService {
         if (Object.keys(updates).length > 0) {
           await updateDoc(existingDoc.ref, {
             ...updates,
-            updatedAt: serverTimestamp()
+            updatedAt: new Date().toISOString() // FIXED
           });
           console.log('User document updated!');
         }
@@ -219,10 +220,13 @@ class FirebaseService {
   async createHabit(habitData) {
     if (!this.currentUser) throw new Error('User not authenticated');
 
+    // FIXED: Use ISO string for createdAt to avoid query issues
+    const now = new Date().toISOString();
+    
     const habit = {
       ...habitData,
       userId: this.currentUser.uid,
-      createdAt: serverTimestamp(),
+      createdAt: now, // FIXED: Direct ISO string instead of serverTimestamp()
       currentStreak: 0,
       longestStreak: 0,
       totalCompletions: 0,
@@ -230,7 +234,9 @@ class FirebaseService {
       completions: []
     };
 
+    console.log('Creating habit in Firestore:', habit);
     const docRef = await addDoc(collection(db, 'habits'), habit);
+    console.log('Habit created with ID:', docRef.id);
     
     // Update user's total habits count
     await this.updateUserStats({ totalHabits: increment(1) });
@@ -239,27 +245,40 @@ class FirebaseService {
   }
 
   async getUserHabits() {
-    if (!this.currentUser) return [];
+    if (!this.currentUser) {
+      console.log('No current user, returning empty habits');
+      return [];
+    }
 
-    const q = query(
-      collection(db, 'habits'),
-      where('userId', '==', this.currentUser.uid),
-      where('isActive', '==', true),
-      orderBy('createdAt', 'desc')
-    );
+    try {
+      console.log('Fetching habits for user:', this.currentUser.uid);
+      
+      const q = query(
+        collection(db, 'habits'),
+        where('userId', '==', this.currentUser.uid),
+        where('isActive', '==', true),
+        orderBy('createdAt', 'desc')
+      );
 
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
+      const querySnapshot = await getDocs(q);
+      const habits = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      console.log('Fetched habits count:', habits.length);
+      return habits;
+    } catch (error) {
+      console.error('Error fetching habits:', error);
+      throw error;
+    }
   }
 
   async updateHabit(habitId, updates) {
     const habitRef = doc(db, 'habits', habitId);
     await updateDoc(habitRef, {
       ...updates,
-      updatedAt: serverTimestamp()
+      updatedAt: new Date().toISOString() // FIXED
     });
   }
 
@@ -267,7 +286,7 @@ class FirebaseService {
     const habitRef = doc(db, 'habits', habitId);
     await updateDoc(habitRef, {
       isActive: false,
-      deletedAt: serverTimestamp()
+      deletedAt: new Date().toISOString() // FIXED
     });
     
     // Update user's total habits count
@@ -301,7 +320,7 @@ class FirebaseService {
       currentStreak: newStreak,
       longestStreak: newLongestStreak,
       totalCompletions: increment(1),
-      lastCompletedAt: serverTimestamp()
+      lastCompletedAt: new Date().toISOString() // FIXED
     });
 
     // Update user's longest streak if this is a new record
@@ -366,7 +385,7 @@ class FirebaseService {
       const userDoc = querySnapshot.docs[0];
       await updateDoc(userDoc.ref, {
         ...updates,
-        updatedAt: serverTimestamp()
+        updatedAt: new Date().toISOString() // FIXED
       });
     }
   }
@@ -399,14 +418,14 @@ class FirebaseService {
     // Update referrer's count
     await updateDoc(referrerDoc.ref, {
       referralCount: increment(1),
-      updatedAt: serverTimestamp()
+      updatedAt: new Date().toISOString() // FIXED
     });
 
     // Create referral record
     await addDoc(collection(db, 'referrals'), {
       referrerId: referrerId,
       referredUserId: this.currentUser.uid,
-      createdAt: serverTimestamp(),
+      createdAt: new Date().toISOString(), // FIXED
       status: 'completed'
     });
 
@@ -436,7 +455,7 @@ class FirebaseService {
         userId: this.currentUser?.uid || 'anonymous',
         eventName,
         parameters,
-        timestamp: serverTimestamp(),
+        timestamp: new Date().toISOString(), // FIXED
         platform: Platform.OS
       });
     } catch (error) {
@@ -507,6 +526,7 @@ class FirebaseService {
     const message = errorMessages[error.code] || error.message || 'An unexpected error occurred';
     return new Error(message);
   }
+
   async updateUserPremiumStatus(isPremium) {
     try {
       if (!this.currentUser) {
@@ -524,7 +544,7 @@ class FirebaseService {
         const userDoc = querySnapshot.docs[0];
         await updateDoc(userDoc.ref, {
           isPremium: isPremium,
-          premiumUpdatedAt: new Date().toISOString()
+          premiumUpdatedAt: new Date().toISOString() // FIXED
         });
       
         console.log(`Premium status updated to: ${isPremium}`);
