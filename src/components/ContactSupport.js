@@ -4,7 +4,8 @@ import {
   Text,
   StyleSheet,
   Alert,
-  Linking
+  Linking,
+  ScrollView
 } from 'react-native';
 import {
   Dialog,
@@ -40,35 +41,18 @@ const ContactSupport = ({ visible, onDismiss }) => {
     }
 
     if (!userEmail.trim()) {
-      Alert.alert('Error', 'Please provide your email for our response');
+      Alert.alert('Error', 'Please provide your email');
       return;
     }
 
     try {
       setIsLoading(true);
 
-      // Create support ticket in Firestore
-      const supportTicket = {
-        userId: FirebaseService.currentUser?.uid || 'anonymous',
-        userEmail: userEmail.trim(),
-        issueType: selectedIssue,
-        message: message.trim(),
-        status: 'open',
-        createdAt: new Date().toISOString(),
-        deviceInfo: {
-          platform: 'mobile',
-          // You could add more device info here
-        }
-      };
-
       await FirebaseService.trackEvent('support_ticket_created', {
         issue_type: selectedIssue,
         has_account: !!FirebaseService.currentUser
-      });
+      }).catch(() => {});
 
-      // In a real app, you would send this to your support system
-      // For now, we'll store it in Firestore and send an email
-      
       const emailSubject = `HabitOwl Support: ${issueTypes.find(i => i.value === selectedIssue)?.label}`;
       const emailBody = `Issue Type: ${issueTypes.find(i => i.value === selectedIssue)?.label}
 User Email: ${userEmail}
@@ -85,8 +69,8 @@ Sent from HabitOwl Mobile App`;
       await Linking.openURL(emailUrl);
 
       Alert.alert(
-        'Support Request Sent! 📧',
-        'We\'ve opened your email client with your support request. Please send the email and we\'ll respond within 24 hours.',
+        'Support Request Sent!',
+        'We\'ve opened your email client. Please send the email.',
         [
           {
             text: 'OK',
@@ -101,103 +85,27 @@ Sent from HabitOwl Mobile App`;
       );
 
     } catch (error) {
-      console.error('Error sending support request:', error);
-      
-      // Fallback: Try to open email client directly
-      try {
-        await Linking.openURL('mailto:support@habitowl.app');
-        Alert.alert(
-          'Email Client Opened',
-          'Please describe your issue in the email and we\'ll help you out!'
-        );
-      } catch (emailError) {
-        Alert.alert(
-          'Unable to Send',
-          'Please email us directly at support@habitowl.app with your issue details.'
-        );
-      }
+      console.error('Error sending support:', error);
+      Alert.alert('Error', 'Unable to open email. Please email support@habitowl.app');
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const handleQuickAction = async (action) => {
-    let url = '';
-    let trackingEvent = '';
-
-    switch (action) {
-      case 'faq':
-        url = 'https://habitowl-3405d.web.app/faq';
-        trackingEvent = 'faq_opened';
-        break;
-      case 'video':
-        url = 'https://www.youtube.com/watch?v=your-tutorial-video';
-        trackingEvent = 'tutorial_video_opened';
-        break;
-      case 'community':
-        url = 'https://reddit.com/r/habitowl';
-        trackingEvent = 'community_opened';
-        break;
-      default:
-        return;
-    }
-
-    try {
-      await FirebaseService.trackEvent(trackingEvent);
-      await Linking.openURL(url);
-      onDismiss();
-    } catch (error) {
-      Alert.alert('Error', 'Unable to open link');
     }
   };
 
   return (
     <Portal>
       <Dialog visible={visible} onDismiss={onDismiss} style={styles.dialog}>
-        <Dialog.Title style={styles.title}>
-          <Icon name="help-circle" size={24} color="#4f46e5" />
-          <Text style={styles.titleText}>Contact Support</Text>
+        <Dialog.Title>
+          <View style={styles.titleContainer}>
+            <Icon name="help-circle" size={24} color="#4f46e5" />
+            <Text style={styles.titleText}>Contact Support</Text>
+          </View>
         </Dialog.Title>
 
-        <Dialog.ScrollArea style={styles.scrollArea}>
-          <View style={styles.content}>
-            {/* Quick Help Options */}
-            <Text style={styles.sectionTitle}>Quick Help</Text>
+        <Dialog.ScrollArea>
+          <ScrollView style={styles.scrollContent}>
+            <Text style={styles.sectionTitle}>What can we help you with?</Text>
             
-            <Button
-              mode="outlined"
-              icon="frequently-asked-questions"
-              onPress={() => handleQuickAction('faq')}
-              style={styles.quickButton}
-              contentStyle={styles.quickButtonContent}
-            >
-              View FAQ
-            </Button>
-
-            <Button
-              mode="outlined"
-              icon="play-circle"
-              onPress={() => handleQuickAction('video')}
-              style={styles.quickButton}
-              contentStyle={styles.quickButtonContent}
-            >
-              Watch Tutorial
-            </Button>
-
-            <Button
-              mode="outlined"
-              icon="forum"
-              onPress={() => handleQuickAction('community')}
-              style={styles.quickButton}
-              contentStyle={styles.quickButtonContent}
-            >
-              Community Forum
-            </Button>
-
-            {/* Contact Form */}
-            <Text style={styles.sectionTitle}>Send us a Message</Text>
-
-            <Text style={styles.label}>What can we help you with?</Text>
             <RadioButton.Group
               onValueChange={setSelectedIssue}
               value={selectedIssue}
@@ -206,7 +114,7 @@ Sent from HabitOwl Mobile App`;
                 <List.Item
                   key={issue.value}
                   title={issue.label}
-                  left={(props) => (
+                  left={() => (
                     <View style={styles.radioContainer}>
                       <RadioButton value={issue.value} />
                       <Icon name={issue.icon} size={20} color="#6b7280" />
@@ -237,13 +145,13 @@ Sent from HabitOwl Mobile App`;
               multiline
               numberOfLines={4}
               style={styles.input}
-              placeholder="Please provide as much detail as possible..."
+              placeholder="Please provide details..."
             />
 
             <Text style={styles.responseTime}>
-              💬 We typically respond within 24 hours
+              We typically respond within 24 hours
             </Text>
-          </View>
+          </ScrollView>
         </Dialog.ScrollArea>
 
         <Dialog.Actions>
@@ -254,7 +162,7 @@ Sent from HabitOwl Mobile App`;
             disabled={isLoading}
             mode="contained"
           >
-            Send Message
+            Send
           </Button>
         </Dialog.Actions>
       </Dialog>
@@ -266,10 +174,9 @@ const styles = StyleSheet.create({
   dialog: {
     maxHeight: '90%',
   },
-  title: {
+  titleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingBottom: 8,
   },
   titleText: {
     fontSize: 20,
@@ -277,30 +184,15 @@ const styles = StyleSheet.create({
     color: '#1f2937',
     marginLeft: 8,
   },
-  scrollArea: {
-    maxHeight: 400,
-  },
-  content: {
-    paddingHorizontal: 4,
+  scrollContent: {
+    paddingHorizontal: 8,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: '#374151',
-    marginTop: 16,
+    marginTop: 8,
     marginBottom: 12,
-  },
-  quickButton: {
-    marginBottom: 8,
-  },
-  quickButtonContent: {
-    paddingVertical: 4,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#374151',
-    marginBottom: 8,
   },
   radioContainer: {
     flexDirection: 'row',
@@ -318,7 +210,7 @@ const styles = StyleSheet.create({
     color: '#10b981',
     textAlign: 'center',
     marginTop: 8,
-    fontStyle: 'italic',
+    marginBottom: 16,
   },
 });
 

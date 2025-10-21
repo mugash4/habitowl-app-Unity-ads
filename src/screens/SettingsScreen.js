@@ -17,7 +17,6 @@ import {
   Dialog,
   Portal,
   TextInput,
-  Divider
 } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -41,133 +40,96 @@ const SettingsScreen = ({ navigation }) => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // FIXED: Use simple useEffect instead of useFocusEffect to prevent re-render issues
   useEffect(() => {
-    console.log('Settings screen mounted, loading data...');
-    initializeSettings();
+    console.log('Settings screen mounted');
+    loadSettingsData();
   }, []);
 
-  // FIXED: Simplified initialization with better timeout protection
-  const initializeSettings = async () => {
+  const loadSettingsData = async () => {
     try {
+      console.log('Loading settings data...');
       setIsLoading(true);
-      console.log('Initializing settings...');
-      
-      // Set a reasonable timeout to prevent infinite loading
-      const timeoutId = setTimeout(() => {
-        console.log('Loading timeout reached - displaying screen with available data');
-        setIsLoading(false);
-      }, 8000); // 8 seconds timeout
 
-      // Load all data - each function has its own error handling
-      await Promise.allSettled([
-        loadUserData(),
-        loadSettings(),
-        checkAdminStatus()
+      // Set timeout to prevent infinite loading
+      const timeoutId = setTimeout(() => {
+        console.log('Loading timeout - displaying screen');
+        setIsLoading(false);
+      }, 3000);
+
+      // Load data in parallel with error handling
+      await Promise.all([
+        loadUserData().catch(err => {
+          console.error('loadUserData error:', err);
+          setDefaultUserData();
+        }),
+        loadSettings().catch(err => {
+          console.error('loadSettings error:', err);
+          setApiProvider('deepseek');
+        }),
+        checkAdminStatus().catch(err => {
+          console.error('checkAdminStatus error:', err);
+          setIsAdmin(false);
+        })
       ]);
 
-      // Clear timeout since we finished loading
       clearTimeout(timeoutId);
-      console.log('Settings initialization complete');
+      console.log('Settings data loaded successfully');
       setIsLoading(false);
     } catch (error) {
-      console.error('Error initializing settings screen:', error);
-      // Always show the screen, even if there were errors
+      console.error('Error loading settings:', error);
       setIsLoading(false);
     }
   };
 
+  const setDefaultUserData = () => {
+    const user = FirebaseService.currentUser;
+    setUserStats({
+      displayName: user?.displayName || 'User',
+      email: user?.email || '',
+      totalHabits: 0,
+      longestStreak: 0,
+      referralCount: 0
+    });
+    setIsPremium(false);
+  };
+
   const checkAdminStatus = async () => {
-    try {
-      const user = FirebaseService.currentUser;
-      if (user && user.email) {
-        const adminStatus = await AdminService.checkAdminStatus(user.email);
-        console.log('Admin status:', adminStatus);
-        setIsAdmin(adminStatus);
-        
-        // Auto-grant premium to admins
-        if (adminStatus && !isPremium) {
-          try {
-            await FirebaseService.updateUserPremiumStatus(true);
-            setIsPremium(true);
-            console.log('Auto-granted premium to admin');
-          } catch (premiumError) {
-            console.error('Error granting premium to admin:', premiumError);
-          }
-        }
-      } else {
-        console.log('No user or email found');
-        setIsAdmin(false);
+    const user = FirebaseService.currentUser;
+    if (user && user.email) {
+      const adminStatus = await AdminService.checkAdminStatus(user.email);
+      setIsAdmin(adminStatus);
+      
+      if (adminStatus && !isPremium) {
+        await FirebaseService.updateUserPremiumStatus(true).catch(err => 
+          console.error('Error granting premium:', err)
+        );
+        setIsPremium(true);
       }
-    } catch (error) {
-      console.error('Error checking admin status:', error);
-      setIsAdmin(false);
     }
   };
 
   const loadUserData = async () => {
-    try {
-      console.log('Loading user stats...');
-      const stats = await FirebaseService.getUserStats();
-      console.log('User stats loaded:', stats);
-      
-      if (stats) {
-        setUserStats(stats);
-        setIsPremium(stats.isPremium || false);
-      } else {
-        console.log('No user stats found, using defaults');
-        // Set default values
-        const user = FirebaseService.currentUser;
-        setUserStats({
-          displayName: user?.displayName || 'User',
-          email: user?.email || '',
-          totalHabits: 0,
-          longestStreak: 0,
-          referralCount: 0
-        });
-        setIsPremium(false);
-      }
-    } catch (error) {
-      console.error('Error loading user data:', error);
-      // Set default values on error
-      const user = FirebaseService.currentUser;
-      setUserStats({
-        displayName: user?.displayName || 'User',
-        email: user?.email || '',
-        totalHabits: 0,
-        longestStreak: 0,
-        referralCount: 0
-      });
-      setIsPremium(false);
+    const stats = await FirebaseService.getUserStats();
+    if (stats) {
+      setUserStats(stats);
+      setIsPremium(stats.isPremium || false);
+    } else {
+      setDefaultUserData();
     }
   };
 
   const loadSettings = async () => {
-    try {
-      console.log('Loading AI provider settings...');
-      const stats = await FirebaseService.getUserStats();
-      const isPremiumUser = stats?.isPremium || false;
-      
-      const provider = await SecureAIService.getActiveProvider(isPremiumUser);
-      console.log('Active provider:', provider);
-      setApiProvider(provider || 'deepseek');
-    } catch (error) {
-      console.error('Error loading settings:', error);
-      setApiProvider('deepseek');
-    }
+    const stats = await FirebaseService.getUserStats();
+    const isPremiumUser = stats?.isPremium || false;
+    const provider = await SecureAIService.getActiveProvider(isPremiumUser);
+    setApiProvider(provider || 'deepseek');
   };
 
   const handlePremiumUpgrade = () => {
     try {
-      const parentNav = navigation.getParent();
-      if (parentNav && parentNav.navigate) {
-        parentNav.navigate('Premium');
-      } else {
-        Alert.alert('Info', 'Premium upgrade coming soon!');
-      }
+      navigation.getParent()?.navigate('Premium');
     } catch (error) {
-      console.error('Navigation error:', error);
-      Alert.alert('Error', 'Unable to open Premium screen');
+      Alert.alert('Info', 'Premium upgrade coming soon!');
     }
   };
 
@@ -183,13 +145,9 @@ const SettingsScreen = ({ navigation }) => {
           onPress: async () => {
             try {
               await FirebaseService.signOut();
-              const parentNav = navigation.getParent();
-              if (parentNav && parentNav.replace) {
-                parentNav.replace('Auth');
-              }
+              navigation.getParent()?.replace('Auth');
             } catch (error) {
-              console.error('Sign out error:', error);
-              Alert.alert('Error', 'Failed to sign out. Please try again.');
+              Alert.alert('Error', 'Failed to sign out');
             }
           }
         }
@@ -199,21 +157,17 @@ const SettingsScreen = ({ navigation }) => {
 
   const handleShareApp = async () => {
     try {
-      const referralCode = userStats?.referralCode || 'HABITOWL';
-      const message = `Check out HabitOwl - the smart habit tracker that actually works! \n\nUse my referral code: ${referralCode}\n\nDownload: https://habitowl-app.web.app`;
+      const code = userStats?.referralCode || 'HABITOWL';
+      const message = `Check out HabitOwl - the smart habit tracker!\n\nUse code: ${code}\n\nDownload: https://habitowl-app.web.app`;
       
-      await Share.share({
-        message,
-        title: 'Join me on HabitOwl!'
-      });
-
+      await Share.share({ message, title: 'Join me on HabitOwl!' });
       await FirebaseService.trackEvent('app_shared', {
         method: 'native_share',
-        referral_code: referralCode
-      }).catch(err => console.error('Error tracking event:', err));
+        referral_code: code
+      }).catch(() => {});
     } catch (error) {
       if (error.message !== 'User did not share') {
-        console.error('Error sharing app:', error);
+        console.error('Share error:', error);
       }
     }
   };
@@ -231,40 +185,25 @@ const SettingsScreen = ({ navigation }) => {
       Alert.alert('Success!', 'Referral code applied successfully!');
       await loadUserData();
     } catch (error) {
-      console.error('Error processing referral:', error);
       Alert.alert('Error', error.message || 'Failed to process referral code');
     }
   };
 
   const handleAboutPress = () => {
     try {
-      const parentNav = navigation.getParent();
-      if (parentNav && parentNav.navigate) {
-        parentNav.navigate('About');
-      } else {
-        Alert.alert('Info', 'About section coming soon!');
-      }
+      navigation.getParent()?.navigate('About');
     } catch (error) {
-      console.error('Navigation error:', error);
-      Alert.alert('Error', 'Unable to open About screen');
+      Alert.alert('Info', 'About section coming soon!');
     }
   };
 
   const handleAdminPress = () => {
     if (isAdmin) {
       try {
-        const parentNav = navigation.getParent();
-        if (parentNav && parentNav.navigate) {
-          parentNav.navigate('Admin');
-        } else {
-          Alert.alert('Info', 'Admin panel coming soon!');
-        }
+        navigation.getParent()?.navigate('Admin');
       } catch (error) {
-        console.error('Navigation error:', error);
         Alert.alert('Error', 'Unable to open Admin screen');
       }
-    } else {
-      Alert.alert('Access Denied', 'Admin access only');
     }
   };
 
@@ -273,25 +212,22 @@ const SettingsScreen = ({ navigation }) => {
   };
 
   const handlePrivacyPolicy = () => {
-    Linking.openURL('https://habitowl-app.web.app/privacy').catch(err => {
-      console.error('Error opening privacy policy:', err);
-      Alert.alert('Error', 'Unable to open privacy policy');
-    });
+    Linking.openURL('https://habitowl-app.web.app/privacy').catch(() => 
+      Alert.alert('Error', 'Unable to open privacy policy')
+    );
   };
 
   const handleTermsOfService = () => {
-    Linking.openURL('https://habitowl-app.web.app/terms').catch(err => {
-      console.error('Error opening terms:', err);
-      Alert.alert('Error', 'Unable to open terms of service');
-    });
+    Linking.openURL('https://habitowl-app.web.app/terms').catch(() => 
+      Alert.alert('Error', 'Unable to open terms of service')
+    );
   };
 
   const handleStatisticsPress = () => {
     try {
       navigation.navigate('Statistics');
     } catch (error) {
-      console.error('Navigation error:', error);
-      Alert.alert('Info', 'Please use the Statistics tab at the bottom of the screen');
+      Alert.alert('Info', 'Please use the Statistics tab');
     }
   };
 
@@ -319,7 +255,9 @@ const SettingsScreen = ({ navigation }) => {
               <Icon name="account" size={40} color="#ffffff" />
             </View>
             <View style={styles.userDetails}>
-              <Text style={styles.userName}>{user.displayName || userStats?.displayName || 'User'}</Text>
+              <Text style={styles.userName}>
+                {user.displayName || userStats?.displayName || 'User'}
+              </Text>
               <Text style={styles.userEmail}>{user.email}</Text>
               <View style={styles.badgeContainer}>
                 {isPremium && (
@@ -359,7 +297,6 @@ const SettingsScreen = ({ navigation }) => {
     );
   };
 
-  // FIXED: Improved loading state
   if (isLoading) {
     return (
       <View style={[styles.container, styles.centerContent]}>
@@ -369,7 +306,6 @@ const SettingsScreen = ({ navigation }) => {
     );
   }
 
-  // FIXED: Always render content once loading is complete
   return (
     <View style={styles.container}>
       <ScrollView 
@@ -556,11 +492,11 @@ const SettingsScreen = ({ navigation }) => {
         <View style={styles.bottomPadding} />
       </ScrollView>
 
-      <Portal>
-        <Dialog visible={showContactSupport} onDismiss={() => setShowContactSupport(false)}>
-          <ContactSupport onClose={() => setShowContactSupport(false)} />
-        </Dialog>
-      </Portal>
+      {/* FIXED: Correct usage of ContactSupport - pass visible and onDismiss props */}
+      <ContactSupport 
+        visible={showContactSupport} 
+        onDismiss={() => setShowContactSupport(false)} 
+      />
 
       <Portal>
         <Dialog visible={showReferralDialog} onDismiss={() => setShowReferralDialog(false)}>
@@ -580,8 +516,8 @@ const SettingsScreen = ({ navigation }) => {
             />
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setShowReferralDialog(false)} labelStyle={styles.buttonLabel}>Cancel</Button>
-            <Button onPress={handleReferralSubmit} labelStyle={styles.buttonLabel}>Apply</Button>
+            <Button onPress={() => setShowReferralDialog(false)}>Cancel</Button>
+            <Button onPress={handleReferralSubmit}>Apply</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
@@ -603,7 +539,6 @@ const styles = StyleSheet.create({
   centerContent: {
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
   },
   loadingText: {
     marginTop: 16,

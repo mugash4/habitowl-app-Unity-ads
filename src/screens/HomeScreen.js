@@ -29,11 +29,13 @@ const HomeScreen = ({ navigation, route }) => {
   const [motivationalMessage, setMotivationalMessage] = useState('');
   const [fadeAnim] = useState(new Animated.Value(0));
 
-  // FIXED: Reload habits EVERY time screen comes into focus
+  // FIXED: Force reload habits on EVERY screen focus
   useFocusEffect(
     useCallback(() => {
-      console.log('HomeScreen focused - reloading habits...');
-      loadHabits();
+      console.log('🔄 HomeScreen focused - force reloading habits...');
+      
+      // Force reload immediately
+      loadHabits(true);
       
       // Animate screen
       Animated.timing(fadeAnim, {
@@ -46,14 +48,18 @@ const HomeScreen = ({ navigation, route }) => {
         // Cleanup
         fadeAnim.setValue(0);
       };
-    }, []) // Empty dependency array ensures this runs on EVERY focus
+    }, []) // Empty array means runs on EVERY focus
   );
 
-  // FIXED: Comprehensive habit loading with better error handling
-  const loadHabits = async () => {
+  // FIXED: Added forceReload parameter
+  const loadHabits = async (forceReload = false) => {
     try {
+      if (forceReload) {
+        console.log('📱 Force reload - clearing cache and fetching fresh data...');
+        setLoading(true);
+      }
+      
       console.log('📱 Loading habits from Firebase...');
-      setLoading(true);
       
       // Add timeout protection
       const timeoutPromise = new Promise((_, reject) => {
@@ -65,9 +71,10 @@ const HomeScreen = ({ navigation, route }) => {
       const userHabits = await Promise.race([loadPromise, timeoutPromise]);
       
       console.log('✅ Successfully loaded', userHabits.length, 'habits');
-      console.log('Habits:', userHabits.map(h => h.name));
+      console.log('📝 Habit names:', userHabits.map(h => h.name).join(', '));
       
-      setHabits(userHabits);
+      // FIXED: Always update state with fresh data
+      setHabits([...userHabits]); // Create new array to force re-render
       
       // Check which habits are completed today
       const today = new Date().toDateString();
@@ -99,7 +106,7 @@ const HomeScreen = ({ navigation, route }) => {
           'Connection Issue', 
           'Please check your internet connection and try again.',
           [
-            { text: 'Retry', onPress: () => loadHabits() },
+            { text: 'Retry', onPress: () => loadHabits(true) },
             { text: 'Cancel', style: 'cancel' }
           ]
         );
@@ -137,7 +144,7 @@ const HomeScreen = ({ navigation, route }) => {
   const onRefresh = async () => {
     console.log('🔄 Manual refresh triggered');
     setRefreshing(true);
-    await loadHabits();
+    await loadHabits(true); // Force reload
     setRefreshing(false);
   };
 
@@ -169,11 +176,11 @@ const HomeScreen = ({ navigation, route }) => {
       setTodayCompletions(newCompletions);
       
       // Reload habits to get updated data
-      await loadHabits();
+      await loadHabits(true); // Force reload
       
     } catch (error) {
       Alert.alert('Error', error.message);
-      await loadHabits();
+      await loadHabits(true); // Force reload on error
     }
   };
 
@@ -189,7 +196,7 @@ const HomeScreen = ({ navigation, route }) => {
   const handleDeleteHabit = async (habitId) => {
     try {
       await FirebaseService.deleteHabit(habitId);
-      await loadHabits();
+      await loadHabits(true); // Force reload
     } catch (error) {
       Alert.alert('Error', 'Failed to delete habit');
     }
