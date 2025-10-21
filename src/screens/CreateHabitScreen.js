@@ -15,7 +15,6 @@ import {
   Chip,
   Switch,
   Appbar,
-  RadioButton,
   HelperText
 } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -136,16 +135,14 @@ const CreateHabitScreen = ({ navigation, route }) => {
         has_reminder: reminderEnabled
       });
 
-      // FIXED: Navigate back and force refresh
+      // FIXED: Navigate back properly
       console.log('Navigating back to Home screen...');
-      
-      // Use goBack() to return to Home
       navigation.goBack();
       
-      // Show success message after a small delay
+      // Show success after slight delay
       setTimeout(() => {
         Alert.alert(
-          'Success!',
+          'Success! 🎉',
           `"${habitName}" has been added to your habits!`,
           [{ text: 'OK' }]
         );
@@ -167,11 +164,7 @@ const CreateHabitScreen = ({ navigation, route }) => {
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
-    >
+    <View style={styles.container}>
       <Appbar.Header style={styles.appbar}>
         <Appbar.BackAction onPress={() => navigation.goBack()} color="#ffffff" />
         <Appbar.Content title="Create New Habit" titleStyle={styles.headerTitle} />
@@ -183,228 +176,234 @@ const CreateHabitScreen = ({ navigation, route }) => {
         />
       </Appbar.Header>
 
-      {/* FIXED: ScrollView with proper configuration for scrolling */}
-      <ScrollView 
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={true}
-        keyboardShouldPersistTaps="handled"
-        nestedScrollEnabled={true}
-        bounces={true}
-        scrollEnabled={true}
-        alwaysBounceVertical={true}
+      {/* FIXED: Improved ScrollView configuration */}
+      <KeyboardAvoidingView 
+        style={styles.keyboardAvoid}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
-        {/* AI Suggestions */}
-        {aiSuggestions.length > 0 && (
+        <ScrollView 
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={true}
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled={true}
+          bounces={true}
+          scrollEnabled={true}
+        >
+          {/* AI Suggestions */}
+          {aiSuggestions.length > 0 && (
+            <Card style={styles.card}>
+              <Card.Content>
+                <View style={styles.sectionHeader}>
+                  <Icon name="lightbulb" size={20} color="#f59e0b" />
+                  <Text style={styles.sectionTitle}>AI Suggestions</Text>
+                </View>
+                <Text style={styles.sectionSubtitle}>
+                  Based on your profile and current habits
+                </Text>
+                
+                {aiSuggestions.map((suggestion, index) => (
+                  <Button
+                    key={index}
+                    mode="outlined"
+                    onPress={() => handleSuggestionSelect(suggestion)}
+                    style={styles.suggestionButton}
+                    contentStyle={styles.suggestionContent}
+                    labelStyle={styles.suggestionButtonLabel}
+                  >
+                    <View style={styles.suggestionText}>
+                      <Text style={styles.suggestionName}>{suggestion.name}</Text>
+                      <Text style={styles.suggestionDescription}>
+                        {suggestion.description}
+                      </Text>
+                    </View>
+                  </Button>
+                ))}
+              </Card.Content>
+            </Card>
+          )}
+
+          {/* Basic Information */}
           <Card style={styles.card}>
             <Card.Content>
-              <View style={styles.sectionHeader}>
-                <Icon name="lightbulb" size={20} color="#f59e0b" />
-                <Text style={styles.sectionTitle}>AI Suggestions</Text>
-              </View>
-              <Text style={styles.sectionSubtitle}>
-                Based on your profile and current habits
-              </Text>
+              <Text style={styles.sectionTitle}>Basic Information</Text>
               
-              {aiSuggestions.map((suggestion, index) => (
-                <Button
-                  key={index}
-                  mode="outlined"
-                  onPress={() => handleSuggestionSelect(suggestion)}
-                  style={styles.suggestionButton}
-                  contentStyle={styles.suggestionContent}
-                  labelStyle={styles.suggestionButtonLabel}
-                >
-                  <View style={styles.suggestionText}>
-                    <Text style={styles.suggestionName}>{suggestion.name}</Text>
-                    <Text style={styles.suggestionDescription}>
-                      {suggestion.description}
-                    </Text>
-                  </View>
-                </Button>
-              ))}
+              <TextInput
+                label="Habit Name *"
+                value={habitName}
+                onChangeText={setHabitName}
+                mode="outlined"
+                style={styles.input}
+                placeholder="e.g., Morning meditation"
+                maxLength={50}
+                theme={{ colors: { primary: '#4f46e5' } }}
+              />
+              
+              <HelperText type="info">
+                Choose a specific, actionable name for your habit
+              </HelperText>
+
+              <TextInput
+                label="Description (Optional)"
+                value={description}
+                onChangeText={setDescription}
+                mode="outlined"
+                multiline
+                numberOfLines={3}
+                style={styles.input}
+                placeholder="What does this habit involve?"
+                maxLength={200}
+                theme={{ colors: { primary: '#4f46e5' } }}
+              />
             </Card.Content>
           </Card>
-        )}
 
-        {/* Basic Information */}
-        <Card style={styles.card}>
-          <Card.Content>
-            <Text style={styles.sectionTitle}>Basic Information</Text>
-            
-            <TextInput
-              label="Habit Name *"
-              value={habitName}
-              onChangeText={setHabitName}
-              mode="outlined"
-              style={styles.input}
-              placeholder="e.g., Morning meditation"
-              maxLength={50}
-              theme={{ colors: { primary: '#4f46e5' } }}
-            />
-            
-            <HelperText type="info">
-              Choose a specific, actionable name for your habit
-            </HelperText>
+          {/* Category */}
+          <Card style={styles.card}>
+            <Card.Content>
+              <Text style={styles.sectionTitle}>Category</Text>
+              <Text style={styles.sectionSubtitle}>
+                Choose the category that best fits your habit
+              </Text>
+              
+              <View style={styles.categoriesContainer}>
+                {categories.map((cat) => (
+                  <Chip
+                    key={cat.value}
+                    selected={category === cat.value}
+                    onPress={() => setCategory(cat.value)}
+                    style={[
+                      styles.categoryChip,
+                      category === cat.value && { backgroundColor: cat.color }
+                    ]}
+                    textStyle={[
+                      styles.categoryChipText,
+                      category === cat.value && { color: '#ffffff' }
+                    ]}
+                    icon={cat.icon}
+                  >
+                    {cat.label}
+                  </Chip>
+                ))}
+              </View>
+            </Card.Content>
+          </Card>
 
-            <TextInput
-              label="Description (Optional)"
-              value={description}
-              onChangeText={setDescription}
-              mode="outlined"
-              multiline
-              numberOfLines={3}
-              style={styles.input}
-              placeholder="What does this habit involve?"
-              maxLength={200}
-              theme={{ colors: { primary: '#4f46e5' } }}
-            />
-          </Card.Content>
-        </Card>
+          {/* Difficulty & Time */}
+          <Card style={styles.card}>
+            <Card.Content>
+              <Text style={styles.sectionTitle}>Difficulty & Time</Text>
+              
+              <Text style={styles.subsectionTitle}>Difficulty Level</Text>
+              <Text style={styles.sectionSubtitle}>
+                How challenging is this habit for you?
+              </Text>
+              
+              <View style={styles.difficultyContainer}>
+                {[1, 2, 3, 4, 5].map((level) => (
+                  <Button
+                    key={level}
+                    mode={difficulty === level ? "contained" : "outlined"}
+                    onPress={() => setDifficulty(level)}
+                    style={styles.difficultyButton}
+                    labelStyle={difficulty === level ? styles.buttonLabelWhite : styles.buttonLabel}
+                    compact
+                  >
+                    {level}
+                  </Button>
+                ))}
+              </View>
+              
+              <Text style={styles.difficultyLabel}>
+                {difficulty === 1 && "Very Easy"}
+                {difficulty === 2 && "Easy"}
+                {difficulty === 3 && "Moderate"}
+                {difficulty === 4 && "Hard"}
+                {difficulty === 5 && "Very Hard"}
+              </Text>
 
-        {/* Category */}
-        <Card style={styles.card}>
-          <Card.Content>
-            <Text style={styles.sectionTitle}>Category</Text>
-            <Text style={styles.sectionSubtitle}>
-              Choose the category that best fits your habit
-            </Text>
-            
-            <View style={styles.categoriesContainer}>
-              {categories.map((cat) => (
-                <Chip
-                  key={cat.value}
-                  selected={category === cat.value}
-                  onPress={() => setCategory(cat.value)}
-                  style={[
-                    styles.categoryChip,
-                    category === cat.value && { backgroundColor: cat.color }
-                  ]}
-                  textStyle={[
-                    styles.categoryChipText,
-                    category === cat.value && { color: '#ffffff' }
-                  ]}
-                  icon={cat.icon}
-                >
-                  {cat.label}
-                </Chip>
-              ))}
-            </View>
-          </Card.Content>
-        </Card>
+              <Text style={styles.subsectionTitle}>Estimated Time</Text>
+              <View style={styles.timeContainer}>
+                {timeOptions.map((time) => (
+                  <Chip
+                    key={time}
+                    selected={estimatedTime === time}
+                    onPress={() => setEstimatedTime(time)}
+                    style={styles.timeChip}
+                    textStyle={estimatedTime === time && { color: '#ffffff' }}
+                  >
+                    {time}
+                  </Chip>
+                ))}
+              </View>
+            </Card.Content>
+          </Card>
 
-        {/* Difficulty & Time */}
-        <Card style={styles.card}>
-          <Card.Content>
-            <Text style={styles.sectionTitle}>Difficulty & Time</Text>
-            
-            <Text style={styles.subsectionTitle}>Difficulty Level</Text>
-            <Text style={styles.sectionSubtitle}>
-              How challenging is this habit for you?
-            </Text>
-            
-            <View style={styles.difficultyContainer}>
-              {[1, 2, 3, 4, 5].map((level) => (
-                <Button
-                  key={level}
-                  mode={difficulty === level ? "contained" : "outlined"}
-                  onPress={() => setDifficulty(level)}
-                  style={styles.difficultyButton}
-                  labelStyle={difficulty === level ? styles.buttonLabelWhite : styles.buttonLabel}
-                  compact
-                >
-                  {level}
-                </Button>
-              ))}
-            </View>
-            
-            <Text style={styles.difficultyLabel}>
-              {difficulty === 1 && "Very Easy"}
-              {difficulty === 2 && "Easy"}
-              {difficulty === 3 && "Moderate"}
-              {difficulty === 4 && "Hard"}
-              {difficulty === 5 && "Very Hard"}
-            </Text>
-
-            <Text style={styles.subsectionTitle}>Estimated Time</Text>
-            <View style={styles.timeContainer}>
-              {timeOptions.map((time) => (
-                <Chip
-                  key={time}
-                  selected={estimatedTime === time}
-                  onPress={() => setEstimatedTime(time)}
-                  style={styles.timeChip}
-                  textStyle={estimatedTime === time && { color: '#ffffff' }}
-                >
-                  {time}
-                </Chip>
-              ))}
-            </View>
-          </Card.Content>
-        </Card>
-
-        {/* Daily Reminder */}
-        <Card style={styles.card}>
-          <Card.Content>
-            <View style={styles.reminderHeader}>
-              <Text style={styles.sectionTitle}>Daily Reminder</Text>
-              <Switch
-                value={reminderEnabled}
-                onValueChange={setReminderEnabled}
-                color="#4f46e5"
-              />
-            </View>
-
-            {reminderEnabled && (
-              <>
-                <Button
-                  mode="outlined"
-                  onPress={() => setShowTimePicker(true)}
-                  style={styles.timeButton}
-                  icon="clock"
-                  labelStyle={styles.buttonLabel}
-                >
-                  {reminderTime.toLocaleTimeString([], { 
-                    hour: '2-digit', 
-                    minute: '2-digit' 
-                  })}
-                </Button>
-
-                <TextInput
-                  label="Custom Reminder Message (Optional)"
-                  value={customMessage}
-                  onChangeText={setCustomMessage}
-                  mode="outlined"
-                  style={styles.input}
-                  placeholder="e.g., Time for your daily meditation!"
-                  maxLength={100}
-                  theme={{ colors: { primary: '#4f46e5' } }}
+          {/* Daily Reminder */}
+          <Card style={styles.card}>
+            <Card.Content>
+              <View style={styles.reminderHeader}>
+                <Text style={styles.sectionTitle}>Daily Reminder</Text>
+                <Switch
+                  value={reminderEnabled}
+                  onValueChange={setReminderEnabled}
+                  color="#4f46e5"
                 />
-                
-                <HelperText type="info">
-                  Leave blank to use the default reminder message
-                </HelperText>
-              </>
-            )}
-          </Card.Content>
-        </Card>
+              </View>
 
-        {/* Create Button */}
-        <Button
-          mode="contained"
-          onPress={handleCreateHabit}
-          loading={isLoading}
-          disabled={isLoading}
-          style={styles.createButton}
-          contentStyle={styles.createButtonContent}
-          labelStyle={styles.buttonLabelWhite}
-        >
-          Create Habit
-        </Button>
+              {reminderEnabled && (
+                <>
+                  <Button
+                    mode="outlined"
+                    onPress={() => setShowTimePicker(true)}
+                    style={styles.timeButton}
+                    icon="clock"
+                    labelStyle={styles.buttonLabel}
+                  >
+                    {reminderTime.toLocaleTimeString([], { 
+                      hour: '2-digit', 
+                      minute: '2-digit' 
+                    })}
+                  </Button>
 
-        {/* FIXED: Extra padding for better scroll access */}
-        <View style={styles.bottomPadding} />
-      </ScrollView>
+                  <TextInput
+                    label="Custom Reminder Message (Optional)"
+                    value={customMessage}
+                    onChangeText={setCustomMessage}
+                    mode="outlined"
+                    style={styles.input}
+                    placeholder="e.g., Time for your daily meditation!"
+                    maxLength={100}
+                    theme={{ colors: { primary: '#4f46e5' } }}
+                  />
+                  
+                  <HelperText type="info">
+                    Leave blank to use the default reminder message
+                  </HelperText>
+                </>
+              )}
+            </Card.Content>
+          </Card>
+
+          {/* Create Button */}
+          <Button
+            mode="contained"
+            onPress={handleCreateHabit}
+            loading={isLoading}
+            disabled={isLoading}
+            style={styles.createButton}
+            contentStyle={styles.createButtonContent}
+            labelStyle={styles.buttonLabelWhite}
+            icon="plus"
+          >
+            Create Habit
+          </Button>
+
+          {/* FIXED: Much larger bottom padding for scroll access */}
+          <View style={styles.bottomPadding} />
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Time Picker */}
       {showTimePicker && (
@@ -415,7 +414,7 @@ const CreateHabitScreen = ({ navigation, route }) => {
           onChange={handleTimeChange}
         />
       )}
-    </KeyboardAvoidingView>
+    </View>
   );
 };
 
@@ -432,12 +431,15 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontWeight: 'bold',
   },
-  // FIXED: Proper flex for ScrollView
+  keyboardAvoid: {
+    flex: 1,
+  },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 200, // FIXED: Increased padding for scroll access
+    paddingBottom: 300, // FIXED: Extra large padding for scroll
+    flexGrow: 1,
   },
   card: {
     margin: 16,
@@ -549,6 +551,7 @@ const styles = StyleSheet.create({
   },
   createButton: {
     margin: 16,
+    marginTop: 8,
     backgroundColor: '#4f46e5',
     elevation: 3,
   },
@@ -556,7 +559,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   bottomPadding: {
-    height: 200, // FIXED: Increased for better scroll access
+    height: 300, // FIXED: Large bottom padding
   },
 });
 

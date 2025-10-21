@@ -29,29 +29,43 @@ const HomeScreen = ({ navigation, route }) => {
   const [motivationalMessage, setMotivationalMessage] = useState('');
   const [fadeAnim] = useState(new Animated.Value(0));
 
-  // FIXED: Reload habits every time screen comes into focus
+  // FIXED: Reload habits EVERY time screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      console.log('HomeScreen focused, loading habits...');
+      console.log('HomeScreen focused - reloading habits...');
       loadHabits();
       
-      // Animate in the screen
+      // Animate screen
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 500,
         useNativeDriver: true,
       }).start();
-    }, [])
+
+      return () => {
+        // Cleanup
+        fadeAnim.setValue(0);
+      };
+    }, []) // Empty dependency array ensures this runs on EVERY focus
   );
 
-  // FIXED: Better error handling for habit loading
+  // FIXED: Comprehensive habit loading with better error handling
   const loadHabits = async () => {
     try {
-      console.log('Loading habits from Firebase...');
+      console.log('📱 Loading habits from Firebase...');
       setLoading(true);
       
-      const userHabits = await FirebaseService.getUserHabits();
-      console.log('Successfully loaded', userHabits.length, 'habits');
+      // Add timeout protection
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Loading timeout')), 10000);
+      });
+
+      const loadPromise = FirebaseService.getUserHabits();
+      
+      const userHabits = await Promise.race([loadPromise, timeoutPromise]);
+      
+      console.log('✅ Successfully loaded', userHabits.length, 'habits');
+      console.log('Habits:', userHabits.map(h => h.name));
       
       setHabits(userHabits);
       
@@ -67,21 +81,20 @@ const HomeScreen = ({ navigation, route }) => {
       
       setTodayCompletions(completedToday);
       
-      // Load motivational message after habits are loaded
+      // Load motivational message
       if (userHabits.length > 0) {
         loadMotivationalMessage(userHabits, completedToday);
       }
       
     } catch (error) {
-      console.error('Error loading habits:', error);
+      console.error('❌ Error loading habits:', error);
       
-      // FIXED: More user-friendly error handling
-      // Don't show alert immediately - just log and set empty state
+      // Set empty state
       setHabits([]);
       setTodayCompletions(new Set());
       
-      // Only show error alert if it's a network issue
-      if (error.message && error.message.includes('network')) {
+      // Show error only for critical issues
+      if (error.message && (error.message.includes('network') || error.message.includes('timeout'))) {
         Alert.alert(
           'Connection Issue', 
           'Please check your internet connection and try again.',
@@ -110,7 +123,6 @@ const HomeScreen = ({ navigation, route }) => {
       setMotivationalMessage(message);
     } catch (error) {
       console.error('Error loading motivational message:', error);
-      // Don't show error for motivational message failure
       setMotivationalMessage('');
     }
   };
@@ -123,6 +135,7 @@ const HomeScreen = ({ navigation, route }) => {
   };
 
   const onRefresh = async () => {
+    console.log('🔄 Manual refresh triggered');
     setRefreshing(true);
     await loadHabits();
     setRefreshing(false);
@@ -130,18 +143,18 @@ const HomeScreen = ({ navigation, route }) => {
 
   const handleHabitComplete = async (habit, isNowCompleted) => {
     try {
-      // Update local state immediately for smooth UX
+      // Update local state immediately
       const newCompletions = new Set(todayCompletions);
       if (isNowCompleted) {
         newCompletions.add(habit.id);
         
-        // Show celebration for streak milestones
+        // Show celebration for milestones
         const newStreak = (habit.currentStreak || 0) + 1;
         if ([3, 7, 14, 30, 60, 100].includes(newStreak)) {
           await NotificationService.scheduleStreakCelebration(habit, newStreak);
         }
         
-        // Show interstitial ad occasionally after habit completion
+        // Show ad occasionally
         setTimeout(async () => {
           try {
             await unityAdsService.showInterstitialAd('habit_completion');
@@ -155,17 +168,17 @@ const HomeScreen = ({ navigation, route }) => {
       
       setTodayCompletions(newCompletions);
       
-      // Reload habits to get updated streaks
+      // Reload habits to get updated data
       await loadHabits();
       
     } catch (error) {
       Alert.alert('Error', error.message);
-      // Reload habits to ensure consistency
       await loadHabits();
     }
   };
 
   const handleCreateHabit = async () => {
+    console.log('📝 Navigating to CreateHabit screen');
     navigation.navigate('CreateHabit');
   };
 
@@ -212,7 +225,7 @@ const HomeScreen = ({ navigation, route }) => {
         <View style={styles.headerContent}>
           <View style={styles.greetingContainer}>
             <Text style={styles.greeting}>
-              Good {getTimeOfDay()}, {displayName}! 
+              Good {getTimeOfDay()}, {displayName}! 👋
             </Text>
           </View>
           
@@ -321,7 +334,7 @@ const HomeScreen = ({ navigation, route }) => {
           renderEmptyState()
         ) : (
           <>
-            <Text style={styles.sectionTitle}>Your Habits</Text>
+            <Text style={styles.sectionTitle}>Your Habits ({habits.length})</Text>
             {habits.map((habit) => (
               <HabitCard
                 key={habit.id}
@@ -338,7 +351,7 @@ const HomeScreen = ({ navigation, route }) => {
         {/* Unity Banner Ad */}
         <UnityBannerAd style={styles.adBanner} />
         
-        {/* Bottom padding for FAB */}
+        {/* Bottom padding */}
         <View style={styles.bottomPadding} />
       </ScrollView>
 
