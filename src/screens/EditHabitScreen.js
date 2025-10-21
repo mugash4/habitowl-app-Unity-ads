@@ -166,26 +166,40 @@ const EditHabitScreen = ({ navigation, route }) => {
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <Appbar.Header>
-        <Appbar.BackAction onPress={() => navigation.goBack()} />
-        <Appbar.Content title="Edit Habit" />
+    <View style={styles.container}>
+      <Appbar.Header style={styles.appbar}>
+        <Appbar.BackAction onPress={() => navigation.goBack()} color="#ffffff" />
+        <Appbar.Content title="Edit Habit" titleStyle={styles.headerTitle} />
         <Appbar.Action 
           icon="delete" 
           onPress={handleDeleteHabit}
           disabled={isLoading}
+          color="#ffffff"
         />
         <Appbar.Action 
           icon="check" 
           onPress={handleUpdateHabit}
           disabled={isLoading}
+          color="#ffffff"
         />
       </Appbar.Header>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      {/* CRITICAL FIX: Same scroll properties as CreateHabitScreen */}
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={true}
+        keyboardShouldPersistTaps="handled"
+        nestedScrollEnabled={true}
+        bounces={true}
+        scrollEnabled={true}
+        // CRITICAL FIX: Android APK scroll properties
+        removeClippedSubviews={false}
+        overScrollMode="always"
+        persistentScrollbar={true}
+        scrollEventThrottle={16}
+        alwaysBounceVertical={true}
+      >
         {/* Habit Stats */}
         <Card style={styles.card}>
           <Card.Content>
@@ -226,6 +240,7 @@ const EditHabitScreen = ({ navigation, route }) => {
               style={styles.input}
               placeholder="e.g., Morning meditation"
               maxLength={50}
+              theme={{ colors: { primary: '#4f46e5' } }}
             />
             
             <HelperText type="info">
@@ -242,6 +257,7 @@ const EditHabitScreen = ({ navigation, route }) => {
               style={styles.input}
               placeholder="What does this habit involve?"
               maxLength={200}
+              theme={{ colors: { primary: '#4f46e5' } }}
             />
           </Card.Content>
         </Card>
@@ -294,6 +310,7 @@ const EditHabitScreen = ({ navigation, route }) => {
                   mode={difficulty === level ? "contained" : "outlined"}
                   onPress={() => setDifficulty(level)}
                   style={styles.difficultyButton}
+                  labelStyle={difficulty === level ? styles.buttonLabelWhite : styles.buttonLabel}
                   compact
                 >
                   {level}
@@ -317,6 +334,7 @@ const EditHabitScreen = ({ navigation, route }) => {
                   selected={estimatedTime === time}
                   onPress={() => setEstimatedTime(time)}
                   style={styles.timeChip}
+                  textStyle={estimatedTime === time && { color: '#ffffff' }}
                 >
                   {time}
                 </Chip>
@@ -333,6 +351,7 @@ const EditHabitScreen = ({ navigation, route }) => {
               <Switch
                 value={reminderEnabled}
                 onValueChange={setReminderEnabled}
+                color="#4f46e5"
               />
             </View>
 
@@ -343,6 +362,7 @@ const EditHabitScreen = ({ navigation, route }) => {
                   onPress={() => setShowTimePicker(true)}
                   style={styles.timeButton}
                   icon="clock"
+                  labelStyle={styles.buttonLabel}
                 >
                   {reminderTime.toLocaleTimeString([], { 
                     hour: '2-digit', 
@@ -358,6 +378,7 @@ const EditHabitScreen = ({ navigation, route }) => {
                   style={styles.input}
                   placeholder="e.g., Time for your daily meditation!"
                   maxLength={100}
+                  theme={{ colors: { primary: '#4f46e5' } }}
                 />
                 
                 <HelperText type="info">
@@ -376,10 +397,13 @@ const EditHabitScreen = ({ navigation, route }) => {
           disabled={isLoading}
           style={styles.updateButton}
           contentStyle={styles.updateButtonContent}
+          labelStyle={styles.buttonLabelWhite}
+          icon="check"
         >
           Update Habit
         </Button>
 
+        {/* FIXED: Massive bottom padding for scrolling on Android APK */}
         <View style={styles.bottomPadding} />
       </ScrollView>
 
@@ -391,7 +415,7 @@ const EditHabitScreen = ({ navigation, route }) => {
           onChange={handleTimeChange}
         />
       )}
-    </KeyboardAvoidingView>
+    </View>
   );
 };
 
@@ -400,12 +424,26 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8fafc',
   },
-  content: {
+  appbar: {
+    backgroundColor: '#4f46e5',
+    elevation: 4,
+  },
+  headerTitle: {
+    color: '#ffffff',
+    fontWeight: 'bold',
+  },
+  scrollView: {
     flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 150, // CRITICAL FIX: Massive padding for Android APK
+    flexGrow: 1,
+    minHeight: 1200, // CRITICAL FIX: Force scroll container height
   },
   card: {
     margin: 16,
     marginBottom: 8,
+    elevation: 2,
   },
   sectionTitle: {
     fontSize: 18,
@@ -447,6 +485,7 @@ const styles = StyleSheet.create({
   },
   input: {
     marginBottom: 8,
+    backgroundColor: '#ffffff',
   },
   categoriesContainer: {
     flexDirection: 'row',
@@ -489,16 +528,27 @@ const styles = StyleSheet.create({
   },
   timeButton: {
     marginBottom: 16,
+    borderColor: '#e5e7eb',
+  },
+  buttonLabel: {
+    color: '#4f46e5',
+    fontWeight: '600',
+  },
+  buttonLabelWhite: {
+    color: '#ffffff',
+    fontWeight: '600',
   },
   updateButton: {
     margin: 16,
+    marginTop: 8,
     backgroundColor: '#4f46e5',
+    elevation: 3,
   },
   updateButtonContent: {
     paddingVertical: 8,
   },
   bottomPadding: {
-    height: 20,
+    height: 150, // CRITICAL FIX: Extra padding for Android scrolling
   },
 });
 

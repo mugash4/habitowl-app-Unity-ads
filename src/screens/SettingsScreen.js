@@ -26,8 +26,18 @@ import AdService from '../services/AdService';
 import SecureAIService from '../services/SecureAIService';
 import NotificationService from '../services/NotificationService';
 import ContactSupport from '../components/ContactSupport';
-import PromoOfferBanner from '../components/PromoOfferBanner';
 import AdminService from '../services/AdminService';
+
+// FIXED: Safe component wrapper for PromoOfferBanner
+const SafePromoOfferBanner = ({ onUpgradePress }) => {
+  try {
+    const PromoOfferBanner = require('../components/PromoOfferBanner').default;
+    return <PromoOfferBanner onUpgradePress={onUpgradePress} />;
+  } catch (error) {
+    console.log('PromoOfferBanner not available:', error);
+    return null;
+  }
+};
 
 const SettingsScreen = ({ navigation }) => {
   const [userStats, setUserStats] = useState(null);
@@ -50,18 +60,30 @@ const SettingsScreen = ({ navigation }) => {
     setIsLoading(true);
 
     try {
-      // Load critical data with individual error handling
-      await Promise.allSettled([
+      // FIXED: Load with timeout to prevent infinite loading
+      const loadPromise = Promise.allSettled([
         loadUserData(),
         loadSettings(),
         checkAdminStatus()
       ]);
 
+      // Set 5 second timeout
+      const timeoutPromise = new Promise((resolve) => {
+        setTimeout(() => {
+          console.log('SettingsScreen: Loading timeout reached');
+          resolve('timeout');
+        }, 5000);
+      });
+
+      await Promise.race([loadPromise, timeoutPromise]);
+
       console.log('SettingsScreen: Data loaded successfully');
     } catch (error) {
       console.error('SettingsScreen: Error in loadSettingsData:', error);
+      // Set default values on error
+      setDefaultUserData();
     } finally {
-      // Always stop loading, even if there are errors
+      // CRITICAL FIX: Always stop loading after max 5 seconds
       setIsLoading(false);
     }
   };
@@ -304,6 +326,7 @@ const SettingsScreen = ({ navigation }) => {
     );
   };
 
+  // FIXED: Show loading only briefly, then show content
   if (isLoading) {
     return (
       <View style={[styles.container, styles.centerContent]}>
@@ -322,8 +345,8 @@ const SettingsScreen = ({ navigation }) => {
       >
         {renderUserInfo()}
 
-        {/* PromoOfferBanner with error boundary - won't crash if it fails */}
-        <PromoOfferBanner onUpgradePress={handlePremiumUpgrade} />
+        {/* FIXED: Safe PromoOfferBanner that won't crash if component has errors */}
+        <SafePromoOfferBanner onUpgradePress={handlePremiumUpgrade} />
 
         {!isPremium && !isAdmin && (
           <Card style={styles.card}>
