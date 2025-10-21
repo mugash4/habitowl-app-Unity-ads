@@ -302,7 +302,7 @@ const HomeScreen = ({ navigation, route }) => {
         labelStyle={styles.emptyButtonLabel}
         icon="plus"
       >
-        Create Your First Habit!
+        Create 1st Habit!
       </Button>
     </View>
   );
