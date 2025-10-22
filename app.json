@@ -2,7 +2,7 @@
   "expo": {
     "name": "HabitOwl",
     "slug": "habitowl",
-    "version": "2.4.0",
+    "version": "2.5.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -94,9 +94,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "a70e26aa-8781-42b1-8d6e-8e8b700d2759"
+        "projectId": "7428558d-04f9-4d10-9c9e-2142922877ca"
       }
     },
-    "owner": "mugambi3"
+    "owner": "mugash4"
   }
 }
