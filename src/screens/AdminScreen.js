@@ -4,7 +4,8 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Alert
+  Alert,
+  ActivityIndicator
 } from 'react-native';
 import {
   Card,
@@ -15,7 +16,6 @@ import {
   Dialog,
   Portal,
   Appbar,
-  Switch,
   Divider
 } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -33,6 +33,8 @@ const AdminScreen = ({ navigation }) => {
   const [apiKey, setApiKey] = useState('');
   const [defaultProvider, setDefaultProvider] = useState('deepseek');
   const [loading, setLoading] = useState(false);
+  const [isVerifyingAdmin, setIsVerifyingAdmin] = useState(true);
+  const [isAuthorized, setIsAuthorized] = useState(false);
 
   // Promo offer states
   const [promoTitle, setPromoTitle] = useState('');
@@ -41,8 +43,39 @@ const AdminScreen = ({ navigation }) => {
   const [promoValidDays, setPromoValidDays] = useState('7');
 
   useEffect(() => {
-    loadAdminData();
+    verifyAdminAccess();
   }, []);
+
+  // ✅ CRITICAL: Verify admin access on screen load
+  const verifyAdminAccess = async () => {
+    try {
+      setIsVerifyingAdmin(true);
+      const isAdmin = await AdminService.isCurrentUserAdmin();
+      
+      if (!isAdmin) {
+        Alert.alert(
+          'Access Denied',
+          'You do not have administrator privileges.',
+          [{ text: 'OK', onPress: () => navigation.goBack() }]
+        );
+        setIsAuthorized(false);
+        return;
+      }
+      
+      setIsAuthorized(true);
+      await loadAdminData();
+    } catch (error) {
+      console.error('Admin verification error:', error);
+      Alert.alert(
+        'Error',
+        'Unable to verify admin access.',
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
+      );
+      setIsAuthorized(false);
+    } finally {
+      setIsVerifyingAdmin(false);
+    }
+  };
 
   const loadAdminData = async () => {
     try {
@@ -55,7 +88,7 @@ const AdminScreen = ({ navigation }) => {
       setStats(appStats);
       setDefaultProvider(currentProvider);
     } catch (error) {
-      Alert.alert('Error', 'Failed to load admin data');
+      Alert.alert('Error', 'Failed to load admin data: ' + error.message);
       console.error('Admin data error:', error);
     } finally {
       setLoading(false);
@@ -68,6 +101,14 @@ const AdminScreen = ({ navigation }) => {
       return;
     }
 
+    // ✅ EXTRA SECURITY: Re-verify admin status before saving API key
+    const isAdmin = await AdminService.isCurrentUserAdmin();
+    if (!isAdmin) {
+      Alert.alert('Error', 'Admin verification failed. Access denied.');
+      navigation.goBack();
+      return;
+    }
+
     try {
       setLoading(true);
       await SecureAIService.setApiKey(selectedProvider, apiKey.trim());
@@ -76,20 +117,28 @@ const AdminScreen = ({ navigation }) => {
       setShowApiDialog(false);
       setApiKey('');
     } catch (error) {
-      Alert.alert('Error', 'Failed to save API key');
+      Alert.alert('Error', 'Failed to save API key: ' + error.message);
     } finally {
       setLoading(false);
     }
   };
 
   const handleSetDefaultProvider = async (provider) => {
+    // ✅ EXTRA SECURITY: Re-verify admin status
+    const isAdmin = await AdminService.isCurrentUserAdmin();
+    if (!isAdmin) {
+      Alert.alert('Error', 'Admin verification failed. Access denied.');
+      navigation.goBack();
+      return;
+    }
+
     try {
       setLoading(true);
       await SecureAIService.setDefaultProvider(provider);
       setDefaultProvider(provider);
       Alert.alert('Success', `Default AI provider set to ${provider.toUpperCase()}`);
     } catch (error) {
-      Alert.alert('Error', 'Failed to set default provider');
+      Alert.alert('Error', 'Failed to set default provider: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -98,6 +147,14 @@ const AdminScreen = ({ navigation }) => {
   const handleCreatePromoOffer = async () => {
     if (!promoTitle.trim() || !promoDescription.trim() || !promoDiscount.trim()) {
       Alert.alert('Error', 'Please fill in all fields');
+      return;
+    }
+
+    // ✅ EXTRA SECURITY: Re-verify admin status
+    const isAdmin = await AdminService.isCurrentUserAdmin();
+    if (!isAdmin) {
+      Alert.alert('Error', 'Admin verification failed. Access denied.');
+      navigation.goBack();
       return;
     }
 
@@ -121,7 +178,7 @@ const AdminScreen = ({ navigation }) => {
       setPromoDiscount('');
       setPromoValidDays('7');
     } catch (error) {
-      Alert.alert('Error', 'Failed to create promotional offer');
+      Alert.alert('Error', 'Failed to create promotional offer: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -167,6 +224,21 @@ const AdminScreen = ({ navigation }) => {
     );
   };
 
+  // ✅ Show loading while verifying admin access
+  if (isVerifyingAdmin) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <ActivityIndicator size="large" color="#4f46e5" />
+        <Text style={styles.loadingText}>Verifying admin access...</Text>
+      </View>
+    );
+  }
+
+  // ✅ Don't render anything if not authorized
+  if (!isAuthorized) {
+    return null;
+  }
+
   return (
     <View style={styles.container}>
       <Appbar.Header>
@@ -176,17 +248,30 @@ const AdminScreen = ({ navigation }) => {
       </Appbar.Header>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Security Notice */}
+        <Card style={[styles.card, styles.securityNotice]}>
+          <Card.Content>
+            <View style={styles.noticeHeader}>
+              <Icon name="shield-lock" size={24} color="#ef4444" />
+              <Text style={styles.noticeTitle}>Admin Access</Text>
+            </View>
+            <Text style={styles.noticeText}>
+              You have administrative privileges. API keys and sensitive data are visible only to verified admins.
+            </Text>
+          </Card.Content>
+        </Card>
+
         {/* App Statistics */}
         <Text style={styles.sectionTitle}>App Statistics</Text>
         {renderStats()}
 
         {/* AI Configuration */}
         <Card style={styles.card}>
-          <List.Subheader>AI Configuration</List.Subheader>
+          <List.Subheader>🔐 AI Configuration (Admin Only)</List.Subheader>
           
           <List.Item
             title="Configure API Keys"
-            description="Set API keys for AI providers"
+            description="Set API keys for AI providers (Admin Only)"
             left={(props) => <List.Icon {...props} icon="key" />}
             right={(props) => <List.Icon {...props} icon="chevron-right" />}
             onPress={() => setShowApiDialog(true)}
@@ -254,7 +339,7 @@ const AdminScreen = ({ navigation }) => {
         {/* API Key Configuration Dialog */}
         <Portal>
           <Dialog visible={showApiDialog} onDismiss={() => setShowApiDialog(false)}>
-            <Dialog.Title>Configure API Key</Dialog.Title>
+            <Dialog.Title>🔐 Configure API Key (Admin Only)</Dialog.Title>
             <Dialog.Content>
               <Text style={styles.dialogDescription}>
                 Select provider and enter API key:
@@ -287,6 +372,13 @@ const AdminScreen = ({ navigation }) => {
                 {selectedProvider === 'openai' && 'Get API key from: https://platform.openai.com'}
                 {selectedProvider === 'openrouter' && 'Get API key from: https://openrouter.ai'}
               </Text>
+              
+              <View style={styles.warningBox}>
+                <Icon name="alert" size={20} color="#ef4444" />
+                <Text style={styles.warningText}>
+                  API keys are stored securely and only accessible to admins.
+                </Text>
+              </View>
             </Dialog.Content>
             <Dialog.Actions>
               <Button onPress={() => setShowApiDialog(false)}>Cancel</Button>
@@ -356,6 +448,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8fafc',
   },
+  centerContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6b7280',
+  },
   content: {
     flex: 1,
   },
@@ -366,6 +467,28 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginTop: 16,
     marginBottom: 12,
+  },
+  securityNotice: {
+    margin: 16,
+    backgroundColor: '#fef2f2',
+    borderLeftWidth: 4,
+    borderLeftColor: '#ef4444',
+  },
+  noticeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  noticeTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#991b1b',
+    marginLeft: 8,
+  },
+  noticeText: {
+    fontSize: 14,
+    color: '#7f1d1d',
+    lineHeight: 20,
   },
   statsContainer: {
     flexDirection: 'row',
@@ -429,6 +552,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#9ca3af',
     fontStyle: 'italic',
+    marginBottom: 12,
+  },
+  warningBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fef2f2',
+    padding: 12,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#ef4444',
+  },
+  warningText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#991b1b',
+    marginLeft: 8,
   },
   bottomPadding: {
     height: 20,

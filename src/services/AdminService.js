@@ -14,20 +14,57 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 class AdminService {
   constructor() {
     this.isAdmin = false;
-    this.adminEmails = [
-      'augustinemwathi96@gmail.com', // Your admin email
-      // Add more admin emails if needed
-    ];
+    this.adminEmails = []; // Will be loaded from Firestore
   }
 
+  // ✅ FIXED: Load admin emails from Firestore instead of hardcoding
+  async loadAdminEmails() {
+    try {
+      const configRef = doc(db, 'admin_config', 'settings');
+      const configDoc = await getDoc(configRef);
+      
+      if (configDoc.exists() && configDoc.data().admin_emails) {
+        this.adminEmails = configDoc.data().admin_emails;
+        console.log('Admin emails loaded from Firestore:', this.adminEmails.length);
+      } else {
+        console.warn('No admin_emails found in Firestore admin_config/settings');
+        this.adminEmails = [];
+      }
+      
+      return this.adminEmails;
+    } catch (error) {
+      console.error('Error loading admin emails:', error);
+      this.adminEmails = [];
+      return [];
+    }
+  }
+
+  // ✅ FIXED: Check admin status using Firestore data
   async checkAdminStatus(userEmail) {
     try {
-      // Check if user is in admin list
-      this.isAdmin = this.adminEmails.includes(userEmail?.toLowerCase());
+      if (!userEmail) {
+        this.isAdmin = false;
+        await AsyncStorage.setItem('is_admin', 'false');
+        return false;
+      }
+
+      // Load admin emails from Firestore
+      await this.loadAdminEmails();
+      
+      // Check if user email is in the admin list
+      const normalizedEmail = userEmail.toLowerCase().trim();
+      this.isAdmin = this.adminEmails.some(
+        email => email.toLowerCase().trim() === normalizedEmail
+      );
+      
+      console.log(`Admin check for ${userEmail}: ${this.isAdmin}`);
+      
       await AsyncStorage.setItem('is_admin', this.isAdmin.toString());
       return this.isAdmin;
     } catch (error) {
       console.error('Error checking admin status:', error);
+      this.isAdmin = false;
+      await AsyncStorage.setItem('is_admin', 'false');
       return false;
     }
   }
@@ -54,19 +91,23 @@ class AdminService {
     }
   }
 
-  // API Key Management (Server-side only)
+  // ✅ FIXED: API Key Management with strict admin verification
   async setGlobalApiKey(provider, apiKey) {
-    if (!this.isAdmin) throw new Error('Unauthorized');
-
     try {
+      // Double-check admin status from Firestore
+      const isAdmin = await this.isCurrentUserAdmin();
+      if (!isAdmin) {
+        throw new Error('Unauthorized: Admin access required');
+      }
+
       const configRef = doc(db, 'admin_config', 'api_keys');
       await setDoc(configRef, {
         [provider]: apiKey,
         updatedAt: new Date().toISOString(),
-        updatedBy: 'admin'
+        updatedBy: auth.currentUser?.email || 'admin'
       }, { merge: true });
 
-      console.log(`${provider} API key updated successfully`);
+      console.log(`${provider} API key updated successfully by ${auth.currentUser?.email}`);
       return true;
     } catch (error) {
       console.error('Error setting API key:', error);
@@ -74,13 +115,21 @@ class AdminService {
     }
   }
 
+  // ✅ FIXED: Only admins can retrieve API keys
   async getGlobalApiKey(provider) {
     try {
+      // Verify admin status before revealing API keys
+      const isAdmin = await this.isCurrentUserAdmin();
+      if (!isAdmin) {
+        console.warn('Non-admin attempted to access API key');
+        return null;
+      }
+
       const configRef = doc(db, 'admin_config', 'api_keys');
       const configDoc = await getDoc(configRef);
       
       if (configDoc.exists()) {
-        return configDoc.data()[provider];
+        return configDoc.data()[provider] || null;
       }
       return null;
     } catch (error) {
@@ -90,15 +139,20 @@ class AdminService {
   }
 
   async setDefaultAiProvider(provider) {
-    if (!this.isAdmin) throw new Error('Unauthorized');
-
     try {
+      const isAdmin = await this.isCurrentUserAdmin();
+      if (!isAdmin) {
+        throw new Error('Unauthorized: Admin access required');
+      }
+
       const configRef = doc(db, 'admin_config', 'settings');
       await setDoc(configRef, {
         defaultAiProvider: provider,
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+        updatedBy: auth.currentUser?.email || 'admin'
       }, { merge: true });
 
+      console.log(`Default AI provider set to ${provider} by ${auth.currentUser?.email}`);
       return true;
     } catch (error) {
       console.error('Error setting default AI provider:', error);
@@ -123,9 +177,12 @@ class AdminService {
 
   // Premium User Management
   async setPremiumStatus(userId, isPremium) {
-    if (!this.isAdmin) throw new Error('Unauthorized');
-
     try {
+      const isAdmin = await this.isCurrentUserAdmin();
+      if (!isAdmin) {
+        throw new Error('Unauthorized: Admin access required');
+      }
+
       const q = query(collection(db, 'users'), where('uid', '==', userId));
       const querySnapshot = await getDocs(q);
       
@@ -134,7 +191,7 @@ class AdminService {
         await updateDoc(userDoc.ref, {
           isPremium: isPremium,
           premiumUpdatedAt: new Date().toISOString(),
-          premiumUpdatedBy: 'admin'
+          premiumUpdatedBy: auth.currentUser?.email || 'admin'
         });
       }
 
@@ -145,11 +202,14 @@ class AdminService {
     }
   }
 
-  // App Statistics
+  // ✅ FIXED: App Statistics with admin verification
   async getAppStatistics() {
-    if (!this.isAdmin) throw new Error('Unauthorized');
-
     try {
+      const isAdmin = await this.isCurrentUserAdmin();
+      if (!isAdmin) {
+        throw new Error('Unauthorized: Admin access required');
+      }
+
       const [usersSnapshot, habitsSnapshot, analyticsSnapshot] = await Promise.all([
         getDocs(collection(db, 'users')),
         getDocs(collection(db, 'habits')),
@@ -176,14 +236,17 @@ class AdminService {
 
   // Promotional Offers Management
   async createPromoOffer(offerData) {
-    if (!this.isAdmin) throw new Error('Unauthorized');
-
     try {
+      const isAdmin = await this.isCurrentUserAdmin();
+      if (!isAdmin) {
+        throw new Error('Unauthorized: Admin access required');
+      }
+
       const offersRef = collection(db, 'promo_offers');
       await setDoc(doc(offersRef), {
         ...offerData,
         createdAt: new Date().toISOString(),
-        createdBy: 'admin',
+        createdBy: auth.currentUser?.email || 'admin',
         isActive: true
       });
 
