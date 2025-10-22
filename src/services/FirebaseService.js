@@ -12,7 +12,8 @@ import {
   onSnapshot,
   serverTimestamp,
   increment,
-  Timestamp
+  Timestamp,
+  getDocsFromServer  // 🔧 NEW: Force server fetch
 } from 'firebase/firestore';
 import { 
   createUserWithEmailAndPassword, 
@@ -32,11 +33,19 @@ class FirebaseService {
   constructor() {
     this.currentUser = null;
     this.authStateChangedListeners = [];
+    this.habitsCache = null; // 🔧 NEW: Cache for habits
+    this.lastFetchTime = null; // 🔧 NEW: Track last fetch time
     
     // Listen to auth state changes
     onAuthStateChanged(auth, (user) => {
       this.currentUser = user;
       this.authStateChangedListeners.forEach(listener => listener(user));
+      
+      // 🔧 NEW: Clear cache when user changes
+      if (!user) {
+        this.habitsCache = null;
+        this.lastFetchTime = null;
+      }
     });
   }
 
@@ -48,11 +57,9 @@ class FirebaseService {
       const user = userCredential.user;
       
       console.log('User created, updating profile...');
-      // Update profile with display name
       await updateProfile(user, { displayName });
       
       console.log('Creating user document...');
-      // Create user document
       await this.createUserDocument(user);
       
       console.log('Sign up complete!');
@@ -83,7 +90,6 @@ class FirebaseService {
     }
   }
 
-  // Google Sign In - Web version only (works in APK)
   async signInWithGoogleWeb() {
     try {
       console.log('Starting Google sign in for web/APK...');
@@ -92,7 +98,6 @@ class FirebaseService {
       provider.addScope('email');
       provider.addScope('profile');
       
-      // This works in both web browser and Android APK
       const result = await signInWithPopup(auth, provider);
       
       if (result && result.user) {
@@ -108,7 +113,6 @@ class FirebaseService {
     }
   }
 
-  // Google Sign In - Native implementation using credential
   async signInWithGoogleCredential(idToken) {
     try {
       console.log('Starting Google sign in with credential...');
@@ -132,8 +136,10 @@ class FirebaseService {
   async signOut() {
     try {
       console.log('Signing out...');
+      this.habitsCache = null; // 🔧 NEW: Clear cache
+      this.lastFetchTime = null;
       await signOut(auth);
-      await AsyncStorage.clear(); // Clear local storage
+      await AsyncStorage.clear();
       console.log('Sign out successful!');
     } catch (error) {
       console.error('Sign out error:', error);
@@ -143,7 +149,6 @@ class FirebaseService {
 
   onAuthStateChanged(callback) {
     this.authStateChangedListeners.push(callback);
-    // Call immediately with current state
     callback(this.currentUser);
     return () => {
       this.authStateChangedListeners = this.authStateChangedListeners.filter(
@@ -156,7 +161,6 @@ class FirebaseService {
     try {
       console.log('Creating/updating user document for:', user.uid);
       
-      // Check if user document already exists
       const q = query(
         collection(db, 'users'),
         where('uid', '==', user.uid)
@@ -166,7 +170,6 @@ class FirebaseService {
       
       if (querySnapshot.empty) {
         console.log('Creating new user document...');
-        // Create new user document
         const userDoc = {
           uid: user.uid,
           email: user.email,
@@ -187,7 +190,6 @@ class FirebaseService {
         return userDoc;
       } else {
         console.log('User document already exists, updating...');
-        // Update existing user document if needed
         const existingDoc = querySnapshot.docs[0];
         const existingData = existingDoc.data();
         
@@ -211,12 +213,10 @@ class FirebaseService {
       }
     } catch (error) {
       console.error('Error creating/updating user document:', error);
-      // Don't throw error here, just log it
-      // The authentication itself was successful
     }
   }
 
-  // 🔧 FIX: Improved createHabit with better error handling and confirmation
+  // 🔧 FIXED: Improved createHabit with cache invalidation
   async createHabit(habitData) {
     if (!this.currentUser) {
       throw new Error('User not authenticated');
@@ -237,13 +237,12 @@ class FirebaseService {
         completions: []
       };
 
-      console.log('📝 Creating habit in Firestore:', habit.name);
+      console.log('✅ Creating habit in Firestore:', habit.name);
       
-      // Add to Firestore
       const docRef = await addDoc(collection(db, 'habits'), habit);
       console.log('✅ Habit document created with ID:', docRef.id);
       
-      // 🔧 FIX: Verify the habit was saved by reading it back
+      // 🔧 FIXED: Verify the habit was saved
       const savedHabit = await getDoc(docRef);
       if (!savedHabit.exists()) {
         throw new Error('Failed to verify habit creation');
@@ -256,16 +255,19 @@ class FirebaseService {
         console.log('✅ User stats updated');
       } catch (statsError) {
         console.error('⚠️ Failed to update user stats:', statsError);
-        // Continue even if stats update fails
       }
       
-      // Return the complete habit object with ID
       const createdHabit = { id: docRef.id, ...habit };
+      
+      // 🔧 NEW: Clear cache to force refresh
+      this.habitsCache = null;
+      this.lastFetchTime = null;
+      console.log('✅ Habits cache cleared');
+      
+      // 🔧 FIXED: Longer delay to ensure Firestore propagation
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
       console.log('✅ Habit creation complete:', createdHabit.id);
-      
-      // 🔧 FIX: Add small delay to ensure Firestore has propagated the write
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
       return createdHabit;
     } catch (error) {
       console.error('❌ Error creating habit:', error);
@@ -273,7 +275,7 @@ class FirebaseService {
     }
   }
 
-  // 🔧 FIX: Force fetch from server, not cache
+  // 🔧 FIXED: Now properly forces server fetch when needed
   async getUserHabits(forceRefresh = false) {
     if (!this.currentUser) {
       console.log('⚠️ No current user, returning empty habits');
@@ -281,7 +283,17 @@ class FirebaseService {
     }
 
     try {
-      console.log('📱 Fetching habits for user:', this.currentUser.uid);
+      const now = Date.now();
+      const CACHE_DURATION = 5000; // 5 seconds cache
+      
+      // 🔧 NEW: Use cache if available and not forcing refresh
+      if (!forceRefresh && this.habitsCache && this.lastFetchTime && 
+          (now - this.lastFetchTime) < CACHE_DURATION) {
+        console.log('📦 Returning cached habits:', this.habitsCache.length);
+        return this.habitsCache;
+      }
+      
+      console.log(forceRefresh ? '🔄 Force fetching habits from server...' : '📱 Fetching habits...');
       
       const q = query(
         collection(db, 'habits'),
@@ -290,8 +302,8 @@ class FirebaseService {
         orderBy('createdAt', 'desc')
       );
 
-      // 🔧 FIX: Force fetch from server to avoid cache issues
-      const querySnapshot = await getDocs(q);
+      // 🔧 FIXED: Always fetch from server, bypassing cache
+      const querySnapshot = await getDocsFromServer(q);
       
       const habits = [];
       querySnapshot.forEach((doc) => {
@@ -302,12 +314,16 @@ class FirebaseService {
         });
       });
       
+      // 🔧 NEW: Update cache
+      this.habitsCache = habits;
+      this.lastFetchTime = now;
+      
       console.log('✅ Fetched', habits.length, 'habits from Firestore');
       
       if (habits.length > 0) {
-        console.log('📋 Habit names:', habits.map(h => h.name).join(', '));
+        console.log('📝 Habit names:', habits.map(h => h.name).join(', '));
       } else {
-        console.log('📋 No habits found for user');
+        console.log('ℹ️ No habits found for user');
       }
       
       return habits;
@@ -315,13 +331,11 @@ class FirebaseService {
       console.error('❌ Error fetching habits:', error);
       console.error('Error details:', {
         code: error.code,
-        message: error.message,
-        stack: error.stack
+        message: error.message
       });
       
-      // Return empty array instead of throwing
-      // This prevents the app from crashing
-      return [];
+      // Return cached data if available, otherwise empty array
+      return this.habitsCache || [];
     }
   }
 
@@ -332,7 +346,10 @@ class FirebaseService {
       updatedAt: new Date().toISOString()
     });
     
-    // 🔧 FIX: Add delay to ensure write propagates
+    // 🔧 NEW: Clear cache after update
+    this.habitsCache = null;
+    this.lastFetchTime = null;
+    
     await new Promise(resolve => setTimeout(resolve, 300));
   }
 
@@ -343,10 +360,12 @@ class FirebaseService {
       deletedAt: new Date().toISOString()
     });
     
-    // Update user's total habits count
     await this.updateUserStats({ totalHabits: increment(-1) });
     
-    // 🔧 FIX: Add delay to ensure write propagates
+    // 🔧 NEW: Clear cache after delete
+    this.habitsCache = null;
+    this.lastFetchTime = null;
+    
     await new Promise(resolve => setTimeout(resolve, 300));
   }
 
@@ -362,12 +381,10 @@ class FirebaseService {
     const today = new Date().toDateString();
     const completions = habit.completions || [];
     
-    // Check if already completed today
     if (completions.includes(today)) {
       throw new Error('Habit already completed today');
     }
 
-    // Add today's completion
     const newCompletions = [...completions, today];
     const newStreak = this.calculateStreak(newCompletions);
     const newLongestStreak = Math.max(habit.longestStreak || 0, newStreak);
@@ -381,13 +398,15 @@ class FirebaseService {
       updatedAt: new Date().toISOString()
     });
 
-    // Update user's longest streak if this is a new record
     const userStats = await this.getUserStats();
     if (newLongestStreak > (userStats.longestStreak || 0)) {
       await this.updateUserStats({ longestStreak: newLongestStreak });
     }
 
-    // 🔧 FIX: Add delay to ensure write propagates
+    // 🔧 NEW: Clear cache after completion
+    this.habitsCache = null;
+    this.lastFetchTime = null;
+
     await new Promise(resolve => setTimeout(resolve, 300));
 
     return { newStreak, newLongestStreak };
@@ -405,7 +424,6 @@ class FirebaseService {
     const today = new Date().toDateString();
     const completions = habit.completions || [];
     
-    // Remove today's completion if it exists
     const newCompletions = completions.filter(date => date !== today);
     const newStreak = this.calculateStreak(newCompletions);
 
@@ -416,13 +434,15 @@ class FirebaseService {
       updatedAt: new Date().toISOString()
     });
 
-    // 🔧 FIX: Add delay to ensure write propagates
+    // 🔧 NEW: Clear cache after uncompletion
+    this.habitsCache = null;
+    this.lastFetchTime = null;
+
     await new Promise(resolve => setTimeout(resolve, 300));
 
     return { newStreak };
   }
 
-  // User Statistics
   async getUserStats() {
     if (!this.currentUser) return null;
 
@@ -455,11 +475,9 @@ class FirebaseService {
     }
   }
 
-  // Referral System
   async processReferral(referralCode) {
     if (!this.currentUser) throw new Error('User not authenticated');
 
-    // Find the referrer
     const q = query(
       collection(db, 'users'),
       where('referralCode', '==', referralCode)
@@ -477,16 +495,13 @@ class FirebaseService {
       throw new Error('Cannot refer yourself');
     }
 
-    // Update current user as referred
     await this.updateUserStats({ referredBy: referrerId });
 
-    // Update referrer's count
     await updateDoc(referrerDoc.ref, {
       referralCount: increment(1),
       updatedAt: new Date().toISOString()
     });
 
-    // Create referral record
     await addDoc(collection(db, 'referrals'), {
       referrerId: referrerId,
       referredUserId: this.currentUser.uid,
@@ -513,7 +528,6 @@ class FirebaseService {
     }));
   }
 
-  // Analytics
   async trackEvent(eventName, parameters = {}) {
     try {
       await addDoc(collection(db, 'analytics'), {
@@ -528,13 +542,12 @@ class FirebaseService {
     }
   }
 
-  // Utility Methods
   calculateStreak(completions) {
     if (!completions || completions.length === 0) return 0;
 
     const sortedDates = completions
       .map(dateStr => new Date(dateStr))
-      .sort((a, b) => b - a); // Most recent first
+      .sort((a, b) => b - a);
 
     let streak = 0;
     const today = new Date();

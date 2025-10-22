@@ -104,12 +104,10 @@ const CreateHabitScreen = ({ navigation, route }) => {
     return true;
   };
 
-  // 🔧 FIXED handleCreateHabit function
+  // 🔧 FIXED: Improved handleCreateHabit with better navigation
   const handleCreateHabit = async () => {
-    // Validate form first
     if (!validateForm()) return;
 
-    // Dismiss keyboard
     Keyboard.dismiss();
 
     try {
@@ -130,7 +128,7 @@ const CreateHabitScreen = ({ navigation, route }) => {
 
       console.log('✅ Creating habit with data:', habitData.name);
       
-      // 🔧 FIX: Create habit and wait for it to be saved
+      // 🔧 FIXED: Create habit and get the result
       const newHabit = await FirebaseService.createHabit(habitData);
       console.log('✅ Habit created successfully with ID:', newHabit.id);
 
@@ -151,17 +149,26 @@ const CreateHabitScreen = ({ navigation, route }) => {
         has_reminder: reminderEnabled
       }).catch(err => console.error('⚠️ Tracking error:', err));
 
-      // 🔧 FIX: Navigate back FIRST, then show success message
-      navigation.goBack();
+      // 🔧 FIXED: Navigate with a flag to trigger refresh
+      console.log('🔄 Navigating back to Home screen...');
       
-      // Show success message after navigation
+      // Navigate back and pass a refresh flag
+      navigation.navigate('Main', {
+        screen: 'Home',
+        params: {
+          refresh: true,
+          timestamp: Date.now() // Unique value to force update
+        }
+      });
+      
+      // Show success message after a short delay
       setTimeout(() => {
         Alert.alert(
           '🎉 Success!',
           `"${habitName}" has been added to your habits!`,
-          [{ text: 'OK' }]
+          [{ text: 'Great!' }]
         );
-      }, 300);
+      }, 400);
 
     } catch (error) {
       console.error('❌ Create habit error:', error);
@@ -435,7 +442,7 @@ const CreateHabitScreen = ({ navigation, route }) => {
           labelStyle={styles.buttonLabelWhite}
           icon="plus"
         >
-          Create Habit
+          {isLoading ? 'Creating...' : 'Create Habit'}
         </Button>
 
         <View style={styles.bottomPadding} />
