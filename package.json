@@ -11,6 +11,7 @@
     "deploy": "npm run build:web && firebase deploy"
   },
   "dependencies": {
+    "@expo/metro-runtime": "~3.2.3",
     "@expo/vector-icons": "^14.0.2",
     "@react-native-async-storage/async-storage": "1.23.1",
     "@react-native-community/datetimepicker": "8.0.1",
