@@ -97,33 +97,46 @@ const EditHabitScreen = ({ navigation, route }) => {
         updatedAt: new Date().toISOString(),
       };
 
+      console.log('🔧 Updating habit:', habit.id);
       await FirebaseService.updateHabit(habit.id, updates);
+      console.log('✅ Habit updated successfully');
 
+      // Update notifications
       if (reminderEnabled) {
         const updatedHabit = { ...habit, ...updates };
         await NotificationService.scheduleHabitReminder(updatedHabit);
+        console.log('🔔 Reminder updated');
       } else {
         await NotificationService.cancelHabitNotifications(habit.id);
+        console.log('🔕 Reminder cancelled');
       }
 
-      await FirebaseService.trackEvent('habit_updated', {
-        category,
-        difficulty,
-        has_reminder: reminderEnabled
-      });
+      // Track event
+      try {
+        await FirebaseService.trackEvent('habit_updated', {
+          category,
+          difficulty,
+          has_reminder: reminderEnabled
+        });
+      } catch (trackError) {
+        console.error('Tracking error:', trackError);
+      }
 
-      Alert.alert(
-        'Success!',
-        `"${habitName}" has been updated!`,
-        [
-          {
-            text: 'OK',
-            onPress: () => navigation.goBack()
-          }
-        ]
-      );
+      // 🔧 FIX: Navigate back immediately, then show success message
+      console.log('🔧 Navigating back to Home screen...');
+      navigation.goBack();
+      
+      // Show success message after navigation starts
+      setTimeout(() => {
+        Alert.alert(
+          'Success! ✅',
+          `"${habitName}" has been updated!`,
+          [{ text: 'OK' }]
+        );
+      }, 500);
 
     } catch (error) {
+      console.error('❌ Update habit error:', error);
       Alert.alert('Error', error.message || 'Failed to update habit');
     } finally {
       setIsLoading(false);
@@ -142,12 +155,22 @@ const EditHabitScreen = ({ navigation, route }) => {
           onPress: async () => {
             try {
               setIsLoading(true);
+              console.log('🗑️ Deleting habit:', habit.id);
+              
               await FirebaseService.deleteHabit(habit.id);
               await NotificationService.cancelHabitNotifications(habit.id);
               
-              Alert.alert('Deleted', 'Habit has been deleted successfully');
+              console.log('✅ Habit deleted successfully');
+              
+              // 🔧 FIX: Navigate back immediately, then show success message
               navigation.goBack();
+              
+              setTimeout(() => {
+                Alert.alert('Deleted', 'Habit has been deleted successfully');
+              }, 500);
+              
             } catch (error) {
+              console.error('❌ Delete habit error:', error);
               Alert.alert('Error', 'Failed to delete habit');
             } finally {
               setIsLoading(false);
@@ -165,7 +188,6 @@ const EditHabitScreen = ({ navigation, route }) => {
     }
   };
 
-  // ✅ AUTO-SCROLL when input is focused
   const scrollToInput = (yOffset) => {
     setTimeout(() => {
       scrollViewRef.current?.scrollTo({
@@ -208,11 +230,9 @@ const EditHabitScreen = ({ navigation, route }) => {
         nestedScrollEnabled={true}
         bounces={true}
         scrollEnabled={true}
-        // ✅ CRITICAL: Android APK scroll optimization
         removeClippedSubviews={false}
         overScrollMode="always"
         persistentScrollbar={Platform.OS === 'android'}
-        // ✅ CRITICAL: Better keyboard handling
         keyboardDismissMode="on-drag"
         automaticallyAdjustKeyboardInsets={true}
       >
@@ -425,7 +445,6 @@ const EditHabitScreen = ({ navigation, route }) => {
           Update Habit
         </Button>
 
-        {/* ✅ CRITICAL: Extra bottom padding */}
         <View style={styles.bottomPadding} />
       </ScrollView>
 
@@ -458,8 +477,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 300, // ✅ INCREASED: Better bottom padding
-    flexGrow: 1, // ✅ ADDED: Ensures content fills scroll area
+    paddingBottom: 300,
+    flexGrow: 1,
   },
   card: {
     margin: 16,
@@ -569,7 +588,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   bottomPadding: {
-    height: 100, // ✅ ADJUSTED: Better spacing
+    height: 100,
   },
 });
 

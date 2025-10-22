@@ -20,6 +20,7 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
   const [visible, setVisible] = useState(false);
   const [slideAnim] = useState(new Animated.Value(-100));
   const [pulseAnim] = useState(new Animated.Value(1));
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     loadActiveOffer();
@@ -66,30 +67,46 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
 
   const loadActiveOffer = async () => {
     try {
-      console.log('PromoOfferBanner: Loading offers...');
+      console.log('PromoOfferBanner: Starting offer load...');
       
-      // Set timeout to prevent hanging
+      // CRITICAL FIX 1: Set loading timeout to 2 seconds MAX
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout')), 5000)
+        setTimeout(() => reject(new Error('Timeout')), 2000)
       );
       
-      const offersPromise = AdminService.getActivePromoOffers();
+      // CRITICAL FIX 2: Wrap AdminService call in try-catch
+      const offersPromise = (async () => {
+        try {
+          const result = await AdminService.getActivePromoOffers();
+          return result;
+        } catch (err) {
+          console.log('AdminService error:', err);
+          return [];
+        }
+      })();
       
       // Race between timeout and actual fetch
       const offers = await Promise.race([offersPromise, timeoutPromise]);
       
       console.log('PromoOfferBanner: Offers loaded:', offers?.length || 0);
       
-      if (offers && offers.length > 0) {
+      if (offers && Array.isArray(offers) && offers.length > 0) {
         const activeOffer = offers[0]; // Get the first active offer
-        setOffer(activeOffer);
-        setVisible(true);
         
-        // Track offer impression (don't await to avoid blocking)
-        FirebaseService.trackEvent('promo_offer_shown', {
-          offer_id: activeOffer.id,
-          offer_title: activeOffer.title
-        }).catch(err => console.log('Track event failed:', err));
+        // Validate offer has required fields
+        if (activeOffer.title && activeOffer.description) {
+          setOffer(activeOffer);
+          setVisible(true);
+          
+          // Track offer impression (fire and forget)
+          FirebaseService.trackEvent('promo_offer_shown', {
+            offer_id: activeOffer.id,
+            offer_title: activeOffer.title
+          }).catch(() => {});
+        } else {
+          console.log('PromoOfferBanner: Invalid offer data');
+          setVisible(false);
+        }
       } else {
         console.log('PromoOfferBanner: No active offers');
         setVisible(false);
@@ -99,11 +116,17 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
       // Gracefully fail - just don't show the banner
       setVisible(false);
       setOffer(null);
+    } finally {
+      // CRITICAL FIX 3: Always stop loading after attempt
+      setIsLoading(false);
     }
   };
 
   const updateTimeLeft = () => {
-    if (!offer) return;
+    if (!offer || !offer.expiresAt) {
+      setTimeLeft('');
+      return;
+    }
 
     try {
       const now = new Date().getTime();
@@ -137,16 +160,16 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
     if (!offer) return;
 
     try {
-      // Track offer click (don't await to avoid blocking)
+      // Track offer click (fire and forget)
       FirebaseService.trackEvent('promo_offer_clicked', {
         offer_id: offer.id,
         offer_title: offer.title
-      }).catch(err => console.log('Track event failed:', err));
+      }).catch(() => {});
 
       // Show offer details
       Alert.alert(
-        offer.title,
-        `${offer.description}\n\nDiscount: ${offer.discount}\nValid for: ${timeLeft}`,
+        offer.title || 'Special Offer',
+        `${offer.description || 'Limited time offer!'}\n\nDiscount: ${offer.discount || 'Special pricing'}\nValid for: ${timeLeft || 'Limited time'}`,
         [
           { text: 'Maybe Later', style: 'cancel' },
           {
@@ -155,8 +178,11 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
               FirebaseService.trackEvent('promo_offer_converted', {
                 offer_id: offer.id,
                 offer_title: offer.title
-              }).catch(err => console.log('Track event failed:', err));
-              onUpgradePress && onUpgradePress();
+              }).catch(() => {});
+              
+              if (onUpgradePress && typeof onUpgradePress === 'function') {
+                onUpgradePress();
+              }
             }
           }
         ]
@@ -168,12 +194,12 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
 
   const handleDismiss = async () => {
     try {
-      // Track dismissal (don't await to avoid blocking)
+      // Track dismissal (fire and forget)
       if (offer) {
         FirebaseService.trackEvent('promo_offer_dismissed', {
           offer_id: offer.id,
           offer_title: offer.title
-        }).catch(err => console.log('Track event failed:', err));
+        }).catch(() => {});
       }
 
       // Slide out animation
@@ -190,7 +216,13 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
     }
   };
 
-  // Return null if not visible or no offer (this prevents rendering empty space)
+  // CRITICAL FIX 4: Return null immediately if loading failed or no offer
+  if (isLoading && !visible) {
+    // Still loading but not visible yet - show nothing to avoid blocking
+    return null;
+  }
+
+  // Return null if not visible or no offer (prevents rendering empty space)
   if (!visible || !offer) {
     return null;
   }
@@ -232,17 +264,23 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
                 </Chip>
               </View>
 
-              <Text style={styles.title}>{offer.title}</Text>
-              <Text style={styles.description}>{offer.description}</Text>
+              <Text style={styles.title}>{offer.title || 'Special Offer'}</Text>
+              <Text style={styles.description}>
+                {offer.description || 'Don\'t miss out on this amazing deal!'}
+              </Text>
 
               <View style={styles.discountContainer}>
-                <Text style={styles.discountText}>{offer.discount}</Text>
+                <Text style={styles.discountText}>
+                  {offer.discount || 'Special Pricing'}
+                </Text>
               </View>
 
               <View style={styles.footer}>
                 <View style={styles.timerContainer}>
                   <Icon name="clock-outline" size={16} color="#ffffff" />
-                  <Text style={styles.timerText}>Expires in: {timeLeft}</Text>
+                  <Text style={styles.timerText}>
+                    Expires in: {timeLeft || 'Soon'}
+                  </Text>
                 </View>
 
                 <Button

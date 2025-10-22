@@ -123,7 +123,7 @@ const CreateHabitScreen = ({ navigation, route }) => {
         userId: FirebaseService.currentUser.uid,
       };
 
-      console.log('✨ Creating habit with data:', habitData);
+      console.log('🔧 Creating habit with data:', habitData);
       const newHabit = await FirebaseService.createHabit(habitData);
       console.log('✅ Habit created successfully with ID:', newHabit.id);
 
@@ -134,7 +134,6 @@ const CreateHabitScreen = ({ navigation, route }) => {
           console.log('🔔 Reminder scheduled');
         } catch (reminderError) {
           console.error('Reminder error:', reminderError);
-          // Continue even if reminder fails
         }
       }
 
@@ -147,26 +146,21 @@ const CreateHabitScreen = ({ navigation, route }) => {
         });
       } catch (trackError) {
         console.error('Tracking error:', trackError);
-        // Continue even if tracking fails
       }
 
-      // 🔧 FIX 1: Navigate back FIRST, then show success message
-      console.log('🔄 Navigating back to Home screen...');
+      // 🔧 FIX: Use navigation.goBack() to return to HomeScreen
+      // The useFocusEffect in HomeScreen will automatically reload habits
+      console.log('🔧 Navigating back to Home screen...');
+      navigation.goBack();
       
-      // Pass a refresh flag to HomeScreen
-      navigation.navigate('Main', {
-        screen: 'Home',
-        params: { refresh: true, newHabitId: newHabit.id }
-      });
-      
-      // 🔧 FIX 2: Show success message AFTER navigation starts
+      // Show success message after navigation
       setTimeout(() => {
         Alert.alert(
           'Success! 🎉',
           `"${habitName}" has been added to your habits!`,
           [{ text: 'OK' }]
         );
-      }, 300);
+      }, 500);
 
     } catch (error) {
       console.error('❌ Create habit error:', error);
@@ -186,7 +180,6 @@ const CreateHabitScreen = ({ navigation, route }) => {
     }
   };
 
-  //  AUTO-SCROLL when input is focused (fixes keyboard covering issue)
   const scrollToInput = (yOffset) => {
     setTimeout(() => {
       scrollViewRef.current?.scrollTo({
@@ -223,11 +216,9 @@ const CreateHabitScreen = ({ navigation, route }) => {
         nestedScrollEnabled={true}
         bounces={true}
         scrollEnabled={true}
-        //  CRITICAL: Android APK scroll optimization
         removeClippedSubviews={false}
         overScrollMode="always"
         persistentScrollbar={Platform.OS === 'android'}
-        //  CRITICAL: Better keyboard handling
         keyboardDismissMode="on-drag"
         automaticallyAdjustKeyboardInsets={true}
       >
@@ -446,7 +437,6 @@ const CreateHabitScreen = ({ navigation, route }) => {
           Create Habit
         </Button>
 
-        {/*  CRITICAL: Extra bottom padding for smooth scroll */}
         <View style={styles.bottomPadding} />
       </ScrollView>
 
