@@ -11,7 +11,7 @@ import { Card, Button, Chip } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
-import AdminService from '../services/AdminService';
+import PromoService from '../services/PromoService';
 import FirebaseService from '../services/FirebaseService';
 
 const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
@@ -20,21 +20,20 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
   const [visible, setVisible] = useState(false);
   const [slideAnim] = useState(new Animated.Value(-100));
   const [pulseAnim] = useState(new Animated.Value(1));
-  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     loadActiveOffer();
   }, []);
 
   useEffect(() => {
-    if (offer) {
+    if (offer && offer.expiresAt) {
       const timer = setInterval(updateTimeLeft, 1000);
       return () => clearInterval(timer);
     }
   }, [offer]);
 
   useEffect(() => {
-    if (visible) {
+    if (visible && offer) {
       // Slide in animation
       Animated.spring(slideAnim, {
         toValue: 0,
@@ -43,7 +42,7 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
         useNativeDriver: true,
       }).start();
 
-      // Pulse animation for attention
+      // Pulse animation
       const pulseAnimation = Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
@@ -58,67 +57,41 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
           }),
         ])
       );
-      
+
       pulseAnimation.start();
-      
+
       return () => pulseAnimation.stop();
     }
-  }, [visible]);
+  }, [visible, offer]);
 
   const loadActiveOffer = async () => {
     try {
-      console.log('PromoOfferBanner: Starting offer load...');
+      console.log('PromoOfferBanner: Loading active offer...');
       
-      // CRITICAL FIX 1: Set loading timeout to 2 seconds MAX
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout')), 2000)
-      );
+      // Get user stats for personalization
+      const userStats = await FirebaseService.getUserStats();
       
-      // CRITICAL FIX 2: Wrap AdminService call in try-catch
-      const offersPromise = (async () => {
-        try {
-          const result = await AdminService.getActivePromoOffers();
-          return result;
-        } catch (err) {
-          console.log('AdminService error:', err);
-          return [];
-        }
-      })();
+      // Get personalized offer from PromoService
+      const activeOffer = await PromoService.getPersonalizedOffer(userStats);
       
-      // Race between timeout and actual fetch
-      const offers = await Promise.race([offersPromise, timeoutPromise]);
-      
-      console.log('PromoOfferBanner: Offers loaded:', offers?.length || 0);
-      
-      if (offers && Array.isArray(offers) && offers.length > 0) {
-        const activeOffer = offers[0]; // Get the first active offer
+      if (activeOffer && activeOffer.title && activeOffer.description) {
+        console.log('PromoOfferBanner: Loaded offer:', activeOffer.title);
+        setOffer(activeOffer);
+        setVisible(true);
         
-        // Validate offer has required fields
-        if (activeOffer.title && activeOffer.description) {
-          setOffer(activeOffer);
-          setVisible(true);
-          
-          // Track offer impression (fire and forget)
-          FirebaseService.trackEvent('promo_offer_shown', {
-            offer_id: activeOffer.id,
-            offer_title: activeOffer.title
-          }).catch(() => {});
-        } else {
-          console.log('PromoOfferBanner: Invalid offer data');
-          setVisible(false);
-        }
+        // Track impression
+        FirebaseService.trackEvent('promo_offer_shown', {
+          offer_id: activeOffer.id,
+          offer_title: activeOffer.title,
+          offer_type: activeOffer.type
+        }).catch(() => {});
       } else {
-        console.log('PromoOfferBanner: No active offers');
+        console.log('PromoOfferBanner: No active offers available');
         setVisible(false);
       }
     } catch (error) {
-      console.log('PromoOfferBanner: Error loading offers (gracefully handled):', error.message);
-      // Gracefully fail - just don't show the banner
+      console.log('PromoOfferBanner: Error loading offer:', error.message);
       setVisible(false);
-      setOffer(null);
-    } finally {
-      // CRITICAL FIX 3: Always stop loading after attempt
-      setIsLoading(false);
     }
   };
 
@@ -151,7 +124,7 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
         setVisible(false);
       }
     } catch (error) {
-      console.log('PromoOfferBanner: Error updating time:', error.message);
+      console.log('PromoOfferBanner: Error updating time');
       setTimeLeft('');
     }
   };
@@ -160,13 +133,16 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
     if (!offer) return;
 
     try {
-      // Track offer click (fire and forget)
+      // Track click
+      await PromoService.trackOfferClick(offer.id);
+      
       FirebaseService.trackEvent('promo_offer_clicked', {
         offer_id: offer.id,
-        offer_title: offer.title
+        offer_title: offer.title,
+        offer_type: offer.type
       }).catch(() => {});
 
-      // Show offer details
+      // Show details
       Alert.alert(
         offer.title || 'Special Offer',
         `${offer.description || 'Limited time offer!'}\n\nDiscount: ${offer.discount || 'Special pricing'}\nValid for: ${timeLeft || 'Limited time'}`,
@@ -174,10 +150,14 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
           { text: 'Maybe Later', style: 'cancel' },
           {
             text: 'Upgrade Now',
-            onPress: () => {
+            onPress: async () => {
+              // Track conversion
+              await PromoService.trackOfferConversion(offer.id);
+              
               FirebaseService.trackEvent('promo_offer_converted', {
                 offer_id: offer.id,
-                offer_title: offer.title
+                offer_title: offer.title,
+                offer_type: offer.type
               }).catch(() => {});
               
               if (onUpgradePress && typeof onUpgradePress === 'function') {
@@ -188,21 +168,20 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
         ]
       );
     } catch (error) {
-      console.error('PromoOfferBanner: Error handling offer click:', error);
+      console.error('PromoOfferBanner: Error handling click:', error);
     }
   };
 
   const handleDismiss = async () => {
     try {
-      // Track dismissal (fire and forget)
       if (offer) {
         FirebaseService.trackEvent('promo_offer_dismissed', {
           offer_id: offer.id,
-          offer_title: offer.title
+          offer_title: offer.title,
+          offer_type: offer.type
         }).catch(() => {});
       }
 
-      // Slide out animation
       Animated.timing(slideAnim, {
         toValue: -100,
         duration: 300,
@@ -211,18 +190,11 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
         setVisible(false);
       });
     } catch (error) {
-      console.error('PromoOfferBanner: Error handling offer dismiss:', error);
+      console.error('PromoOfferBanner: Error dismissing:', error);
       setVisible(false);
     }
   };
 
-  // CRITICAL FIX 4: Return null immediately if loading failed or no offer
-  if (isLoading && !visible) {
-    // Still loading but not visible yet - show nothing to avoid blocking
-    return null;
-  }
-
-  // Return null if not visible or no offer (prevents rendering empty space)
   if (!visible || !offer) {
     return null;
   }
@@ -264,10 +236,8 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
                 </Chip>
               </View>
 
-              <Text style={styles.title}>{offer.title || 'Special Offer'}</Text>
-              <Text style={styles.description}>
-                {offer.description || 'Don\'t miss out on this amazing deal!'}
-              </Text>
+              <Text style={styles.title}>{offer.title}</Text>
+              <Text style={styles.description}>{offer.description}</Text>
 
               <View style={styles.discountContainer}>
                 <Text style={styles.discountText}>

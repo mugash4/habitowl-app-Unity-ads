@@ -21,6 +21,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
+import PromoOfferBanner from '../components/PromoOfferBanner';
 import FirebaseService from '../services/FirebaseService';
 import AdService from '../services/AdService';
 import SecureAIService from '../services/SecureAIService';
@@ -399,9 +400,8 @@ const SettingsScreen = ({ navigation }) => {
       >
         {renderUserInfo()}
 
-        {/* FIXED: PromoOfferBanner loads after screen is visible, won't block UI */}
         {!isPremium && !isAdmin && (
-          <SafePromoOfferBanner onUpgradePress={handlePremiumUpgrade} />
+          <PromoOfferBanner onUpgradePress={handlePremiumUpgrade} />
         )}
 
         {!isPremium && !isAdmin && (
