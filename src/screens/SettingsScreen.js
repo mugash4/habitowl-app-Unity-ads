@@ -27,51 +27,8 @@ import SecureAIService from '../services/SecureAIService';
 import NotificationService from '../services/NotificationService';
 import ContactSupport from '../components/ContactSupport';
 import AdminService from '../services/AdminService';
-
-// FIXED: Simplified and safer PromoOfferBanner wrapper
-const SafePromoOfferBanner = ({ onUpgradePress }) => {
-  const [BannerComponent, setBannerComponent] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-  
-  useEffect(() => {
-    // Try to load PromoOfferBanner component
-    const loadBanner = async () => {
-      try {
-        // Use dynamic import with a timeout
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Timeout')), 1000)
-        );
-        
-        const loadPromise = import('../components/PromoOfferBanner')
-          .then(module => module.default);
-        
-        const component = await Promise.race([loadPromise, timeoutPromise]);
-        setBannerComponent(() => component);
-      } catch (error) {
-        console.log('PromoOfferBanner not available or failed to load:', error.message);
-        setBannerComponent(null);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    loadBanner();
-  }, []);
-  
-  // Don't render anything while loading (quick check)
-  if (isLoading) return null;
-  
-  // Don't render if component couldn't be loaded
-  if (!BannerComponent) return null;
-  
-  // Render the loaded component with error boundary
-  try {
-    return <BannerComponent onUpgradePress={onUpgradePress} />;
-  } catch (error) {
-    console.log('PromoOfferBanner render error:', error);
-    return null;
-  }
-};
+// FIXED: Use normal static import instead of dynamic import
+import PromoOfferBanner from '../components/PromoOfferBanner';
 
 const SettingsScreen = ({ navigation }) => {
   const [userStats, setUserStats] = useState(null);
@@ -92,10 +49,10 @@ const SettingsScreen = ({ navigation }) => {
   const loadSettingsData = async () => {
     console.log('SettingsScreen: Starting data load...');
     
-    // CRITICAL FIX 1: Set default data IMMEDIATELY before any async calls
+    // Set default data IMMEDIATELY before any async calls
     setDefaultUserData();
     
-    // CRITICAL FIX 2: Stop loading after 1 second MAX - screen MUST show
+    // Stop loading after 1 second MAX - screen MUST show
     const loadingTimeout = setTimeout(() => {
       console.log('SettingsScreen: Force stopping loading indicator');
       setIsLoading(false);
@@ -389,7 +346,7 @@ const SettingsScreen = ({ navigation }) => {
     );
   };
 
-  // FIXED: Show loading for MAXIMUM 1 second, then ALWAYS show content
+  // Show loading for MAXIMUM 1 second, then ALWAYS show content
   if (isLoading) {
     return (
       <View style={[styles.container, styles.centerContent]}>
@@ -408,8 +365,9 @@ const SettingsScreen = ({ navigation }) => {
       >
         {renderUserInfo()}
 
+        {/* FIXED: Simple conditional render - no dynamic import */}
         {!isPremium && !isAdmin && (
-          <SafePromoOfferBanner onUpgradePress={handlePremiumUpgrade} />
+          <PromoOfferBanner onUpgradePress={handlePremiumUpgrade} />
         )}
 
         {!isPremium && !isAdmin && (
@@ -568,7 +526,7 @@ const SettingsScreen = ({ navigation }) => {
 
           <List.Item
             title="App Version"
-            description="2.6.0"
+            description="2.7.0"
             left={(props) => <List.Icon {...props} icon="information" />}
             titleStyle={styles.listItemTitle}
             descriptionStyle={styles.listItemDescription}

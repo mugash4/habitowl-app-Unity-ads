@@ -28,87 +28,100 @@ const HomeScreen = ({ navigation, route }) => {
   const [todayCompletions, setTodayCompletions] = useState(new Set());
   const [motivationalMessage, setMotivationalMessage] = useState('');
   const [fadeAnim] = useState(new Animated.Value(0));
-  const [refreshKey, setRefreshKey] = useState(0); // 🔧 FIX: Force re-render key
+  const [renderKey, setRenderKey] = useState(0); // 🔧 FIX: Force component re-render
 
-  // 🔧 FIX: Reload habits EVERY time the screen is focused (no dependencies)
+  // 🔧 FIX: Reload habits on EVERY screen focus (including tab navigation)
   useFocusEffect(
     useCallback(() => {
-      console.log('🔄 HomeScreen focused - reloading habits...');
+      console.log('🔄 HomeScreen FOCUSED - Loading habits...');
       
-      // Force reload immediately on every focus
+      // Force reload immediately
       loadHabits(true);
       
-      // Animate screen
+      // Animate screen entrance
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 500,
         useNativeDriver: true,
       }).start();
 
+      // Cleanup on screen blur
       return () => {
-        // Cleanup when screen loses focus
+        console.log('👋 HomeScreen BLURRED');
         fadeAnim.setValue(0);
       };
-    }, []) // 🔧 Empty array = runs on EVERY focus
+    }, []) // Empty deps = runs on EVERY focus/blur
   );
+
+  // 🔧 FIX: Also listen to navigation events for tab changes
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('tabPress', (e) => {
+      console.log('📍 Tab pressed - Reloading habits');
+      loadHabits(true);
+    });
+
+    return unsubscribe;
+  }, [navigation]);
 
   const loadHabits = async (forceReload = false) => {
     try {
       if (forceReload) {
-        console.log('📱 Force reload - fetching fresh data...');
+        console.log('🔄 Force reload triggered');
         setLoading(true);
       }
       
-      console.log('📱 Loading habits from Firebase...');
+      console.log('📱 Fetching habits from Firebase...');
       
-      // 🔧 FIX: Always get fresh data from Firestore
-      const userHabits = await FirebaseService.getUserHabits();
+      // 🔧 FIX: Always get fresh data
+      const userHabits = await FirebaseService.getUserHabits(true);
       
-      console.log('✅ Successfully loaded', userHabits ? userHabits.length : 0, 'habits');
+      console.log(`✅ Loaded ${userHabits ? userHabits.length : 0} habits`);
       
-      // 🔧 FIX: Always update state with new array reference
       if (userHabits && Array.isArray(userHabits)) {
-        console.log('📝 Setting habits:', userHabits.map(h => h.name).join(', '));
-        setHabits([...userHabits]); // Create new array reference
-        setRefreshKey(prev => prev + 1); // Force component re-render
-      } else {
-        console.log('⚠️ No habits returned, setting empty array');
-        setHabits([]);
-      }
-      
-      // Check which habits are completed today
-      const today = new Date().toDateString();
-      const completedToday = new Set();
-      
-      if (userHabits && userHabits.length > 0) {
-        userHabits.forEach(habit => {
+        // 🔧 FIX: Create new array reference to force React re-render
+        const habitsArray = [...userHabits];
+        console.log('📝 Setting habits:', habitsArray.map(h => h.name).join(', '));
+        
+        setHabits(habitsArray);
+        setRenderKey(prev => prev + 1); // Force re-render
+        
+        // Check completions
+        const today = new Date().toDateString();
+        const completedToday = new Set();
+        
+        habitsArray.forEach(habit => {
           if (habit.completions && habit.completions.includes(today)) {
             completedToday.add(habit.id);
           }
         });
-      }
-      
-      setTodayCompletions(completedToday);
-      
-      // Load motivational message
-      if (userHabits && userHabits.length > 0) {
-        loadMotivationalMessage(userHabits, completedToday);
+        
+        setTodayCompletions(completedToday);
+        
+        // Load motivational message
+        if (habitsArray.length > 0) {
+          loadMotivationalMessage(habitsArray, completedToday);
+        } else {
+          setMotivationalMessage('');
+        }
       } else {
+        console.log('⚠️ No habits or invalid data, setting empty array');
+        setHabits([]);
+        setTodayCompletions(new Set());
         setMotivationalMessage('');
       }
       
     } catch (error) {
       console.error('❌ Error loading habits:', error);
       
-      // 🔧 FIX: Set empty state on error
+      // Set empty state on error
       setHabits([]);
       setTodayCompletions(new Set());
       setMotivationalMessage('');
       
-      // Show error for critical issues
-      if (error.message && (error.message.includes('network') || error.message.includes('timeout'))) {
+      // Show error alert for critical issues
+      if (error.message && error.message.includes('network')) {
         Alert.alert(
-          'Connection Issue', 
+          'Connection Issue',
           'Please check your internet connection and try again.',
           [
             { text: 'Retry', onPress: () => loadHabits(true) },
@@ -155,7 +168,7 @@ const HomeScreen = ({ navigation, route }) => {
 
   const handleHabitComplete = async (habit, isNowCompleted) => {
     try {
-      // Update local state immediately
+      // Update local state immediately for instant feedback
       const newCompletions = new Set(todayCompletions);
       if (isNowCompleted) {
         newCompletions.add(habit.id);
@@ -219,8 +232,8 @@ const HomeScreen = ({ navigation, route }) => {
     const longestStreaks = habits.map(h => h.longestStreak || 0);
     
     return {
-      current: Math.max(...currentStreaks),
-      best: Math.max(...longestStreaks)
+      current: Math.max(...currentStreaks, 0),
+      best: Math.max(...longestStreaks, 0)
     };
   };
 
@@ -241,13 +254,13 @@ const HomeScreen = ({ navigation, route }) => {
             </Text>
           </View>
           
-          {motivationalMessage && (
+          {motivationalMessage ? (
             <View style={styles.messageContainer}>
               <Text style={styles.motivationalMessage}>
                 {motivationalMessage}
               </Text>
             </View>
-          )}
+          ) : null}
           
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
@@ -308,7 +321,7 @@ const HomeScreen = ({ navigation, route }) => {
       {renderHeader()}
       
       <ScrollView
-        key={refreshKey} 
+        key={renderKey} // 🔧 FIX: Force ScrollView re-render
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
         refreshControl={
@@ -348,9 +361,9 @@ const HomeScreen = ({ navigation, route }) => {
         ) : (
           <>
             <Text style={styles.sectionTitle}>Your Habits ({habits.length})</Text>
-            {habits.map((habit) => (
+            {habits.map((habit, index) => (
               <HabitCard
-                key={`${habit.id}-${refreshKey}`}
+                key={`${habit.id}-${renderKey}-${index}`} // 🔧 FIX: Unique key with render index
                 habit={habit}
                 isCompleted={todayCompletions.has(habit.id)}
                 onComplete={handleHabitComplete}

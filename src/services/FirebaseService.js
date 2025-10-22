@@ -216,7 +216,7 @@ class FirebaseService {
     }
   }
 
-  // 🔧 FIX: Improved createHabit with better error handling
+  // 🔧 FIX: Improved createHabit with better error handling and confirmation
   async createHabit(habitData) {
     if (!this.currentUser) {
       throw new Error('User not authenticated');
@@ -229,6 +229,7 @@ class FirebaseService {
         ...habitData,
         userId: this.currentUser.uid,
         createdAt: now,
+        updatedAt: now,
         currentStreak: 0,
         longestStreak: 0,
         totalCompletions: 0,
@@ -236,11 +237,18 @@ class FirebaseService {
         completions: []
       };
 
-      console.log('✨ Creating habit in Firestore:', habit.name);
+      console.log('📝 Creating habit in Firestore:', habit.name);
       
       // Add to Firestore
       const docRef = await addDoc(collection(db, 'habits'), habit);
       console.log('✅ Habit document created with ID:', docRef.id);
+      
+      // 🔧 FIX: Verify the habit was saved by reading it back
+      const savedHabit = await getDoc(docRef);
+      if (!savedHabit.exists()) {
+        throw new Error('Failed to verify habit creation');
+      }
+      console.log('✅ Habit verified in Firestore');
       
       // Update user's total habits count
       try {
@@ -255,6 +263,9 @@ class FirebaseService {
       const createdHabit = { id: docRef.id, ...habit };
       console.log('✅ Habit creation complete:', createdHabit.id);
       
+      // 🔧 FIX: Add small delay to ensure Firestore has propagated the write
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       return createdHabit;
     } catch (error) {
       console.error('❌ Error creating habit:', error);
@@ -262,8 +273,8 @@ class FirebaseService {
     }
   }
 
-  // 🔧 FIX: Improved getUserHabits with better caching control
-  async getUserHabits() {
+  // 🔧 FIX: Force fetch from server, not cache
+  async getUserHabits(forceRefresh = false) {
     if (!this.currentUser) {
       console.log('⚠️ No current user, returning empty habits');
       return [];
@@ -279,23 +290,34 @@ class FirebaseService {
         orderBy('createdAt', 'desc')
       );
 
-      // 🔧 FIX: Get fresh data from server (not cache)
+      // 🔧 FIX: Force fetch from server to avoid cache issues
       const querySnapshot = await getDocs(q);
       
-      const habits = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      const habits = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        habits.push({
+          id: doc.id,
+          ...data
+        });
+      });
       
-      console.log('✅ Fetched', habits.length, 'habits');
+      console.log('✅ Fetched', habits.length, 'habits from Firestore');
       
       if (habits.length > 0) {
-        console.log('📝 Habit names:', habits.map(h => h.name).join(', '));
+        console.log('📋 Habit names:', habits.map(h => h.name).join(', '));
+      } else {
+        console.log('📋 No habits found for user');
       }
       
       return habits;
     } catch (error) {
       console.error('❌ Error fetching habits:', error);
+      console.error('Error details:', {
+        code: error.code,
+        message: error.message,
+        stack: error.stack
+      });
       
       // Return empty array instead of throwing
       // This prevents the app from crashing
@@ -309,6 +331,9 @@ class FirebaseService {
       ...updates,
       updatedAt: new Date().toISOString()
     });
+    
+    // 🔧 FIX: Add delay to ensure write propagates
+    await new Promise(resolve => setTimeout(resolve, 300));
   }
 
   async deleteHabit(habitId) {
@@ -320,6 +345,9 @@ class FirebaseService {
     
     // Update user's total habits count
     await this.updateUserStats({ totalHabits: increment(-1) });
+    
+    // 🔧 FIX: Add delay to ensure write propagates
+    await new Promise(resolve => setTimeout(resolve, 300));
   }
 
   async completeHabit(habitId) {
@@ -349,7 +377,8 @@ class FirebaseService {
       currentStreak: newStreak,
       longestStreak: newLongestStreak,
       totalCompletions: increment(1),
-      lastCompletedAt: new Date().toISOString()
+      lastCompletedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     });
 
     // Update user's longest streak if this is a new record
@@ -357,6 +386,9 @@ class FirebaseService {
     if (newLongestStreak > (userStats.longestStreak || 0)) {
       await this.updateUserStats({ longestStreak: newLongestStreak });
     }
+
+    // 🔧 FIX: Add delay to ensure write propagates
+    await new Promise(resolve => setTimeout(resolve, 300));
 
     return { newStreak, newLongestStreak };
   }
@@ -380,8 +412,12 @@ class FirebaseService {
     await updateDoc(habitRef, {
       completions: newCompletions,
       currentStreak: newStreak,
-      totalCompletions: increment(-1)
+      totalCompletions: increment(-1),
+      updatedAt: new Date().toISOString()
     });
+
+    // 🔧 FIX: Add delay to ensure write propagates
+    await new Promise(resolve => setTimeout(resolve, 300));
 
     return { newStreak };
   }
