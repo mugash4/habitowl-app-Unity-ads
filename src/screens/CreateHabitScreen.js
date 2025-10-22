@@ -104,8 +104,13 @@ const CreateHabitScreen = ({ navigation, route }) => {
     return true;
   };
 
+  // 🔧 FIXED handleCreateHabit function
   const handleCreateHabit = async () => {
+    // Validate form first
     if (!validateForm()) return;
+
+    // Dismiss keyboard
+    Keyboard.dismiss();
 
     try {
       setIsLoading(true);
@@ -123,7 +128,9 @@ const CreateHabitScreen = ({ navigation, route }) => {
         userId: FirebaseService.currentUser.uid,
       };
 
-      console.log('🔧 Creating habit with data:', habitData);
+      console.log('✅ Creating habit with data:', habitData.name);
+      
+      // 🔧 FIX: Create habit and wait for it to be saved
       const newHabit = await FirebaseService.createHabit(habitData);
       console.log('✅ Habit created successfully with ID:', newHabit.id);
 
@@ -131,36 +138,30 @@ const CreateHabitScreen = ({ navigation, route }) => {
       if (reminderEnabled) {
         try {
           await NotificationService.scheduleHabitReminder(newHabit);
-          console.log('🔔 Reminder scheduled');
+          console.log('✅ Reminder scheduled');
         } catch (reminderError) {
-          console.error('Reminder error:', reminderError);
+          console.error('⚠️ Reminder error:', reminderError);
         }
       }
 
-      // Track event
-      try {
-        await FirebaseService.trackEvent('habit_created', {
-          category,
-          difficulty,
-          has_reminder: reminderEnabled
-        });
-      } catch (trackError) {
-        console.error('Tracking error:', trackError);
-      }
+      // Track event (don't wait for this)
+      FirebaseService.trackEvent('habit_created', {
+        category,
+        difficulty,
+        has_reminder: reminderEnabled
+      }).catch(err => console.error('⚠️ Tracking error:', err));
 
-      // 🔧 FIX: Use navigation.goBack() to return to HomeScreen
-      // The useFocusEffect in HomeScreen will automatically reload habits
-      console.log('🔧 Navigating back to Home screen...');
+      // 🔧 FIX: Navigate back FIRST, then show success message
       navigation.goBack();
       
       // Show success message after navigation
       setTimeout(() => {
         Alert.alert(
-          'Success! 🎉',
+          '🎉 Success!',
           `"${habitName}" has been added to your habits!`,
           [{ text: 'OK' }]
         );
-      }, 500);
+      }, 300);
 
     } catch (error) {
       console.error('❌ Create habit error:', error);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
 import { Card, Appbar, Chip, Button } from 'react-native-paper';
 import { LineChart, BarChart, PieChart } from 'react-native-chart-kit';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 import FirebaseService from '../services/FirebaseService';
@@ -29,17 +30,31 @@ const StatisticsScreen = ({ navigation }) => {
     loadStatistics();
   }, []);
 
+  // 🔧 FIX: Reload statistics when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      console.log('📊 Statistics screen focused - reloading data...');
+      loadStatistics();
+    }, [])
+  );
+
   const loadStatistics = async () => {
     try {
+      setLoading(true);
+      
       const [userHabits, stats] = await Promise.all([
         FirebaseService.getUserHabits(),
         FirebaseService.getUserStats()
       ]);
       
-      setHabits(userHabits);
+      console.log('📊 Loaded', userHabits ? userHabits.length : 0, 'habits for statistics');
+      
+      setHabits(userHabits || []);
       setUserStats(stats);
     } catch (error) {
       console.error('Error loading statistics:', error);
+      setHabits([]);
+      setUserStats(null);
     } finally {
       setLoading(false);
     }

@@ -28,18 +28,9 @@ const HomeScreen = ({ navigation, route }) => {
   const [todayCompletions, setTodayCompletions] = useState(new Set());
   const [motivationalMessage, setMotivationalMessage] = useState('');
   const [fadeAnim] = useState(new Animated.Value(0));
+  const [refreshKey, setRefreshKey] = useState(0); // 🔧 FIX: Force re-render key
 
-  // 🔧 FIX 1: Listen for navigation params to trigger refresh
-  useEffect(() => {
-    if (route.params?.refresh) {
-      console.log('🔄 Refresh triggered by navigation param');
-      loadHabits(true);
-      // Clear the param to avoid infinite loops
-      navigation.setParams({ refresh: undefined });
-    }
-  }, [route.params?.refresh]);
-
-  // 🔧 FIX 2: Reload habits EVERY time the screen is focused
+  // 🔧 FIX: Reload habits EVERY time the screen is focused (no dependencies)
   useFocusEffect(
     useCallback(() => {
       console.log('🔄 HomeScreen focused - reloading habits...');
@@ -55,10 +46,10 @@ const HomeScreen = ({ navigation, route }) => {
       }).start();
 
       return () => {
-        // Cleanup
+        // Cleanup when screen loses focus
         fadeAnim.setValue(0);
       };
-    }, []) // Empty dependency - runs on EVERY focus
+    }, []) // 🔧 Empty array = runs on EVERY focus
   );
 
   const loadHabits = async (forceReload = false) => {
@@ -70,20 +61,16 @@ const HomeScreen = ({ navigation, route }) => {
       
       console.log('📱 Loading habits from Firebase...');
       
-      // 🔧 FIX 3: Add timeout protection
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Loading timeout')), 10000);
-      });
-
-      const loadPromise = FirebaseService.getUserHabits();
-      const userHabits = await Promise.race([loadPromise, timeoutPromise]);
+      // 🔧 FIX: Always get fresh data from Firestore
+      const userHabits = await FirebaseService.getUserHabits();
       
       console.log('✅ Successfully loaded', userHabits ? userHabits.length : 0, 'habits');
       
-      // 🔧 FIX 4: Always set habits, even if empty
+      // 🔧 FIX: Always update state with new array reference
       if (userHabits && Array.isArray(userHabits)) {
         console.log('📝 Setting habits:', userHabits.map(h => h.name).join(', '));
-        setHabits([...userHabits]); // Force new array reference
+        setHabits([...userHabits]); // Create new array reference
+        setRefreshKey(prev => prev + 1); // Force component re-render
       } else {
         console.log('⚠️ No habits returned, setting empty array');
         setHabits([]);
@@ -113,12 +100,12 @@ const HomeScreen = ({ navigation, route }) => {
     } catch (error) {
       console.error('❌ Error loading habits:', error);
       
-      // 🔧 FIX 5: Set empty state on error (don't leave blank)
+      // 🔧 FIX: Set empty state on error
       setHabits([]);
       setTodayCompletions(new Set());
       setMotivationalMessage('');
       
-      // Show error only for critical issues
+      // Show error for critical issues
       if (error.message && (error.message.includes('network') || error.message.includes('timeout'))) {
         Alert.alert(
           'Connection Issue', 
@@ -131,6 +118,7 @@ const HomeScreen = ({ navigation, route }) => {
       }
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -163,7 +151,6 @@ const HomeScreen = ({ navigation, route }) => {
     console.log('🔄 Manual refresh triggered');
     setRefreshing(true);
     await loadHabits(true);
-    setRefreshing(false);
   };
 
   const handleHabitComplete = async (habit, isNowCompleted) => {
@@ -302,7 +289,7 @@ const HomeScreen = ({ navigation, route }) => {
         labelStyle={styles.emptyButtonLabel}
         icon="plus"
       >
-        Create 1st Habit!
+        Create Your First Habit
       </Button>
     </View>
   );
@@ -321,6 +308,7 @@ const HomeScreen = ({ navigation, route }) => {
       {renderHeader()}
       
       <ScrollView
+        key={refreshKey} 
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
         refreshControl={
@@ -362,7 +350,7 @@ const HomeScreen = ({ navigation, route }) => {
             <Text style={styles.sectionTitle}>Your Habits ({habits.length})</Text>
             {habits.map((habit) => (
               <HabitCard
-                key={habit.id}
+                key={`${habit.id}-${refreshKey}`}
                 habit={habit}
                 isCompleted={todayCompletions.has(habit.id)}
                 onComplete={handleHabitComplete}

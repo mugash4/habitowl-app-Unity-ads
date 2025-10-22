@@ -21,7 +21,6 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
-import PromoOfferBanner from '../components/PromoOfferBanner';
 import FirebaseService from '../services/FirebaseService';
 import AdService from '../services/AdService';
 import SecureAIService from '../services/SecureAIService';
@@ -29,32 +28,47 @@ import NotificationService from '../services/NotificationService';
 import ContactSupport from '../components/ContactSupport';
 import AdminService from '../services/AdminService';
 
-// CRITICAL FIX: Completely safe PromoOfferBanner wrapper
-// Only loads if component exists and never blocks the UI
+// FIXED: Simplified and safer PromoOfferBanner wrapper
 const SafePromoOfferBanner = ({ onUpgradePress }) => {
-  const [showBanner, setShowBanner] = useState(false);
+  const [BannerComponent, setBannerComponent] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
   
   useEffect(() => {
-    // Load banner after a delay to not block initial render
-    const timer = setTimeout(() => {
+    // Try to load PromoOfferBanner component
+    const loadBanner = async () => {
       try {
-        require('../components/PromoOfferBanner');
-        setShowBanner(true);
+        // Use dynamic import with a timeout
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout')), 1000)
+        );
+        
+        const loadPromise = import('../components/PromoOfferBanner')
+          .then(module => module.default);
+        
+        const component = await Promise.race([loadPromise, timeoutPromise]);
+        setBannerComponent(() => component);
       } catch (error) {
-        console.log('PromoOfferBanner not available');
+        console.log('PromoOfferBanner not available or failed to load:', error.message);
+        setBannerComponent(null);
+      } finally {
+        setIsLoading(false);
       }
-    }, 500);
+    };
     
-    return () => clearTimeout(timer);
+    loadBanner();
   }, []);
   
-  if (!showBanner) return null;
+  // Don't render anything while loading (quick check)
+  if (isLoading) return null;
   
+  // Don't render if component couldn't be loaded
+  if (!BannerComponent) return null;
+  
+  // Render the loaded component with error boundary
   try {
-    const PromoOfferBanner = require('../components/PromoOfferBanner').default;
-    return <PromoOfferBanner onUpgradePress={onUpgradePress} />;
+    return <BannerComponent onUpgradePress={onUpgradePress} />;
   } catch (error) {
-    console.log('PromoOfferBanner error:', error);
+    console.log('PromoOfferBanner render error:', error);
     return null;
   }
 };
@@ -81,29 +95,27 @@ const SettingsScreen = ({ navigation }) => {
     // CRITICAL FIX 1: Set default data IMMEDIATELY before any async calls
     setDefaultUserData();
     
-    // CRITICAL FIX 2: Stop loading after 1.5 seconds MAX - screen MUST show
+    // CRITICAL FIX 2: Stop loading after 1 second MAX - screen MUST show
     const loadingTimeout = setTimeout(() => {
       console.log('SettingsScreen: Force stopping loading indicator');
       setIsLoading(false);
-    }, 1500);
+    }, 1000);
 
     try {
       // Load data in background with individual timeouts
-      Promise.allSettled([
+      await Promise.allSettled([
         loadUserData().catch(e => console.log('User data failed:', e)),
         loadSettings().catch(e => console.log('Settings failed:', e)),
         checkAdminStatus().catch(e => console.log('Admin check failed:', e))
-      ]).then(() => {
-        console.log('SettingsScreen: All data loading completed');
-      });
-
+      ]);
+      
+      console.log('SettingsScreen: All data loading completed');
     } catch (error) {
       console.error('SettingsScreen: Error in loadSettingsData:', error);
     } finally {
-      // CRITICAL FIX 3: Always clear timeout and show screen
+      // Always clear timeout and show screen
       clearTimeout(loadingTimeout);
-      // Give a tiny delay to ensure state updates
-      setTimeout(() => setIsLoading(false), 100);
+      setIsLoading(false);
     }
   };
 
@@ -128,10 +140,10 @@ const SettingsScreen = ({ navigation }) => {
         return;
       }
       
-      // Quick timeout for admin check - 800ms max
+      // Quick timeout for admin check - 500ms max
       const adminCheckPromise = AdminService.checkAdminStatus(user.email);
       const timeoutPromise = new Promise((resolve) => 
-        setTimeout(() => resolve(false), 800)
+        setTimeout(() => resolve(false), 500)
       );
       
       const adminStatus = await Promise.race([adminCheckPromise, timeoutPromise]);
@@ -155,16 +167,16 @@ const SettingsScreen = ({ navigation }) => {
     try {
       console.log('SettingsScreen: Loading user data...');
       
-      // Quick timeout for user data - 1 second max
+      // Quick timeout for user data - 800ms max
       const userDataPromise = FirebaseService.getUserStats();
       const timeoutPromise = new Promise((resolve) => 
-        setTimeout(() => resolve(null), 1000)
+        setTimeout(() => resolve(null), 800)
       );
       
       const stats = await Promise.race([userDataPromise, timeoutPromise]);
       
       if (stats && typeof stats === 'object') {
-        console.log('SettingsScreen: User stats loaded:', stats);
+        console.log('SettingsScreen: User stats loaded');
         setUserStats(prevStats => ({
           ...prevStats,
           ...stats,
@@ -172,8 +184,6 @@ const SettingsScreen = ({ navigation }) => {
           email: stats.email || prevStats?.email || ''
         }));
         setIsPremium(!!stats.isPremium);
-      } else {
-        console.log('SettingsScreen: No stats loaded, keeping defaults');
       }
     } catch (error) {
       console.error('SettingsScreen: Error loading user data:', error);
@@ -184,24 +194,22 @@ const SettingsScreen = ({ navigation }) => {
     try {
       console.log('SettingsScreen: Loading settings...');
       
-      // Quick timeout for settings - 800ms max
+      // Quick timeout for settings - 500ms max
       const settingsPromise = (async () => {
         try {
           const stats = await FirebaseService.getUserStats();
           const isPremiumUser = stats?.isPremium || false;
           return await SecureAIService.getActiveProvider(isPremiumUser);
         } catch (err) {
-          console.log('Settings load error:', err);
           return 'deepseek';
         }
       })();
       
       const timeoutPromise = new Promise((resolve) => 
-        setTimeout(() => resolve('deepseek'), 800)
+        setTimeout(() => resolve('deepseek'), 500)
       );
       
       const provider = await Promise.race([settingsPromise, timeoutPromise]);
-      console.log('SettingsScreen: AI provider:', provider);
       setApiProvider(provider || 'deepseek');
     } catch (error) {
       console.error('SettingsScreen: Error loading settings:', error);
@@ -381,7 +389,7 @@ const SettingsScreen = ({ navigation }) => {
     );
   };
 
-  // FIXED: Show loading for MAXIMUM 1.5 seconds, then ALWAYS show content
+  // FIXED: Show loading for MAXIMUM 1 second, then ALWAYS show content
   if (isLoading) {
     return (
       <View style={[styles.container, styles.centerContent]}>
@@ -401,7 +409,7 @@ const SettingsScreen = ({ navigation }) => {
         {renderUserInfo()}
 
         {!isPremium && !isAdmin && (
-          <PromoOfferBanner onUpgradePress={handlePremiumUpgrade} />
+          <SafePromoOfferBanner onUpgradePress={handlePremiumUpgrade} />
         )}
 
         {!isPremium && !isAdmin && (
@@ -560,7 +568,7 @@ const SettingsScreen = ({ navigation }) => {
 
           <List.Item
             title="App Version"
-            description="2.3.0"
+            description="2.5.0"
             left={(props) => <List.Icon {...props} icon="information" />}
             titleStyle={styles.listItemTitle}
             descriptionStyle={styles.listItemDescription}
