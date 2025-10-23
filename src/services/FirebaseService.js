@@ -253,7 +253,7 @@ class FirebaseService {
     }
   }
 
-  // ✅ FIXED: Always fetch from server, no caching
+  // ✅ FIXED: Robust habit loading with proper error handling
   async getUserHabits(forceRefresh = false) {
     if (!this.currentUser) {
       console.log('⚠️ No current user');
@@ -261,16 +261,16 @@ class FirebaseService {
     }
 
     try {
-      console.log('📱 Fetching habits from Firestore server...');
+      console.log('📱 Fetching habits from Firestore...');
       
+      // ✅ FIXED: Simplified query without orderBy to avoid index requirement
       const q = query(
         collection(db, 'habits'),
         where('userId', '==', this.currentUser.uid),
-        where('isActive', '==', true),
-        orderBy('createdAt', 'desc')
+        where('isActive', '==', true)
       );
 
-      // ALWAYS fetch from server to ensure fresh data
+      // Always fetch from server for fresh data
       const querySnapshot = await getDocsFromServer(q);
       
       const habits = [];
@@ -282,7 +282,14 @@ class FirebaseService {
         });
       });
       
-      console.log('✅ Fetched', habits.length, 'habits');
+      // Sort by createdAt in JavaScript (instead of Firestore)
+      habits.sort((a, b) => {
+        const dateA = new Date(a.createdAt || 0);
+        const dateB = new Date(b.createdAt || 0);
+        return dateB - dateA; // Descending order (newest first)
+      });
+      
+      console.log(`✅ Fetched ${habits.length} habits`);
       
       if (habits.length > 0) {
         console.log('📝 Habits:', habits.map(h => h.name).join(', '));
@@ -291,6 +298,10 @@ class FirebaseService {
       return habits;
     } catch (error) {
       console.error('❌ Error fetching habits:', error);
+      console.error('Error code:', error.code);
+      console.error('Error message:', error.message);
+      
+      // Return empty array instead of throwing error
       return [];
     }
   }

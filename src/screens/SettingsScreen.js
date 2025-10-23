@@ -26,18 +26,28 @@ import NotificationService from '../services/NotificationService';
 import ContactSupport from '../components/ContactSupport';
 import AdminService from '../services/AdminService';
 
-// ✅ FIXED: Safe PromoOfferBanner import - completely optional
+// ✅ FIXED: Completely safe PromoOfferBanner import
 let PromoOfferBanner = null;
 try {
   const PromoModule = require('../components/PromoOfferBanner');
   PromoOfferBanner = PromoModule.default || PromoModule;
+  console.log('✅ PromoOfferBanner loaded');
 } catch (error) {
-  // Silently ignore if component doesn't exist
-  PromoOfferBanner = null;
+  console.log('ℹ️ PromoOfferBanner not available (non-critical)');
 }
 
 const SettingsScreen = ({ navigation }) => {
-  const [userStats, setUserStats] = useState(null);
+  // ✅ FIXED: Initialize with safe default values
+  const user = FirebaseService.currentUser;
+  const [userStats, setUserStats] = useState({
+    displayName: user?.displayName || 'User',
+    email: user?.email || '',
+    totalHabits: 0,
+    longestStreak: 0,
+    referralCount: 0,
+    referralCode: ''
+  });
+  
   const [isPremium, setIsPremium] = useState(false);
   const [showReferralDialog, setShowReferralDialog] = useState(false);
   const [showContactSupport, setShowContactSupport] = useState(false);
@@ -45,61 +55,93 @@ const SettingsScreen = ({ navigation }) => {
   const [referralCode, setReferralCode] = useState('');
   const [notifications, setNotifications] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    console.log('SettingsScreen: Mounted');
+    console.log('SettingsScreen: Mounted ✅');
     
-    // ✅ FIXED: Set default user data immediately, then load in background
-    setDefaultUserData();
-    loadDataInBackground();
+    // ✅ FIXED: Load data in background with proper error handling
+    loadAllDataInBackground();
   }, []);
 
-  const setDefaultUserData = () => {
-    const user = FirebaseService.currentUser;
-    if (user) {
-      setUserStats({
-        displayName: user.displayName || 'User',
-        email: user.email || '',
-        totalHabits: 0,
-        longestStreak: 0,
-        referralCount: 0
-      });
-    }
-  };
-
-  // ✅ FIXED: Load all data in background without blocking UI
-  const loadDataInBackground = async () => {
+  // ✅ FIXED: Non-blocking background data loading
+  const loadAllDataInBackground = async () => {
+    setIsLoading(true);
+    
     try {
-      console.log('SettingsScreen: Loading data...');
-      
-      // Load data with timeout protection
+      // Load all data with individual error handling
       await Promise.allSettled([
-        loadUserData(),
-        loadSettings(),
-        checkAdminStatus()
+        loadUserDataSafely(),
+        loadSettingsSafely(),
+        checkAdminStatusSafely()
       ]);
-
-      console.log('SettingsScreen: Data loaded');
     } catch (error) {
-      console.error('SettingsScreen: Load error:', error);
+      console.log('SettingsScreen: Background load error:', error.message);
+    } finally {
+      setIsLoading(false);
+      console.log('SettingsScreen: Data loaded ✅');
     }
   };
 
-  const checkAdminStatus = async () => {
+  const loadUserDataSafely = async () => {
+    try {
+      const timeout = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout')), 3000)
+      );
+      
+      const stats = await Promise.race([
+        FirebaseService.getUserStats(),
+        timeout
+      ]);
+      
+      if (stats && typeof stats === 'object') {
+        setUserStats(prevStats => ({
+          ...prevStats,
+          ...stats
+        }));
+        setIsPremium(!!stats.isPremium);
+      }
+    } catch (error) {
+      console.log('User data load failed:', error.message);
+      // Keep default values
+    }
+  };
+
+  const loadSettingsSafely = async () => {
+    try {
+      const timeout = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout')), 2000)
+      );
+      
+      const settingsPromise = (async () => {
+        const stats = await FirebaseService.getUserStats();
+        return await SecureAIService.getActiveProvider(stats?.isPremium || false);
+      })();
+      
+      const provider = await Promise.race([settingsPromise, timeout]);
+      if (provider) {
+        setApiProvider(provider);
+      }
+    } catch (error) {
+      console.log('Settings load failed:', error.message);
+      setApiProvider('deepseek');
+    }
+  };
+
+  const checkAdminStatusSafely = async () => {
     try {
       const user = FirebaseService.currentUser;
-      if (!user || !user.email) {
-        setIsAdmin(false);
+      if (!user?.email) {
         return;
       }
       
-      const timeoutPromise = new Promise((resolve) => 
-        setTimeout(() => resolve(false), 500)
+      const timeout = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout')), 1000)
       );
       
       const adminStatus = await Promise.race([
         AdminService.checkAdminStatus(user.email),
-        timeoutPromise
+        timeout
       ]);
       
       setIsAdmin(!!adminStatus);
@@ -114,56 +156,11 @@ const SettingsScreen = ({ navigation }) => {
     }
   };
 
-  const loadUserData = async () => {
-    try {
-      const timeoutPromise = new Promise((resolve) => 
-        setTimeout(() => resolve(null), 1000)
-      );
-      
-      const stats = await Promise.race([
-        FirebaseService.getUserStats(),
-        timeoutPromise
-      ]);
-      
-      if (stats && typeof stats === 'object') {
-        setUserStats(prevStats => ({
-          ...prevStats,
-          ...stats,
-          displayName: stats.displayName || prevStats?.displayName || 'User',
-          email: stats.email || prevStats?.email || ''
-        }));
-        setIsPremium(!!stats.isPremium);
-      }
-    } catch (error) {
-      console.log('User data error:', error.message);
-    }
-  };
-
-  const loadSettings = async () => {
-    try {
-      const timeoutPromise = new Promise((resolve) => 
-        setTimeout(() => resolve('deepseek'), 500)
-      );
-      
-      const settingsPromise = (async () => {
-        const stats = await FirebaseService.getUserStats();
-        const isPremiumUser = stats?.isPremium || false;
-        return await SecureAIService.getActiveProvider(isPremiumUser);
-      })();
-      
-      const provider = await Promise.race([settingsPromise, timeoutPromise]);
-      setApiProvider(provider || 'deepseek');
-    } catch (error) {
-      console.log('Settings error:', error.message);
-      setApiProvider('deepseek');
-    }
-  };
-
   const handlePremiumUpgrade = () => {
     try {
       navigation.getParent()?.navigate('Premium');
     } catch (error) {
-      Alert.alert('Info', 'Premium upgrade coming soon!');
+      Alert.alert('Info', 'Premium upgrade screen is being loaded...');
     }
   };
 
@@ -181,7 +178,7 @@ const SettingsScreen = ({ navigation }) => {
               await FirebaseService.signOut();
               navigation.getParent()?.replace('Auth');
             } catch (error) {
-              Alert.alert('Error', 'Failed to sign out');
+              Alert.alert('Error', 'Failed to sign out. Please try again.');
             }
           }
         }
@@ -194,7 +191,11 @@ const SettingsScreen = ({ navigation }) => {
       const code = userStats?.referralCode || 'HABITOWL';
       const message = `Check out HabitOwl - the smart habit tracker!\n\nUse code: ${code}\n\nDownload: https://habitowl-app.web.app`;
       
-      await Share.share({ message, title: 'Join me on HabitOwl!' });
+      await Share.share({ 
+        message, 
+        title: 'Join me on HabitOwl!' 
+      });
+      
       await FirebaseService.trackEvent('app_shared', {
         method: 'native_share',
         referral_code: code
@@ -217,7 +218,7 @@ const SettingsScreen = ({ navigation }) => {
       setShowReferralDialog(false);
       setReferralCode('');
       Alert.alert('Success!', 'Referral code applied successfully!');
-      await loadUserData();
+      await loadUserDataSafely();
     } catch (error) {
       Alert.alert('Error', error.message || 'Failed to process referral code');
     }
@@ -236,7 +237,7 @@ const SettingsScreen = ({ navigation }) => {
       try {
         navigation.getParent()?.navigate('Admin');
       } catch (error) {
-        Alert.alert('Error', 'Unable to open Admin screen');
+        Alert.alert('Error', 'Unable to open Admin panel');
       }
     }
   };
@@ -246,13 +247,13 @@ const SettingsScreen = ({ navigation }) => {
   };
 
   const handlePrivacyPolicy = () => {
-    Linking.openURL('https://habitowl-app.web.app/privacy').catch(() => 
+    Linking.openURL('https://habitowl-3405d.web.app/privacy').catch(() => 
       Alert.alert('Error', 'Unable to open privacy policy')
     );
   };
 
   const handleTermsOfService = () => {
-    Linking.openURL('https://habitowl-app.web.app/terms').catch(() => 
+    Linking.openURL('https://habitowl-3405d.web.app/terms').catch(() => 
       Alert.alert('Error', 'Unable to open terms of service')
     );
   };
@@ -290,9 +291,9 @@ const SettingsScreen = ({ navigation }) => {
             </View>
             <View style={styles.userDetails}>
               <Text style={styles.userName}>
-                {user.displayName || userStats?.displayName || 'User'}
+                {userStats.displayName}
               </Text>
-              <Text style={styles.userEmail}>{user.email}</Text>
+              <Text style={styles.userEmail}>{userStats.email}</Text>
               <View style={styles.badgeContainer}>
                 {isPremium && (
                   <View style={styles.premiumBadge}>
@@ -310,28 +311,26 @@ const SettingsScreen = ({ navigation }) => {
             </View>
           </View>
 
-          {userStats && (
-            <View style={styles.statsRow}>
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{userStats.totalHabits || 0}</Text>
-                <Text style={styles.statLabel}>Habits</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{userStats.longestStreak || 0}</Text>
-                <Text style={styles.statLabel}>Best Streak</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{userStats.referralCount || 0}</Text>
-                <Text style={styles.statLabel}>Referrals</Text>
-              </View>
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{userStats.totalHabits || 0}</Text>
+              <Text style={styles.statLabel}>Habits</Text>
             </View>
-          )}
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{userStats.longestStreak || 0}</Text>
+              <Text style={styles.statLabel}>Best Streak</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{userStats.referralCount || 0}</Text>
+              <Text style={styles.statLabel}>Referrals</Text>
+            </View>
+          </View>
         </LinearGradient>
       </Card>
     );
   };
 
-  // ✅ FIXED: Screen renders immediately without loading spinner
+  // ✅ FIXED: Screen renders immediately, even while loading
   return (
     <View style={styles.container}>
       <ScrollView 
@@ -341,7 +340,7 @@ const SettingsScreen = ({ navigation }) => {
       >
         {renderUserInfo()}
 
-        {/* ✅ FIXED: PromoOfferBanner with complete error isolation */}
+        {/* ✅ FIXED: Safe PromoOfferBanner rendering */}
         {!isPremium && !isAdmin && PromoOfferBanner && (
           <View style={styles.promoContainer}>
             <PromoOfferBanner onUpgradePress={handlePremiumUpgrade} />
