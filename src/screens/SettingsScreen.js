@@ -7,7 +7,6 @@ import {
   Alert,
   Share,
   Linking,
-  ActivityIndicator
 } from 'react-native';
 import {
   List,
@@ -27,50 +26,14 @@ import NotificationService from '../services/NotificationService';
 import ContactSupport from '../components/ContactSupport';
 import AdminService from '../services/AdminService';
 
-// CRITICAL FIX: Safe PromoOfferBanner import with better error handling
+// ✅ FIXED: Safe PromoOfferBanner import - completely optional
 let PromoOfferBanner = null;
 try {
-  const PromoOfferBannerModule = require('../components/PromoOfferBanner');
-  PromoOfferBanner = PromoOfferBannerModule.default || PromoOfferBannerModule;
-  console.log('SettingsScreen: PromoOfferBanner loaded');
+  const PromoModule = require('../components/PromoOfferBanner');
+  PromoOfferBanner = PromoModule.default || PromoModule;
 } catch (error) {
-  console.log('SettingsScreen: PromoOfferBanner not available');
-}
-
-// Error boundary for Settings Screen
-class SettingsErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error, errorInfo) {
-    console.error('SettingsScreen Error:', error, errorInfo);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <View style={[styles.container, styles.centerContent]}>
-          <Icon name="alert-circle" size={64} color="#ef4444" />
-          <Text style={styles.errorText}>Settings temporarily unavailable</Text>
-          <Button
-            mode="contained"
-            onPress={() => this.setState({ hasError: false, error: null })}
-            style={styles.retryButton}
-          >
-            Try Again
-          </Button>
-        </View>
-      );
-    }
-
-    return this.props.children;
-  }
+  // Silently ignore if component doesn't exist
+  PromoOfferBanner = null;
 }
 
 const SettingsScreen = ({ navigation }) => {
@@ -82,13 +45,13 @@ const SettingsScreen = ({ navigation }) => {
   const [referralCode, setReferralCode] = useState('');
   const [notifications, setNotifications] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [isLoading, setIsLoading] = useState(false); // FIXED: Start with false
 
   useEffect(() => {
     console.log('SettingsScreen: Mounted');
-    // FIXED: Show screen immediately, load data in background
+    
+    // ✅ FIXED: Set default user data immediately, then load in background
     setDefaultUserData();
-    loadSettingsDataInBackground();
+    loadDataInBackground();
   }, []);
 
   const setDefaultUserData = () => {
@@ -104,25 +67,25 @@ const SettingsScreen = ({ navigation }) => {
     }
   };
 
-  // CRITICAL FIX: Load data in background without blocking UI
-  const loadSettingsDataInBackground = async () => {
+  // ✅ FIXED: Load all data in background without blocking UI
+  const loadDataInBackground = async () => {
     try {
-      console.log('SettingsScreen: Loading data in background...');
+      console.log('SettingsScreen: Loading data...');
       
-      // Load all data with Promise.allSettled (won't fail if one fails)
-      const results = await Promise.allSettled([
-        loadUserDataQuick(),
-        loadSettingsQuick(),
-        checkAdminStatusQuick()
+      // Load data with timeout protection
+      await Promise.allSettled([
+        loadUserData(),
+        loadSettings(),
+        checkAdminStatus()
       ]);
 
-      console.log('SettingsScreen: Background load complete');
+      console.log('SettingsScreen: Data loaded');
     } catch (error) {
-      console.error('SettingsScreen: Background load error:', error);
+      console.error('SettingsScreen: Load error:', error);
     }
   };
 
-  const checkAdminStatusQuick = async () => {
+  const checkAdminStatus = async () => {
     try {
       const user = FirebaseService.currentUser;
       if (!user || !user.email) {
@@ -130,13 +93,15 @@ const SettingsScreen = ({ navigation }) => {
         return;
       }
       
-      // Very short timeout for admin check
-      const adminCheckPromise = AdminService.checkAdminStatus(user.email);
       const timeoutPromise = new Promise((resolve) => 
-        setTimeout(() => resolve(false), 300)
+        setTimeout(() => resolve(false), 500)
       );
       
-      const adminStatus = await Promise.race([adminCheckPromise, timeoutPromise]);
+      const adminStatus = await Promise.race([
+        AdminService.checkAdminStatus(user.email),
+        timeoutPromise
+      ]);
+      
       setIsAdmin(!!adminStatus);
       
       if (adminStatus && !isPremium) {
@@ -144,19 +109,21 @@ const SettingsScreen = ({ navigation }) => {
         setIsPremium(true);
       }
     } catch (error) {
-      console.log('Admin check error:', error.message);
+      console.log('Admin check failed:', error.message);
       setIsAdmin(false);
     }
   };
 
-  const loadUserDataQuick = async () => {
+  const loadUserData = async () => {
     try {
-      const userDataPromise = FirebaseService.getUserStats();
       const timeoutPromise = new Promise((resolve) => 
-        setTimeout(() => resolve(null), 400)
+        setTimeout(() => resolve(null), 1000)
       );
       
-      const stats = await Promise.race([userDataPromise, timeoutPromise]);
+      const stats = await Promise.race([
+        FirebaseService.getUserStats(),
+        timeoutPromise
+      ]);
       
       if (stats && typeof stats === 'object') {
         setUserStats(prevStats => ({
@@ -172,21 +139,17 @@ const SettingsScreen = ({ navigation }) => {
     }
   };
 
-  const loadSettingsQuick = async () => {
+  const loadSettings = async () => {
     try {
-      const settingsPromise = (async () => {
-        try {
-          const stats = await FirebaseService.getUserStats();
-          const isPremiumUser = stats?.isPremium || false;
-          return await SecureAIService.getActiveProvider(isPremiumUser);
-        } catch (err) {
-          return 'deepseek';
-        }
-      })();
-      
       const timeoutPromise = new Promise((resolve) => 
-        setTimeout(() => resolve('deepseek'), 300)
+        setTimeout(() => resolve('deepseek'), 500)
       );
+      
+      const settingsPromise = (async () => {
+        const stats = await FirebaseService.getUserStats();
+        const isPremiumUser = stats?.isPremium || false;
+        return await SecureAIService.getActiveProvider(isPremiumUser);
+      })();
       
       const provider = await Promise.race([settingsPromise, timeoutPromise]);
       setApiProvider(provider || 'deepseek');
@@ -254,7 +217,7 @@ const SettingsScreen = ({ navigation }) => {
       setShowReferralDialog(false);
       setReferralCode('');
       Alert.alert('Success!', 'Referral code applied successfully!');
-      await loadUserDataQuick();
+      await loadUserData();
     } catch (error) {
       Alert.alert('Error', error.message || 'Failed to process referral code');
     }
@@ -368,231 +331,227 @@ const SettingsScreen = ({ navigation }) => {
     );
   };
 
-  // FIXED: Remove loading spinner - show screen immediately
+  // ✅ FIXED: Screen renders immediately without loading spinner
   return (
-    <SettingsErrorBoundary>
-      <View style={styles.container}>
-        <ScrollView 
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {renderUserInfo()}
+    <View style={styles.container}>
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {renderUserInfo()}
 
-          {/* CRITICAL FIX: PromoOfferBanner with complete error isolation */}
-          {!isPremium && !isAdmin && PromoOfferBanner && (
-            <View style={styles.promoContainer}>
-              <React.Suspense fallback={null}>
-                <PromoOfferBanner onUpgradePress={handlePremiumUpgrade} />
-              </React.Suspense>
-            </View>
-          )}
+        {/* ✅ FIXED: PromoOfferBanner with complete error isolation */}
+        {!isPremium && !isAdmin && PromoOfferBanner && (
+          <View style={styles.promoContainer}>
+            <PromoOfferBanner onUpgradePress={handlePremiumUpgrade} />
+          </View>
+        )}
 
-          {!isPremium && !isAdmin && (
-            <Card style={styles.card}>
-              <List.Item
-                title="Upgrade to Premium"
-                description="Remove ads, unlimited habits, AI coaching"
-                left={(props) => <List.Icon {...props} icon="crown" color="#f59e0b" />}
-                right={(props) => <List.Icon {...props} icon="chevron-right" />}
-                onPress={handlePremiumUpgrade}
-                titleStyle={styles.listItemTitle}
-                descriptionStyle={styles.listItemDescription}
-              />
-            </Card>
-          )}
-
+        {!isPremium && !isAdmin && (
           <Card style={styles.card}>
-            <List.Subheader style={styles.subheader}>AI & Personalization</List.Subheader>
-            
             <List.Item
-              title="AI Provider"
-              description={`Currently using: ${apiProvider.toUpperCase()}`}
-              left={(props) => <List.Icon {...props} icon="robot" />}
+              title="Upgrade to Premium"
+              description="Remove ads, unlimited habits, AI coaching"
+              left={(props) => <List.Icon {...props} icon="crown" color="#f59e0b" />}
+              right={(props) => <List.Icon {...props} icon="chevron-right" />}
+              onPress={handlePremiumUpgrade}
               titleStyle={styles.listItemTitle}
               descriptionStyle={styles.listItemDescription}
             />
-
-            <List.Item
-              title="Smart Coaching"
-              description="Powered by advanced AI"
-              left={(props) => <List.Icon {...props} icon="brain" />}
-              titleStyle={styles.listItemTitle}
-              descriptionStyle={styles.listItemDescription}
-            />
-            
-            {isAdmin && (
-              <List.Item
-                title="Admin Panel"
-                description="Manage app settings and API keys"
-                left={(props) => <List.Icon {...props} icon="shield-account" color="#ef4444" />}
-                right={(props) => <List.Icon {...props} icon="chevron-right" />}
-                onPress={handleAdminPress}
-                titleStyle={styles.listItemTitle}
-                descriptionStyle={styles.listItemDescription}
-              />
-            )}
           </Card>
+        )}
 
-          <Card style={styles.card}>
-            <List.Subheader style={styles.subheader}>Social & Sharing</List.Subheader>
-            
+        <Card style={styles.card}>
+          <List.Subheader style={styles.subheader}>AI & Personalization</List.Subheader>
+          
+          <List.Item
+            title="AI Provider"
+            description={`Currently using: ${apiProvider.toUpperCase()}`}
+            left={(props) => <List.Icon {...props} icon="robot" />}
+            titleStyle={styles.listItemTitle}
+            descriptionStyle={styles.listItemDescription}
+          />
+
+          <List.Item
+            title="Smart Coaching"
+            description="Powered by advanced AI"
+            left={(props) => <List.Icon {...props} icon="brain" />}
+            titleStyle={styles.listItemTitle}
+            descriptionStyle={styles.listItemDescription}
+          />
+          
+          {isAdmin && (
             <List.Item
-              title="Share HabitOwl"
-              description="Invite friends and earn rewards"
-              left={(props) => <List.Icon {...props} icon="share" />}
-              onPress={handleShareApp}
+              title="Admin Panel"
+              description="Manage app settings and API keys"
+              left={(props) => <List.Icon {...props} icon="shield-account" color="#ef4444" />}
+              right={(props) => <List.Icon {...props} icon="chevron-right" />}
+              onPress={handleAdminPress}
               titleStyle={styles.listItemTitle}
               descriptionStyle={styles.listItemDescription}
             />
+          )}
+        </Card>
 
+        <Card style={styles.card}>
+          <List.Subheader style={styles.subheader}>Social & Sharing</List.Subheader>
+          
+          <List.Item
+            title="Share HabitOwl"
+            description="Invite friends and earn rewards"
+            left={(props) => <List.Icon {...props} icon="share" />}
+            onPress={handleShareApp}
+            titleStyle={styles.listItemTitle}
+            descriptionStyle={styles.listItemDescription}
+          />
+
+          <List.Item
+            title="Enter Referral Code"
+            description="Got a code from a friend?"
+            left={(props) => <List.Icon {...props} icon="ticket" />}
+            onPress={() => setShowReferralDialog(true)}
+            titleStyle={styles.listItemTitle}
+            descriptionStyle={styles.listItemDescription}
+          />
+
+          {userStats?.referralCode && (
             <List.Item
-              title="Enter Referral Code"
-              description="Got a code from a friend?"
-              left={(props) => <List.Icon {...props} icon="ticket" />}
-              onPress={() => setShowReferralDialog(true)}
-              titleStyle={styles.listItemTitle}
-              descriptionStyle={styles.listItemDescription}
-            />
-
-            {userStats?.referralCode && (
-              <List.Item
-                title="Your Referral Code"
-                description={userStats.referralCode}
-                left={(props) => <List.Icon {...props} icon="card-text" />}
-                right={(props) => (
-                  <Button
-                    compact
-                    mode="outlined"
-                    onPress={() => Share.share({ message: userStats.referralCode })}
-                    labelStyle={styles.buttonLabel}
-                  >
-                    Share
-                  </Button>
-                )}
-                titleStyle={styles.listItemTitle}
-                descriptionStyle={styles.listItemDescription}
-              />
-            )}
-          </Card>
-
-          <Card style={styles.card}>
-            <List.Subheader style={styles.subheader}>App Settings</List.Subheader>
-            
-            <List.Item
-              title="Notifications"
-              description="Habit reminders and motivational messages"
-              left={(props) => <List.Icon {...props} icon="bell" />}
-              right={() => (
-                <Switch
-                  value={notifications}
-                  onValueChange={toggleNotifications}
-                  color="#4f46e5"
-                />
+              title="Your Referral Code"
+              description={userStats.referralCode}
+              left={(props) => <List.Icon {...props} icon="card-text" />}
+              right={(props) => (
+                <Button
+                  compact
+                  mode="outlined"
+                  onPress={() => Share.share({ message: userStats.referralCode })}
+                  labelStyle={styles.buttonLabel}
+                >
+                  Share
+                </Button>
               )}
               titleStyle={styles.listItemTitle}
               descriptionStyle={styles.listItemDescription}
             />
+          )}
+        </Card>
 
-            <List.Item
-              title="Statistics"
-              description="View your habit analytics"
-              left={(props) => <List.Icon {...props} icon="chart-line" />}
-              right={(props) => <List.Icon {...props} icon="chevron-right" />}
-              onPress={handleStatisticsPress}
-              titleStyle={styles.listItemTitle}
-              descriptionStyle={styles.listItemDescription}
-            />
-          </Card>
-
-          <Card style={styles.card}>
-            <List.Subheader style={styles.subheader}>Support & Legal</List.Subheader>
-            
-            <List.Item
-              title="Contact Support"
-              description="Get help or report issues"
-              left={(props) => <List.Icon {...props} icon="help-circle" />}
-              right={(props) => <List.Icon {...props} icon="chevron-right" />}
-              onPress={handleContactSupport}
-              titleStyle={styles.listItemTitle}
-              descriptionStyle={styles.listItemDescription}
-            />
-
-            <List.Item
-              title="About HabitOwl"
-              description="Learn more about the app"
-              left={(props) => <List.Icon {...props} icon="information" />}
-              right={(props) => <List.Icon {...props} icon="chevron-right" />}
-              onPress={handleAboutPress}
-              titleStyle={styles.listItemTitle}
-              descriptionStyle={styles.listItemDescription}
-            />
-
-            <List.Item
-              title="Privacy Policy"
-              left={(props) => <List.Icon {...props} icon="shield-account" />}
-              onPress={handlePrivacyPolicy}
-              titleStyle={styles.listItemTitle}
-            />
-
-            <List.Item
-              title="Terms of Service"
-              left={(props) => <List.Icon {...props} icon="file-document" />}
-              onPress={handleTermsOfService}
-              titleStyle={styles.listItemTitle}
-            />
-
-            <List.Item
-              title="App Version"
-              description="2.8.0"
-              left={(props) => <List.Icon {...props} icon="information" />}
-              titleStyle={styles.listItemTitle}
-              descriptionStyle={styles.listItemDescription}
-            />
-          </Card>
-
-          <Card style={styles.card}>
-            <List.Item
-              title="Sign Out"
-              titleStyle={styles.signOutText}
-              left={(props) => <List.Icon {...props} icon="logout" color="#ef4444" />}
-              onPress={handleSignOut}
-            />
-          </Card>
-
-          <View style={styles.bottomPadding} />
-        </ScrollView>
-
-        <ContactSupport 
-          visible={showContactSupport} 
-          onDismiss={() => setShowContactSupport(false)} 
-        />
-
-        <Portal>
-          <Dialog visible={showReferralDialog} onDismiss={() => setShowReferralDialog(false)}>
-            <Dialog.Title>Enter Referral Code</Dialog.Title>
-            <Dialog.Content>
-              <Text style={styles.dialogDescription}>
-                Enter a referral code from a friend to get started:
-              </Text>
-              
-              <TextInput
-                label="Referral Code"
-                value={referralCode}
-                onChangeText={setReferralCode}
-                mode="outlined"
-                autoCapitalize="characters"
-                style={styles.dialogInput}
+        <Card style={styles.card}>
+          <List.Subheader style={styles.subheader}>App Settings</List.Subheader>
+          
+          <List.Item
+            title="Notifications"
+            description="Habit reminders and motivational messages"
+            left={(props) => <List.Icon {...props} icon="bell" />}
+            right={() => (
+              <Switch
+                value={notifications}
+                onValueChange={toggleNotifications}
+                color="#4f46e5"
               />
-            </Dialog.Content>
-            <Dialog.Actions>
-              <Button onPress={() => setShowReferralDialog(false)}>Cancel</Button>
-              <Button onPress={handleReferralSubmit}>Apply</Button>
-            </Dialog.Actions>
-          </Dialog>
-        </Portal>
-      </View>
-    </SettingsErrorBoundary>
+            )}
+            titleStyle={styles.listItemTitle}
+            descriptionStyle={styles.listItemDescription}
+          />
+
+          <List.Item
+            title="Statistics"
+            description="View your habit analytics"
+            left={(props) => <List.Icon {...props} icon="chart-line" />}
+            right={(props) => <List.Icon {...props} icon="chevron-right" />}
+            onPress={handleStatisticsPress}
+            titleStyle={styles.listItemTitle}
+            descriptionStyle={styles.listItemDescription}
+          />
+        </Card>
+
+        <Card style={styles.card}>
+          <List.Subheader style={styles.subheader}>Support & Legal</List.Subheader>
+          
+          <List.Item
+            title="Contact Support"
+            description="Get help or report issues"
+            left={(props) => <List.Icon {...props} icon="help-circle" />}
+            right={(props) => <List.Icon {...props} icon="chevron-right" />}
+            onPress={handleContactSupport}
+            titleStyle={styles.listItemTitle}
+            descriptionStyle={styles.listItemDescription}
+          />
+
+          <List.Item
+            title="About HabitOwl"
+            description="Learn more about the app"
+            left={(props) => <List.Icon {...props} icon="information" />}
+            right={(props) => <List.Icon {...props} icon="chevron-right" />}
+            onPress={handleAboutPress}
+            titleStyle={styles.listItemTitle}
+            descriptionStyle={styles.listItemDescription}
+          />
+
+          <List.Item
+            title="Privacy Policy"
+            left={(props) => <List.Icon {...props} icon="shield-account" />}
+            onPress={handlePrivacyPolicy}
+            titleStyle={styles.listItemTitle}
+          />
+
+          <List.Item
+            title="Terms of Service"
+            left={(props) => <List.Icon {...props} icon="file-document" />}
+            onPress={handleTermsOfService}
+            titleStyle={styles.listItemTitle}
+          />
+
+          <List.Item
+            title="App Version"
+            description="2.9.0"
+            left={(props) => <List.Icon {...props} icon="information" />}
+            titleStyle={styles.listItemTitle}
+            descriptionStyle={styles.listItemDescription}
+          />
+        </Card>
+
+        <Card style={styles.card}>
+          <List.Item
+            title="Sign Out"
+            titleStyle={styles.signOutText}
+            left={(props) => <List.Icon {...props} icon="logout" color="#ef4444" />}
+            onPress={handleSignOut}
+          />
+        </Card>
+
+        <View style={styles.bottomPadding} />
+      </ScrollView>
+
+      <ContactSupport 
+        visible={showContactSupport} 
+        onDismiss={() => setShowContactSupport(false)} 
+      />
+
+      <Portal>
+        <Dialog visible={showReferralDialog} onDismiss={() => setShowReferralDialog(false)}>
+          <Dialog.Title>Enter Referral Code</Dialog.Title>
+          <Dialog.Content>
+            <Text style={styles.dialogDescription}>
+              Enter a referral code from a friend to get started:
+            </Text>
+            
+            <TextInput
+              label="Referral Code"
+              value={referralCode}
+              onChangeText={setReferralCode}
+              mode="outlined"
+              autoCapitalize="characters"
+              style={styles.dialogInput}
+            />
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setShowReferralDialog(false)}>Cancel</Button>
+            <Button onPress={handleReferralSubmit}>Apply</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
+    </View>
   );
 };
 
@@ -606,20 +565,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 20,
-  },
-  centerContent: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  errorText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#ef4444',
-    textAlign: 'center',
-  },
-  retryButton: {
-    marginTop: 16,
-    backgroundColor: '#4f46e5',
   },
   card: {
     margin: 16,

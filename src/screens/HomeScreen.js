@@ -28,25 +28,13 @@ const HomeScreen = ({ navigation, route }) => {
   const [todayCompletions, setTodayCompletions] = useState(new Set());
   const [motivationalMessage, setMotivationalMessage] = useState('');
   const [fadeAnim] = useState(new Animated.Value(0));
-  const [renderKey, setRenderKey] = useState(0);
 
-  // 🔧 FIX: Listen to route params changes
-  useEffect(() => {
-    if (route.params?.refresh) {
-      console.log('🔄 Refresh param detected, reloading habits...');
-      loadHabits(true);
-      
-      // Clear the param to prevent repeated reloads
-      navigation.setParams({ refresh: undefined });
-    }
-  }, [route.params?.refresh, route.params?.timestamp]);
-
-  // 🔧 FIX: Reload habits on screen focus
+  // ✅ FIXED: Reload on screen focus - removed cache dependency
   useFocusEffect(
     useCallback(() => {
-      console.log('🔄 HomeScreen FOCUSED - Loading habits...');
+      console.log('🔄 HomeScreen FOCUSED - Reloading habits...');
       
-      // Force reload immediately
+      // Always reload when screen is focused
       loadHabits(true);
       
       // Animate screen entrance
@@ -56,41 +44,36 @@ const HomeScreen = ({ navigation, route }) => {
         useNativeDriver: true,
       }).start();
 
-      // Cleanup on screen blur
       return () => {
         console.log('👋 HomeScreen BLURRED');
         fadeAnim.setValue(0);
       };
-    }, []) // Empty deps = runs on EVERY focus/blur
+    }, []) // Empty deps = runs every time screen is focused
   );
 
   const loadHabits = async (forceReload = false) => {
     try {
       if (forceReload) {
-        console.log('🔄 Force reload triggered');
         setLoading(true);
       }
       
       console.log('📱 Fetching habits from Firebase...');
       
-      // 🔧 FIX: Always get fresh data from server
+      // ✅ FIXED: Always fetch fresh data from server
       const userHabits = await FirebaseService.getUserHabits(true);
       
       console.log(`✅ Loaded ${userHabits ? userHabits.length : 0} habits`);
       
       if (userHabits && Array.isArray(userHabits)) {
-        // 🔧 FIX: Create new array reference to force React re-render
-        const habitsArray = [...userHabits];
-        console.log('📝 Setting habits:', habitsArray.map(h => h.name).join(', '));
+        console.log('📝 Setting habits:', userHabits.map(h => h.name).join(', '));
         
-        setHabits(habitsArray);
-        setRenderKey(prev => prev + 1); // Force re-render
+        setHabits(userHabits);
         
-        // Check completions
+        // Check today's completions
         const today = new Date().toDateString();
         const completedToday = new Set();
         
-        habitsArray.forEach(habit => {
+        userHabits.forEach(habit => {
           if (habit.completions && habit.completions.includes(today)) {
             completedToday.add(habit.id);
           }
@@ -99,13 +82,13 @@ const HomeScreen = ({ navigation, route }) => {
         setTodayCompletions(completedToday);
         
         // Load motivational message
-        if (habitsArray.length > 0) {
-          loadMotivationalMessage(habitsArray, completedToday);
+        if (userHabits.length > 0) {
+          loadMotivationalMessage(userHabits, completedToday);
         } else {
           setMotivationalMessage('');
         }
       } else {
-        console.log('⚠️ No habits or invalid data, setting empty array');
+        console.log('⚠️ No habits found, setting empty array');
         setHabits([]);
         setTodayCompletions(new Set());
         setMotivationalMessage('');
@@ -114,12 +97,10 @@ const HomeScreen = ({ navigation, route }) => {
     } catch (error) {
       console.error('❌ Error loading habits:', error);
       
-      // Set empty state on error
       setHabits([]);
       setTodayCompletions(new Set());
       setMotivationalMessage('');
       
-      // Show error alert for critical issues
       if (error.message && error.message.includes('network')) {
         Alert.alert(
           'Connection Issue',
@@ -322,7 +303,6 @@ const HomeScreen = ({ navigation, route }) => {
       {renderHeader()}
       
       <ScrollView
-        key={renderKey}
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
         refreshControl={
@@ -364,7 +344,7 @@ const HomeScreen = ({ navigation, route }) => {
             <Text style={styles.sectionTitle}>Your Habits ({habits.length})</Text>
             {habits.map((habit, index) => (
               <HabitCard
-                key={`${habit.id}-${renderKey}-${index}`}
+                key={`${habit.id}-${index}`}
                 habit={habit}
                 isCompleted={todayCompletions.has(habit.id)}
                 onComplete={handleHabitComplete}
