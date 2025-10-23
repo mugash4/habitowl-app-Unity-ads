@@ -25,7 +25,7 @@ import FirebaseService from '../services/FirebaseService';
 import NotificationService from '../services/NotificationService';
 
 const EditHabitScreen = ({ navigation, route }) => {
-  const { habit } = route.params;
+  const { habit, onGoBack } = route.params;
   const scrollViewRef = useRef(null);
   
   const [habitName, setHabitName] = useState(habit.name || '');
@@ -122,18 +122,27 @@ const EditHabitScreen = ({ navigation, route }) => {
         console.error('Tracking error:', trackError);
       }
 
-      // 🔧 FIX: Navigate back immediately, then show success message
+      // 🔧 FIX: Wait for Firestore to sync, then navigate back
+      console.log('⏳ Waiting for Firestore sync...');
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // 🔧 FIX: Call onGoBack callback to force HomeScreen reload
+      if (onGoBack) {
+        onGoBack();
+      }
+      
+      // Navigate back
       console.log('🔧 Navigating back to Home screen...');
       navigation.goBack();
       
-      // Show success message after navigation starts
+      // Show success message after navigation
       setTimeout(() => {
         Alert.alert(
           'Success! ✅',
           `"${habitName}" has been updated!`,
           [{ text: 'OK' }]
         );
-      }, 500);
+      }, 300);
 
     } catch (error) {
       console.error('❌ Update habit error:', error);
@@ -162,12 +171,20 @@ const EditHabitScreen = ({ navigation, route }) => {
               
               console.log('✅ Habit deleted successfully');
               
-              // 🔧 FIX: Navigate back immediately, then show success message
+              // 🔧 FIX: Wait for Firestore sync
+              await new Promise(resolve => setTimeout(resolve, 500));
+              
+              // 🔧 FIX: Call onGoBack callback
+              if (onGoBack) {
+                onGoBack();
+              }
+              
+              // Navigate back
               navigation.goBack();
               
               setTimeout(() => {
                 Alert.alert('Deleted', 'Habit has been deleted successfully');
-              }, 500);
+              }, 300);
               
             } catch (error) {
               console.error('❌ Delete habit error:', error);
@@ -205,7 +222,13 @@ const EditHabitScreen = ({ navigation, route }) => {
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
       <Appbar.Header style={styles.appbar}>
-        <Appbar.BackAction onPress={() => navigation.goBack()} color="#ffffff" />
+        <Appbar.BackAction onPress={() => {
+          // 🔧 FIX: Call onGoBack even when using back button
+          if (onGoBack) {
+            onGoBack();
+          }
+          navigation.goBack();
+        }} color="#ffffff" />
         <Appbar.Content title="Edit Habit" titleStyle={styles.headerTitle} />
         <Appbar.Action 
           icon="delete" 

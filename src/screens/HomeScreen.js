@@ -28,30 +28,46 @@ const HomeScreen = ({ navigation, route }) => {
   const [todayCompletions, setTodayCompletions] = useState(new Set());
   const [motivationalMessage, setMotivationalMessage] = useState('');
   const [fadeAnim] = useState(new Animated.Value(0));
+  const [screenKey, setScreenKey] = useState(0); // 🔧 FIX: Force refresh key
 
-  // ✅ FIXED: Reload on screen focus - removed cache dependency
+  // ✅ FIXED: Always reload on screen focus with proper cleanup
   useFocusEffect(
     useCallback(() => {
       console.log('🔄 HomeScreen FOCUSED - Reloading habits...');
       
-      // Always reload when screen is focused
-      loadHabits(true);
+      let isActive = true; // Flag to prevent state updates after unmount
       
-      // Animate screen entrance
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }).start();
-
+      // Force a fresh reload
+      const reloadData = async () => {
+        try {
+          await loadHabits(true, isActive);
+          
+          // Animate screen entrance
+          if (isActive) {
+            Animated.timing(fadeAnim, {
+              toValue: 1,
+              duration: 500,
+              useNativeDriver: true,
+            }).start();
+          }
+        } catch (error) {
+          console.error('Error reloading habits:', error);
+        }
+      };
+      
+      reloadData();
+      
+      // Cleanup function
       return () => {
-        console.log('👋 HomeScreen BLURRED');
+        console.log('👋 HomeScreen BLURRED - Cleaning up');
+        isActive = false;
         fadeAnim.setValue(0);
       };
-    }, []) // Empty deps = runs every time screen is focused
+    }, [screenKey]) // 🔧 FIX: Depend on screenKey to force reload
   );
 
-  const loadHabits = async (forceReload = false) => {
+  // ✅ FIXED: Enhanced loadHabits with proper state management
+  const loadHabits = async (forceReload = false, isActive = true) => {
     try {
       if (forceReload) {
         setLoading(true);
@@ -59,8 +75,15 @@ const HomeScreen = ({ navigation, route }) => {
       
       console.log('📱 Fetching habits from Firebase...');
       
-      // ✅ FIXED: Always fetch fresh data from server
+      // ✅ FIXED: Always fetch fresh data with a small delay to ensure Firestore sync
+      await new Promise(resolve => setTimeout(resolve, 300));
       const userHabits = await FirebaseService.getUserHabits(true);
+      
+      // Only update state if component is still active
+      if (!isActive) {
+        console.log('⚠️ Component unmounted, skipping state update');
+        return;
+      }
       
       console.log(`✅ Loaded ${userHabits ? userHabits.length : 0} habits`);
       
@@ -97,23 +120,28 @@ const HomeScreen = ({ navigation, route }) => {
     } catch (error) {
       console.error('❌ Error loading habits:', error);
       
-      setHabits([]);
-      setTodayCompletions(new Set());
-      setMotivationalMessage('');
-      
-      if (error.message && error.message.includes('network')) {
-        Alert.alert(
-          'Connection Issue',
-          'Please check your internet connection and try again.',
-          [
-            { text: 'Retry', onPress: () => loadHabits(true) },
-            { text: 'Cancel', style: 'cancel' }
-          ]
-        );
+      // Only update state if component is still active
+      if (isActive) {
+        setHabits([]);
+        setTodayCompletions(new Set());
+        setMotivationalMessage('');
+        
+        if (error.message && error.message.includes('network')) {
+          Alert.alert(
+            'Connection Issue',
+            'Please check your internet connection and try again.',
+            [
+              { text: 'Retry', onPress: () => loadHabits(true) },
+              { text: 'Cancel', style: 'cancel' }
+            ]
+          );
+        }
       }
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (isActive) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   };
 
@@ -145,6 +173,7 @@ const HomeScreen = ({ navigation, route }) => {
   const onRefresh = async () => {
     console.log('🔄 Manual refresh triggered');
     setRefreshing(true);
+    setScreenKey(prev => prev + 1); // Force reload
     await loadHabits(true);
   };
 
@@ -176,10 +205,12 @@ const HomeScreen = ({ navigation, route }) => {
       setTodayCompletions(newCompletions);
       
       // Reload habits to get updated data
+      setScreenKey(prev => prev + 1); // Force reload
       await loadHabits(true);
       
     } catch (error) {
       Alert.alert('Error', error.message);
+      setScreenKey(prev => prev + 1); // Force reload even on error
       await loadHabits(true);
     }
   };
@@ -190,12 +221,20 @@ const HomeScreen = ({ navigation, route }) => {
   };
 
   const handleEditHabit = (habit) => {
-    navigation.navigate('EditHabit', { habit });
+    navigation.navigate('EditHabit', { 
+      habit,
+      onGoBack: () => {
+        // 🔧 FIX: Force reload when returning from edit
+        console.log('🔄 Returned from EditHabit - forcing reload');
+        setScreenKey(prev => prev + 1);
+      }
+    });
   };
 
   const handleDeleteHabit = async (habitId) => {
     try {
       await FirebaseService.deleteHabit(habitId);
+      setScreenKey(prev => prev + 1); // Force reload
       await loadHabits(true);
     } catch (error) {
       Alert.alert('Error', 'Failed to delete habit');
@@ -299,7 +338,7 @@ const HomeScreen = ({ navigation, route }) => {
   }
 
   return (
-    <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
+    <Animated.View style={[styles.container, { opacity: fadeAnim }]} key={screenKey}>
       {renderHeader()}
       
       <ScrollView
@@ -344,7 +383,7 @@ const HomeScreen = ({ navigation, route }) => {
             <Text style={styles.sectionTitle}>Your Habits ({habits.length})</Text>
             {habits.map((habit, index) => (
               <HabitCard
-                key={`${habit.id}-${index}`}
+                key={`${habit.id}-${index}-${screenKey}`}
                 habit={habit}
                 isCompleted={todayCompletions.has(habit.id)}
                 onComplete={handleHabitComplete}

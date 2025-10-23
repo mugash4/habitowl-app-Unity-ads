@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Provider as PaperProvider } from 'react-native-paper';
+import { Provider as PaperProvider, MD3LightTheme } from 'react-native-paper';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 // Screens
@@ -25,8 +25,11 @@ import AdminService from '../services/AdminService';
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
+// ✅ FIXED: Properly extend MD3LightTheme instead of creating theme from scratch
 const theme = {
+  ...MD3LightTheme,
   colors: {
+    ...MD3LightTheme.colors,
     primary: '#4f46e5',
     accent: '#7c3aed',
     background: '#f8fafc',
