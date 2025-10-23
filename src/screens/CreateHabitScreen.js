@@ -104,7 +104,7 @@ const CreateHabitScreen = ({ navigation, route }) => {
     return true;
   };
 
-  // 🔧 FIXED: Improved handleCreateHabit with better navigation
+  // 🔧 FIXED: Complete fix for habit creation and navigation
   const handleCreateHabit = async () => {
     if (!validateForm()) return;
 
@@ -128,18 +128,15 @@ const CreateHabitScreen = ({ navigation, route }) => {
 
       console.log('✅ Creating habit with data:', habitData.name);
       
-      // 🔧 FIXED: Create habit and get the result
+      // 🔧 FIXED: Create habit and wait for completion
       const newHabit = await FirebaseService.createHabit(habitData);
       console.log('✅ Habit created successfully with ID:', newHabit.id);
 
-      // Schedule reminder if enabled
+      // Schedule reminder if enabled (don't block navigation)
       if (reminderEnabled) {
-        try {
-          await NotificationService.scheduleHabitReminder(newHabit);
-          console.log('✅ Reminder scheduled');
-        } catch (reminderError) {
-          console.error('⚠️ Reminder error:', reminderError);
-        }
+        NotificationService.scheduleHabitReminder(newHabit).catch(err => {
+          console.error('⚠️ Reminder error:', err);
+        });
       }
 
       // Track event (don't wait for this)
@@ -149,26 +146,38 @@ const CreateHabitScreen = ({ navigation, route }) => {
         has_reminder: reminderEnabled
       }).catch(err => console.error('⚠️ Tracking error:', err));
 
-      // 🔧 FIXED: Navigate with a flag to trigger refresh
-      console.log('🔄 Navigating back to Home screen...');
+      // 🔧 FIXED: Navigate back with refresh parameters
+      console.log('🔄 Navigating back to Home with refresh...');
       
-      // Navigate back and pass a refresh flag
-      navigation.navigate('Main', {
-        screen: 'Home',
-        params: {
-          refresh: true,
-          timestamp: Date.now() // Unique value to force update
-        }
+      // Use replace to ensure proper navigation
+      navigation.reset({
+        index: 0,
+        routes: [
+          {
+            name: 'Main',
+            state: {
+              routes: [
+                {
+                  name: 'Home',
+                  params: {
+                    refresh: true,
+                    timestamp: Date.now(),
+                  },
+                },
+              ],
+            },
+          },
+        ],
       });
       
-      // Show success message after a short delay
+      // Show success message after navigation
       setTimeout(() => {
         Alert.alert(
           '🎉 Success!',
           `"${habitName}" has been added to your habits!`,
           [{ text: 'Great!' }]
         );
-      }, 400);
+      }, 300);
 
     } catch (error) {
       console.error('❌ Create habit error:', error);

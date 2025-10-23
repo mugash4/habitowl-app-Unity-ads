@@ -28,9 +28,20 @@ const HomeScreen = ({ navigation, route }) => {
   const [todayCompletions, setTodayCompletions] = useState(new Set());
   const [motivationalMessage, setMotivationalMessage] = useState('');
   const [fadeAnim] = useState(new Animated.Value(0));
-  const [renderKey, setRenderKey] = useState(0); // 🔧 FIX: Force component re-render
+  const [renderKey, setRenderKey] = useState(0);
 
-  // 🔧 FIX: Reload habits on EVERY screen focus (including tab navigation)
+  // 🔧 FIX: Listen to route params changes
+  useEffect(() => {
+    if (route.params?.refresh) {
+      console.log('🔄 Refresh param detected, reloading habits...');
+      loadHabits(true);
+      
+      // Clear the param to prevent repeated reloads
+      navigation.setParams({ refresh: undefined });
+    }
+  }, [route.params?.refresh, route.params?.timestamp]);
+
+  // 🔧 FIX: Reload habits on screen focus
   useFocusEffect(
     useCallback(() => {
       console.log('🔄 HomeScreen FOCUSED - Loading habits...');
@@ -53,16 +64,6 @@ const HomeScreen = ({ navigation, route }) => {
     }, []) // Empty deps = runs on EVERY focus/blur
   );
 
-  // 🔧 FIX: Also listen to navigation events for tab changes
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('tabPress', (e) => {
-      console.log('📍 Tab pressed - Reloading habits');
-      loadHabits(true);
-    });
-
-    return unsubscribe;
-  }, [navigation]);
-
   const loadHabits = async (forceReload = false) => {
     try {
       if (forceReload) {
@@ -72,7 +73,7 @@ const HomeScreen = ({ navigation, route }) => {
       
       console.log('📱 Fetching habits from Firebase...');
       
-      // 🔧 FIX: Always get fresh data
+      // 🔧 FIX: Always get fresh data from server
       const userHabits = await FirebaseService.getUserHabits(true);
       
       console.log(`✅ Loaded ${userHabits ? userHabits.length : 0} habits`);
@@ -321,7 +322,7 @@ const HomeScreen = ({ navigation, route }) => {
       {renderHeader()}
       
       <ScrollView
-        key={renderKey} // 🔧 FIX: Force ScrollView re-render
+        key={renderKey}
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
         refreshControl={
@@ -363,7 +364,7 @@ const HomeScreen = ({ navigation, route }) => {
             <Text style={styles.sectionTitle}>Your Habits ({habits.length})</Text>
             {habits.map((habit, index) => (
               <HabitCard
-                key={`${habit.id}-${renderKey}-${index}`} // 🔧 FIX: Unique key with render index
+                key={`${habit.id}-${renderKey}-${index}`}
                 habit={habit}
                 isCompleted={todayCompletions.has(habit.id)}
                 onComplete={handleHabitComplete}

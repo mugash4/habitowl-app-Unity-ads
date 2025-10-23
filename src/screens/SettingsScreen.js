@@ -28,13 +28,17 @@ import NotificationService from '../services/NotificationService';
 import ContactSupport from '../components/ContactSupport';
 import AdminService from '../services/AdminService';
 
-// CRITICAL FIX: Safe import of PromoOfferBanner
+
+// FIXED: Improved PromoOfferBanner import
 let PromoOfferBanner = null;
-try {
-  PromoOfferBanner = require('../components/PromoOfferBanner').default;
-} catch (error) {
-  console.log('SettingsScreen: PromoOfferBanner not available:', error.message);
-}
+  try {
+    const PromoOfferBannerModule = require('../components/PromoOfferBanner');
+    PromoOfferBanner = PromoOfferBannerModule.default || PromoOfferBannerModule;
+    console.log('SettingsScreen: PromoOfferBanner loaded successfully');
+  } catch (error) {
+    console.error('SettingsScreen: Failed to load PromoOfferBanner:', error);
+  }
+
 
 // CRITICAL FIX: Error boundary for Settings Screen
 class SettingsErrorBoundary extends React.Component {
@@ -392,10 +396,13 @@ const SettingsScreen = ({ navigation }) => {
         >
           {renderUserInfo()}
 
-          {/* CRITICAL FIX: Safe PromoOfferBanner rendering */}
+          {/* FIXED: PromoOfferBanner with error handling */}
           {!isPremium && !isAdmin && PromoOfferBanner && (
-            <PromoOfferBanner onUpgradePress={handlePremiumUpgrade} />
+            <View style={styles.promoContainer}>
+              <PromoOfferBanner onUpgradePress={handlePremiumUpgrade} />
+            </View>
           )}
+
 
           {!isPremium && !isAdmin && (
             <Card style={styles.card}>
@@ -749,6 +756,9 @@ const styles = StyleSheet.create({
   },
   bottomPadding: {
     height: 20,
+  },
+  promoContainer: {
+    marginBottom: 8,
   },
 });
 

@@ -25,6 +25,8 @@ try {
 
 class PromoService {
   constructor() {
+    console.log('PromoService: Initializing...');
+    
     this.PROMO_TEMPLATES = [
       {
         title: "🔥 Weekend Flash Sale!",
@@ -62,13 +64,20 @@ class PromoService {
         type: "accelerator"
       },
       {
-        title: "🚀 New Year, New You!",
-        description: "Transform your life with Premium! Special offer: 60% OFF - Biggest discount ever!",
+        title: "🚀 Transform Your Life!",
+        description: "Start building better habits today with Premium! Special offer: 60% OFF - Biggest discount ever!",
         discount: "60% OFF",
         durationDays: 7,
         type: "new_year"
       }
     ];
+    
+    // Auto-initialize with delay (non-blocking)
+    setTimeout(() => {
+      this.initializePromoSystem().catch(err => {
+        console.log('PromoService: Background init failed (non-critical):', err.message);
+      });
+    }, 3000);
   }
 
   async initializePromoSystem() {
