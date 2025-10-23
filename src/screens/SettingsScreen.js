@@ -22,25 +22,22 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 import FirebaseService from '../services/FirebaseService';
-import AdService from '../services/AdService';
 import SecureAIService from '../services/SecureAIService';
 import NotificationService from '../services/NotificationService';
 import ContactSupport from '../components/ContactSupport';
 import AdminService from '../services/AdminService';
 
-
-// FIXED: Improved PromoOfferBanner import
+// CRITICAL FIX: Safe PromoOfferBanner import with better error handling
 let PromoOfferBanner = null;
-  try {
-    const PromoOfferBannerModule = require('../components/PromoOfferBanner');
-    PromoOfferBanner = PromoOfferBannerModule.default || PromoOfferBannerModule;
-    console.log('SettingsScreen: PromoOfferBanner loaded successfully');
-  } catch (error) {
-    console.error('SettingsScreen: Failed to load PromoOfferBanner:', error);
-  }
+try {
+  const PromoOfferBannerModule = require('../components/PromoOfferBanner');
+  PromoOfferBanner = PromoOfferBannerModule.default || PromoOfferBannerModule;
+  console.log('SettingsScreen: PromoOfferBanner loaded');
+} catch (error) {
+  console.log('SettingsScreen: PromoOfferBanner not available');
+}
 
-
-// CRITICAL FIX: Error boundary for Settings Screen
+// Error boundary for Settings Screen
 class SettingsErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -52,7 +49,7 @@ class SettingsErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error('SettingsScreen Error Boundary:', error, errorInfo);
+    console.error('SettingsScreen Error:', error, errorInfo);
   }
 
   render() {
@@ -85,53 +82,47 @@ const SettingsScreen = ({ navigation }) => {
   const [referralCode, setReferralCode] = useState('');
   const [notifications, setNotifications] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false); // FIXED: Start with false
 
   useEffect(() => {
-    console.log('SettingsScreen: Component mounted');
-    loadSettingsData();
-  }, []);
-
-  const loadSettingsData = async () => {
-    console.log('SettingsScreen: Starting data load...');
-    
-    // Set default data IMMEDIATELY
+    console.log('SettingsScreen: Mounted');
+    // FIXED: Show screen immediately, load data in background
     setDefaultUserData();
-    
-    // CRITICAL FIX: Force stop loading after 800ms - MUST show screen
-    const loadingTimeout = setTimeout(() => {
-      console.log('SettingsScreen: Force stopping loading');
-      setIsLoading(false);
-    }, 800);
-
-    try {
-      // Load data with very short timeouts
-      await Promise.allSettled([
-        loadUserData().catch(e => console.log('User data error:', e.message)),
-        loadSettings().catch(e => console.log('Settings error:', e.message)),
-        checkAdminStatus().catch(e => console.log('Admin check error:', e.message))
-      ]);
-    } catch (error) {
-      console.error('SettingsScreen: Load error:', error);
-    } finally {
-      clearTimeout(loadingTimeout);
-      setIsLoading(false);
-    }
-  };
+    loadSettingsDataInBackground();
+  }, []);
 
   const setDefaultUserData = () => {
     const user = FirebaseService.currentUser;
-    setUserStats({
-      displayName: user?.displayName || 'User',
-      email: user?.email || '',
-      totalHabits: 0,
-      longestStreak: 0,
-      referralCount: 0
-    });
-    setIsPremium(false);
+    if (user) {
+      setUserStats({
+        displayName: user.displayName || 'User',
+        email: user.email || '',
+        totalHabits: 0,
+        longestStreak: 0,
+        referralCount: 0
+      });
+    }
   };
 
-  const checkAdminStatus = async () => {
+  // CRITICAL FIX: Load data in background without blocking UI
+  const loadSettingsDataInBackground = async () => {
+    try {
+      console.log('SettingsScreen: Loading data in background...');
+      
+      // Load all data with Promise.allSettled (won't fail if one fails)
+      const results = await Promise.allSettled([
+        loadUserDataQuick(),
+        loadSettingsQuick(),
+        checkAdminStatusQuick()
+      ]);
+
+      console.log('SettingsScreen: Background load complete');
+    } catch (error) {
+      console.error('SettingsScreen: Background load error:', error);
+    }
+  };
+
+  const checkAdminStatusQuick = async () => {
     try {
       const user = FirebaseService.currentUser;
       if (!user || !user.email) {
@@ -139,9 +130,10 @@ const SettingsScreen = ({ navigation }) => {
         return;
       }
       
+      // Very short timeout for admin check
       const adminCheckPromise = AdminService.checkAdminStatus(user.email);
       const timeoutPromise = new Promise((resolve) => 
-        setTimeout(() => resolve(false), 400)
+        setTimeout(() => resolve(false), 300)
       );
       
       const adminStatus = await Promise.race([adminCheckPromise, timeoutPromise]);
@@ -152,16 +144,16 @@ const SettingsScreen = ({ navigation }) => {
         setIsPremium(true);
       }
     } catch (error) {
-      console.error('SettingsScreen: Admin check error:', error);
+      console.log('Admin check error:', error.message);
       setIsAdmin(false);
     }
   };
 
-  const loadUserData = async () => {
+  const loadUserDataQuick = async () => {
     try {
       const userDataPromise = FirebaseService.getUserStats();
       const timeoutPromise = new Promise((resolve) => 
-        setTimeout(() => resolve(null), 600)
+        setTimeout(() => resolve(null), 400)
       );
       
       const stats = await Promise.race([userDataPromise, timeoutPromise]);
@@ -176,11 +168,11 @@ const SettingsScreen = ({ navigation }) => {
         setIsPremium(!!stats.isPremium);
       }
     } catch (error) {
-      console.error('SettingsScreen: User data error:', error);
+      console.log('User data error:', error.message);
     }
   };
 
-  const loadSettings = async () => {
+  const loadSettingsQuick = async () => {
     try {
       const settingsPromise = (async () => {
         try {
@@ -193,13 +185,13 @@ const SettingsScreen = ({ navigation }) => {
       })();
       
       const timeoutPromise = new Promise((resolve) => 
-        setTimeout(() => resolve('deepseek'), 400)
+        setTimeout(() => resolve('deepseek'), 300)
       );
       
       const provider = await Promise.race([settingsPromise, timeoutPromise]);
       setApiProvider(provider || 'deepseek');
     } catch (error) {
-      console.error('SettingsScreen: Settings error:', error);
+      console.log('Settings error:', error.message);
       setApiProvider('deepseek');
     }
   };
@@ -262,7 +254,7 @@ const SettingsScreen = ({ navigation }) => {
       setShowReferralDialog(false);
       setReferralCode('');
       Alert.alert('Success!', 'Referral code applied successfully!');
-      await loadUserData();
+      await loadUserDataQuick();
     } catch (error) {
       Alert.alert('Error', error.message || 'Failed to process referral code');
     }
@@ -376,16 +368,7 @@ const SettingsScreen = ({ navigation }) => {
     );
   };
 
-  // CRITICAL FIX: Show screen even while loading
-  if (isLoading) {
-    return (
-      <View style={[styles.container, styles.centerContent]}>
-        <ActivityIndicator size="large" color="#4f46e5" />
-        <Text style={styles.loadingText}>Loading settings...</Text>
-      </View>
-    );
-  }
-
+  // FIXED: Remove loading spinner - show screen immediately
   return (
     <SettingsErrorBoundary>
       <View style={styles.container}>
@@ -396,13 +379,14 @@ const SettingsScreen = ({ navigation }) => {
         >
           {renderUserInfo()}
 
-          {/* FIXED: PromoOfferBanner with error handling */}
+          {/* CRITICAL FIX: PromoOfferBanner with complete error isolation */}
           {!isPremium && !isAdmin && PromoOfferBanner && (
             <View style={styles.promoContainer}>
-              <PromoOfferBanner onUpgradePress={handlePremiumUpgrade} />
+              <React.Suspense fallback={null}>
+                <PromoOfferBanner onUpgradePress={handlePremiumUpgrade} />
+              </React.Suspense>
             </View>
           )}
-
 
           {!isPremium && !isAdmin && (
             <Card style={styles.card}>
@@ -626,11 +610,6 @@ const styles = StyleSheet.create({
   centerContent: {
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#6b7280',
   },
   errorText: {
     marginTop: 16,

@@ -11,7 +11,7 @@ import { Card, Button, Chip } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
-// Safe service imports with fallbacks
+// Safe service imports
 let PromoService = null;
 let FirebaseService = null;
 
@@ -19,17 +19,17 @@ try {
   const PromoServiceModule = require('../services/PromoService');
   PromoService = PromoServiceModule.default || PromoServiceModule;
 } catch (error) {
-  console.log('PromoOfferBanner: PromoService not available:', error.message);
+  console.log('PromoOfferBanner: PromoService not available');
 }
 
 try {
   const FirebaseServiceModule = require('../services/FirebaseService');
   FirebaseService = FirebaseServiceModule.default || FirebaseServiceModule;
 } catch (error) {
-  console.log('PromoOfferBanner: FirebaseService not available:', error.message);
+  console.log('PromoOfferBanner: FirebaseService not available');
 }
 
-// Error boundary component
+// Error boundary
 class PromoOfferBannerErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -37,17 +37,17 @@ class PromoOfferBannerErrorBoundary extends React.Component {
   }
 
   static getDerivedStateFromError(error) {
-    console.log('PromoOfferBanner error boundary:', error.message);
+    console.log('PromoOfferBanner error:', error.message);
     return { hasError: true };
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error('PromoOfferBanner component error:', error, errorInfo);
+    console.error('PromoOfferBanner error:', error);
   }
 
   render() {
     if (this.state.hasError) {
-      return null; // Fail silently - don't break the UI
+      return null; // Fail silently
     }
     return this.props.children;
   }
@@ -59,17 +59,15 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
   const [visible, setVisible] = useState(false);
   const [slideAnim] = useState(new Animated.Value(-100));
   const [pulseAnim] = useState(new Animated.Value(1));
-  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Only load if services are available
+    // Only load if services available
     if (!PromoService || !FirebaseService) {
-      console.log('PromoOfferBanner: Required services not available');
-      setIsLoading(false);
       return;
     }
 
-    loadActiveOffer();
+    // CRITICAL FIX: Load with very short timeout
+    loadActiveOfferQuick();
   }, []);
 
   useEffect(() => {
@@ -82,7 +80,6 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
   useEffect(() => {
     if (visible && offer) {
       try {
-        // Slide in animation
         Animated.spring(slideAnim, {
           toValue: 0,
           tension: 100,
@@ -90,7 +87,6 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
           useNativeDriver: true,
         }).start();
 
-        // Pulse animation
         const pulseAnimation = Animated.loop(
           Animated.sequence([
             Animated.timing(pulseAnim, {
@@ -109,58 +105,55 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
         pulseAnimation.start();
         return () => pulseAnimation.stop();
       } catch (error) {
-        console.log('PromoOfferBanner: Animation error:', error.message);
+        console.log('Animation error:', error.message);
       }
     }
   }, [visible, offer]);
 
-  const loadActiveOffer = async () => {
+  // CRITICAL FIX: Much shorter timeout (1.5 seconds instead of 5)
+  const loadActiveOfferQuick = async () => {
     try {
-      console.log('PromoOfferBanner: Loading active offer...');
+      console.log('PromoOfferBanner: Loading offer...');
       
-      // Add 5-second timeout
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Timeout loading offer')), 5000)
+        setTimeout(() => reject(new Error('Timeout')), 1500)
       );
 
       const loadPromise = (async () => {
-        // Get user stats (with fallback)
         let userStats = null;
         try {
-          userStats = await FirebaseService.getUserStats();
+          const statsPromise = FirebaseService.getUserStats();
+          const statsTimeout = new Promise((resolve) => 
+            setTimeout(() => resolve(null), 500)
+          );
+          userStats = await Promise.race([statsPromise, statsTimeout]);
         } catch (err) {
-          console.log('PromoOfferBanner: Could not load user stats');
+          console.log('Could not load user stats');
         }
         
-        // Get personalized offer from PromoService
         const activeOffer = await PromoService.getPersonalizedOffer(userStats);
         return activeOffer;
       })();
 
       const activeOffer = await Promise.race([loadPromise, timeoutPromise]);
       
-      if (activeOffer && activeOffer.title && activeOffer.description) {
-        console.log('PromoOfferBanner: Loaded offer:', activeOffer.title);
+      if (activeOffer && activeOffer.title) {
+        console.log('PromoOfferBanner: Offer loaded:', activeOffer.title);
         setOffer(activeOffer);
         setVisible(true);
         
-        // Track impression (non-blocking)
         if (FirebaseService && FirebaseService.trackEvent) {
           FirebaseService.trackEvent('promo_offer_shown', {
             offer_id: activeOffer.id,
-            offer_title: activeOffer.title,
-            offer_type: activeOffer.type
+            offer_title: activeOffer.title
           }).catch(() => {});
         }
       } else {
-        console.log('PromoOfferBanner: No active offers available');
         setVisible(false);
       }
     } catch (error) {
-      console.log('PromoOfferBanner: Error loading offer:', error.message);
+      console.log('PromoOfferBanner: Load error (non-critical):', error.message);
       setVisible(false);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -193,7 +186,6 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
         setVisible(false);
       }
     } catch (error) {
-      console.log('PromoOfferBanner: Error updating time');
       setTimeLeft('');
     }
   };
@@ -202,7 +194,6 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
     if (!offer) return;
 
     try {
-      // Track click (non-blocking)
       if (PromoService && PromoService.trackOfferClick) {
         PromoService.trackOfferClick(offer.id).catch(() => {});
       }
@@ -210,12 +201,10 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
       if (FirebaseService && FirebaseService.trackEvent) {
         FirebaseService.trackEvent('promo_offer_clicked', {
           offer_id: offer.id,
-          offer_title: offer.title,
-          offer_type: offer.type
+          offer_title: offer.title
         }).catch(() => {});
       }
 
-      // Show details alert
       Alert.alert(
         offer.title || 'Special Offer',
         `${offer.description || 'Limited time offer!'}\n\nDiscount: ${offer.discount || 'Special pricing'}\nValid for: ${timeLeft || 'Limited time'}`,
@@ -224,7 +213,6 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
           {
             text: 'Upgrade Now',
             onPress: async () => {
-              // Track conversion (non-blocking)
               if (PromoService && PromoService.trackOfferConversion) {
                 PromoService.trackOfferConversion(offer.id).catch(() => {});
               }
@@ -232,12 +220,10 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
               if (FirebaseService && FirebaseService.trackEvent) {
                 FirebaseService.trackEvent('promo_offer_converted', {
                   offer_id: offer.id,
-                  offer_title: offer.title,
-                  offer_type: offer.type
+                  offer_title: offer.title
                 }).catch(() => {});
               }
               
-              // Call upgrade callback
               if (onUpgradePress && typeof onUpgradePress === 'function') {
                 onUpgradePress();
               }
@@ -246,22 +232,18 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
         ]
       );
     } catch (error) {
-      console.error('PromoOfferBanner: Error handling click:', error);
+      console.error('PromoOfferBanner click error:', error);
     }
   };
 
   const handleDismiss = async () => {
     try {
-      // Track dismissal (non-blocking)
       if (offer && FirebaseService && FirebaseService.trackEvent) {
         FirebaseService.trackEvent('promo_offer_dismissed', {
-          offer_id: offer.id,
-          offer_title: offer.title,
-          offer_type: offer.type
+          offer_id: offer.id
         }).catch(() => {});
       }
 
-      // Slide out animation
       Animated.timing(slideAnim, {
         toValue: -100,
         duration: 300,
@@ -270,13 +252,12 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
         setVisible(false);
       });
     } catch (error) {
-      console.error('PromoOfferBanner: Error dismissing:', error);
+      console.error('Dismiss error:', error);
       setVisible(false);
     }
   };
 
-  // Don't render if loading, no offer, or not visible
-  if (isLoading || !visible || !offer) {
+  if (!visible || !offer) {
     return null;
   }
 
@@ -302,7 +283,6 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
               end={{ x: 1, y: 1 }}
               style={styles.gradient}
             >
-              {/* Close button */}
               <TouchableOpacity
                 onPress={handleDismiss}
                 style={styles.dismissButton}
@@ -312,7 +292,6 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
               </TouchableOpacity>
 
               <View style={styles.content}>
-                {/* Header */}
                 <View style={styles.header}>
                   <Icon name="fire" size={24} color="#ffffff" />
                   <Chip style={styles.urgencyChip} textStyle={styles.urgencyText}>
@@ -320,18 +299,15 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
                   </Chip>
                 </View>
 
-                {/* Title & Description */}
                 <Text style={styles.title}>{offer.title}</Text>
                 <Text style={styles.description}>{offer.description}</Text>
 
-                {/* Discount badge */}
                 <View style={styles.discountContainer}>
                   <Text style={styles.discountText}>
                     {offer.discount || 'Special Pricing'}
                   </Text>
                 </View>
 
-                {/* Footer with timer and CTA */}
                 <View style={styles.footer}>
                   <View style={styles.timerContainer}>
                     <Icon name="clock-outline" size={16} color="#ffffff" />

@@ -1,6 +1,6 @@
 /**
  * PromoService - Automatic Promotional Offer Management
- * FIXED: Better error handling to prevent crashes
+ * FIXED: Faster initialization, better error handling
  */
 
 import { 
@@ -15,7 +15,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
-// CRITICAL FIX: Safe import of FirebaseService
+// Safe Firebase Service import
 let FirebaseService = null;
 try {
   FirebaseService = require('./FirebaseService').default;
@@ -72,21 +72,19 @@ class PromoService {
       }
     ];
     
-    // Auto-initialize with delay (non-blocking)
+    // CRITICAL FIX: Delayed background initialization (non-blocking)
     setTimeout(() => {
-      this.initializePromoSystem().catch(err => {
-        console.log('PromoService: Background init failed (non-critical):', err.message);
-      });
-    }, 3000);
+      this.initializePromoSystemBackground();
+    }, 5000); // Increased to 5 seconds
   }
 
-  async initializePromoSystem() {
+  // FIXED: Background initialization that won't block UI
+  async initializePromoSystemBackground() {
     try {
-      console.log('PromoService: Initializing...');
+      console.log('PromoService: Background init starting...');
       
-      // CRITICAL FIX: Add timeout
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Init timeout')), 2000)
+        setTimeout(() => reject(new Error('Init timeout')), 1000)
       );
 
       const initPromise = (async () => {
@@ -102,9 +100,9 @@ class PromoService {
       })();
 
       await Promise.race([initPromise, timeoutPromise]);
+      console.log('PromoService: Background init complete');
     } catch (error) {
-      console.log('PromoService: Init error (non-critical):', error.message);
-      return false;
+      console.log('PromoService: Background init error (non-critical):', error.message);
     }
   }
 
@@ -159,7 +157,6 @@ class PromoService {
       if (FirebaseService && FirebaseService.trackEvent) {
         FirebaseService.trackEvent('promo_offer_auto_created', {
           offer_type: template.type,
-          offer_title: template.title,
           duration_days: template.durationDays
         }).catch(() => {});
       }
