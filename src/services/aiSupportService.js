@@ -1,331 +1,503 @@
-// AI-Powered Support Service for HabitOwl
-// Automatically handles support tickets using AI understanding of the app
-
-import { collection, addDoc, updateDoc, doc, getDoc, getDocs, query, where, orderBy, serverTimestamp } from 'firebase/firestore';
-import { db } from '../config/firebase';
 import axios from 'axios';
-
-// App Knowledge Base - AI uses this to understand your app
-const APP_KNOWLEDGE = {
-  appName: "HabitOwl",
-  version: "2.0",
-  
-  features: {
-    free: [
-      "Track up to 5 habits",
-      "Basic habit tracking and completion",
-      "View habit calendar",
-      "Simple statistics",
-      "Daily reminders",
-      "Streak tracking"
-    ],
-    premium: [
-      "Unlimited habits",
-      "AI-powered habit coaching and suggestions",
-      "Advanced analytics and insights",
-      "No advertisements",
-      "Custom habit categories",
-      "Export data",
-      "Priority support"
-    ]
-  },
-  
-  commonIssues: {
-    login: "Users can login with Google Sign-In. If having issues, try: 1) Check internet connection, 2) Restart the app, 3) Clear app cache",
-    premium: "Premium subscription costs $4.99/month. To upgrade: Go to Profile > Upgrade to Premium. Payments are processed securely through your app store.",
-    habits: "Free users can create up to 5 habits. To create more habits, upgrade to Premium.",
-    sync: "Data syncs automatically when you have internet connection. If not syncing: 1) Check internet, 2) Logout and login again",
-    streaks: "Streaks count consecutive days you complete a habit. If streak is wrong, check your timezone settings.",
-    notifications: "To enable notifications: Go to device Settings > Apps > HabitOwl > Enable Notifications",
-    ads: "Ads support our free tier. Upgrade to Premium for ad-free experience.",
-    data: "Your data is securely stored in Firebase. Premium users can export their data anytime."
-  },
-  
-  pricing: {
-    free: "$0 - 5 habits limit, with ads",
-    premium: "$4.99/month - Unlimited habits, AI coaching, no ads"
-  },
-  
-  support: {
-    responseTime: "24-48 hours for free users, priority for premium",
-    email: "Support through in-app contact form",
-    refunds: "Contact app store for refund requests (Apple App Store or Google Play Store)"
-  }
-};
+import AdminService from './AdminService';
+import FirebaseService from './FirebaseService';
+import { collection, addDoc, updateDoc, doc, query, where, getDocs, orderBy, onSnapshot } from 'firebase/firestore';
+import { db } from '../config/firebase';
 
 class AISupportService {
   constructor() {
-    this.apiKey = null;
-    this.initialized = false;
+    this.appKnowledge = `
+# HabitOwl App - Complete Functionality Guide
+
+## App Overview
+HabitOwl is a smart habit tracking app with AI coaching, streak tracking, and premium features.
+
+## Core Features:
+1. **Habit Creation & Management**
+   - Create unlimited habits (free users: 5 habits max, premium: unlimited)
+   - Set custom names, descriptions, categories, icons, colors
+   - Daily tracking with completion checkboxes
+   - Edit, delete, or archive habits
+
+2. **Streak Tracking**
+   - Current streak counter (consecutive days)
+   - Longest streak record
+   - Completion calendar view
+   - Daily completion tracking
+
+3. **AI Coaching (Premium Feature)**
+   - Personalized habit suggestions
+   - Motivational messages
+   - Progress analysis
+   - Powered by DeepSeek (free) or ChatGPT (premium)
+
+4. **Statistics & Analytics**
+   - Completion rate charts
+   - Weekly/monthly progress graphs
+   - Habit performance comparisons
+   - Best streak records
+
+5. **User Accounts**
+   - Email/password sign up
+   - Google sign-in
+   - Profile management
+   - Password reset
+
+6. **Premium Subscription ($4.99/month)**
+   - Unlimited habits
+   - Remove ads
+   - AI coaching access
+   - Advanced analytics
+   - Priority support
+
+7. **Referral System**
+   - Unique referral codes for each user
+   - Share with friends
+   - Track referrals
+   - Earn rewards
+
+8. **Notifications**
+   - Daily habit reminders
+   - Streak notifications
+   - Motivational push notifications
+   - Customizable reminder times
+
+9. **Settings & Support**
+   - Account management
+   - Notification preferences
+   - Premium upgrade
+   - Contact support
+   - Privacy policy & terms
+
+## Common Issues & Solutions:
+
+### Habit Not Saving
+- Check internet connection
+- Make sure you're signed in
+- Free users limited to 5 habits
+- Try refreshing the app
+
+### Streak Not Updating
+- Complete habit before midnight
+- Check timezone settings
+- Refresh habit list
+- Contact support if issue persists
+
+### Premium Features Not Working
+- Verify payment went through
+- Sign out and sign back in
+- Check subscription status in Settings
+- Contact support for billing issues
+
+### Login Problems
+- Verify email/password correct
+- Use "Forgot Password" for reset
+- Try Google sign-in alternative
+- Clear app cache and retry
+
+### Notifications Not Working
+- Enable notifications in Settings
+- Check device notification permissions
+- Ensure app has background refresh enabled
+- Restart app after enabling
+
+### Referral Code Not Working
+- Code must be entered exactly as shown (case-sensitive)
+- Can't use your own referral code
+- Each code can only be used once per account
+- Contact support if valid code doesn't work
+
+## Technical Details:
+- Built with React Native & Expo
+- Firebase backend (Auth, Firestore, Storage)
+- Node.js v20.18.0 required for development
+- Web version available at habitowl-3405d.web.app
+- Mobile apps for Android & iOS
+
+## Support Contact:
+- In-app: Settings > Contact Support
+- Email: augustinemwathi96@gmail.com
+- Response time: Within 24 hours
+`;
   }
 
-  // Initialize AI service with API key from Firestore
-  async initialize() {
+  /**
+   * Main entry point: Handle support ticket with AI
+   */
+  async handleSupportTicket(ticketData) {
     try {
-      const configDoc = await getDoc(doc(db, 'admin_config', 'settings'));
-      if (configDoc.exists()) {
-        const apiKeys = configDoc.data().api_keys || {};
-        this.apiKey = apiKeys.deepseek || apiKeys.openai;
-        this.initialized = true;
-        return true;
+      // 1. Create ticket in Firestore
+      const ticket = await this.createTicket(ticketData);
+
+      // 2. Generate AI response
+      const aiResponse = await this.generateAIResponse(ticketData);
+
+      // 3. Determine if human escalation needed
+      const needsHuman = this.needsHumanEscalation(ticketData, aiResponse);
+
+      // 4. Update ticket with AI response
+      await this.updateTicket(ticket.id, {
+        aiResponse: aiResponse.answer,
+        confidence: aiResponse.confidence,
+        status: needsHuman ? 'escalated' : 'ai_resolved',
+        resolvedBy: needsHuman ? null : 'ai',
+        escalationReason: aiResponse.escalationReason || null,
+        respondedAt: new Date().toISOString()
+      });
+
+      return {
+        success: true,
+        ticketId: ticket.id,
+        aiResponse: aiResponse.answer,
+        needsHuman: needsHuman,
+        confidence: aiResponse.confidence
+      };
+    } catch (error) {
+      console.error('Error handling support ticket:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create support ticket in Firestore
+   */
+  async createTicket(ticketData) {
+    const user = FirebaseService.currentUser;
+    
+    const ticket = {
+      userId: user?.uid || 'anonymous',
+      userEmail: ticketData.userEmail || user?.email || 'no-email',
+      userName: user?.displayName || 'User',
+      issueType: ticketData.issueType || 'general',
+      message: ticketData.message,
+      status: 'new',
+      createdAt: new Date().toISOString(),
+      platform: ticketData.platform || 'mobile',
+      appVersion: ticketData.appVersion || '2.9.0'
+    };
+
+    const docRef = await addDoc(collection(db, 'support_tickets'), ticket);
+    
+    return { id: docRef.id, ...ticket };
+  }
+
+  /**
+   * Update ticket in Firestore
+   */
+  async updateTicket(ticketId, updates) {
+    const ticketRef = doc(db, 'support_tickets', ticketId);
+    await updateDoc(ticketRef, {
+      ...updates,
+      updatedAt: new Date().toISOString()
+    });
+  }
+
+  /**
+   * Generate AI response using existing AI infrastructure
+   */
+  async generateAIResponse(ticketData) {
+    try {
+      // Get user stats for personalized response
+      const userStats = await FirebaseService.getUserStats();
+      const isPremium = userStats?.isPremium || false;
+
+      // Build context-aware prompt
+      const prompt = this.buildSupportPrompt(ticketData, userStats);
+
+      // Call AI using existing infrastructure
+      const aiAnswer = await this.callAIForSupport(prompt, isPremium);
+
+      // Analyze confidence and escalation needs
+      const analysis = this.analyzeResponse(ticketData, aiAnswer);
+
+      return {
+        answer: aiAnswer,
+        confidence: analysis.confidence,
+        escalationReason: analysis.escalationReason
+      };
+    } catch (error) {
+      console.error('Error generating AI response:', error);
+      
+      // Fallback response
+      return {
+        answer: this.getFallbackResponse(ticketData.issueType),
+        confidence: 0.3,
+        escalationReason: 'AI service unavailable'
+      };
+    }
+  }
+
+  /**
+   * Build comprehensive support prompt
+   */
+  buildSupportPrompt(ticketData, userStats) {
+    return `You are HabitOwl Support AI. Provide helpful, friendly support.
+
+APP KNOWLEDGE:
+${this.appKnowledge}
+
+USER INFO:
+- Email: ${ticketData.userEmail}
+- Premium: ${userStats?.isPremium ? 'Yes' : 'No'}
+- Total Habits: ${userStats?.totalHabits || 0}
+- Longest Streak: ${userStats?.longestStreak || 0}
+
+ISSUE TYPE: ${ticketData.issueType}
+
+USER MESSAGE:
+${ticketData.message}
+
+INSTRUCTIONS:
+1. Provide a clear, helpful answer based on app knowledge
+2. Be friendly and empathetic
+3. Offer specific steps to resolve the issue
+4. If issue requires billing/account access, say "I'll escalate this to our support team"
+5. Keep response under 200 words
+6. End with "Was this helpful? Reply if you need more assistance!"
+
+YOUR RESPONSE:`;
+  }
+
+  /**
+   * Call AI using existing infrastructure
+   */
+  async callAIForSupport(prompt, isPremium) {
+    try {
+      // Get provider (same as app's existing AI service)
+      const provider = isPremium ? 'openai' : 'deepseek';
+      const apiKey = await AdminService.getGlobalApiKey(provider);
+
+      if (!apiKey) {
+        throw new Error('No API key available');
       }
-      console.log('No API keys found in admin_config');
-      return false;
+
+      // Use DeepSeek for cost-effective support
+      if (provider === 'deepseek') {
+        return await this.callDeepSeekSupport(prompt, apiKey);
+      } else {
+        return await this.callOpenAISupport(prompt, apiKey);
+      }
     } catch (error) {
-      console.error('Error initializing AI support:', error);
-      return false;
+      console.error('AI call error:', error);
+      throw error;
     }
   }
 
-  // Analyze ticket and generate AI response
-  async analyzeTicket(ticketData) {
-    if (!this.initialized) {
-      await this.initialize();
-    }
-
-    if (!this.apiKey) {
-      return {
-        canAutoReply: false,
-        reason: 'AI not configured',
-        suggestedResponse: null,
-        confidence: 0
-      };
-    }
-
-    try {
-      // Build context for AI
-      const context = this.buildContext(ticketData);
-      
-      // Call AI API to analyze
-      const aiResponse = await this.callAI(context, ticketData);
-      
-      return aiResponse;
-    } catch (error) {
-      console.error('Error analyzing ticket:', error);
-      return {
-        canAutoReply: false,
-        reason: 'AI analysis failed',
-        suggestedResponse: null,
-        confidence: 0,
-        error: error.message
-      };
-    }
-  }
-
-  // Build context for AI understanding
-  buildContext(ticketData) {
-    return `You are an AI support assistant for ${APP_KNOWLEDGE.appName}, a habit tracking app.
-
-APP INFORMATION:
-- Version: ${APP_KNOWLEDGE.version}
-- Free Features: ${APP_KNOWLEDGE.features.free.join(', ')}
-- Premium Features: ${APP_KNOWLEDGE.features.premium.join(', ')}
-- Pricing: Free (5 habits limit) or Premium ($4.99/month, unlimited)
-
-COMMON ISSUES & SOLUTIONS:
-${Object.entries(APP_KNOWLEDGE.commonIssues).map(([key, solution]) => `- ${key}: ${solution}`).join('\n')}
-
-USER TICKET:
-Subject: ${ticketData.subject || 'No subject'}
-Message: ${ticketData.message}
-User Type: ${ticketData.isPremium ? 'Premium' : 'Free'}
-User Email: ${ticketData.userEmail}
-
-TASK:
-1. Analyze if you can answer this question confidently (yes/no)
-2. Provide confidence score (0-100)
-3. If confident (score > 75), provide helpful response
-4. If not confident, explain why and suggest human support
-
-Respond in JSON format:
-{
-  "canAutoReply": boolean,
-  "confidence": number (0-100),
-  "response": "your helpful response here" or null,
-  "reason": "why you can/cannot answer",
-  "needsHuman": boolean,
-  "category": "login|premium|habits|sync|streaks|notifications|ads|data|billing|other"
-}`;
-  }
-
-  // Call AI API (DeepSeek or OpenAI)
-  async callAI(context, ticketData) {
-    try {
-      // Try DeepSeek first (cheaper)
-      if (this.apiKey.startsWith('sk-')) {
-        // OpenAI format
-        const response = await axios.post(
-          'https://api.deepseek.com/v1/chat/completions',
+  /**
+   * Call DeepSeek API for support
+   */
+  async callDeepSeekSupport(prompt, apiKey) {
+    const response = await axios.post(
+      'https://api.deepseek.com/v1/chat/completions',
+      {
+        model: 'deepseek-chat',
+        messages: [
           {
-            model: 'deepseek-chat',
-            messages: [
-              { role: 'system', content: 'You are a helpful support assistant. Always respond in valid JSON format.' },
-              { role: 'user', content: context }
-            ],
-            temperature: 0.3,
-            max_tokens: 500
+            role: 'system',
+            content: 'You are HabitOwl Support AI. Provide clear, helpful answers. Be concise and actionable.'
           },
           {
-            headers: {
-              'Authorization': `Bearer ${this.apiKey}`,
-              'Content-Type': 'application/json'
-            }
+            role: 'user',
+            content: prompt
           }
-        );
-
-        const aiText = response.data.choices[0].message.content;
-        const aiData = JSON.parse(aiText);
-        
-        return {
-          canAutoReply: aiData.canAutoReply && aiData.confidence > 75,
-          confidence: aiData.confidence,
-          suggestedResponse: aiData.response,
-          reason: aiData.reason,
-          needsHuman: aiData.needsHuman || aiData.confidence <= 75,
-          category: aiData.category || 'other'
-        };
+        ],
+        max_tokens: 400,
+        temperature: 0.7
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        }
       }
-    } catch (error) {
-      console.error('AI API call failed:', error);
-      return {
-        canAutoReply: false,
-        confidence: 0,
-        suggestedResponse: null,
-        reason: 'AI service unavailable',
-        needsHuman: true,
-        category: 'other'
-      };
-    }
+    );
+
+    return response.data.choices[0].message.content.trim();
   }
 
-  // Process new ticket with AI
-  async processTicket(ticketData) {
-    const analysis = await this.analyzeTicket(ticketData);
-    
-    const processedTicket = {
-      ...ticketData,
-      aiAnalysis: analysis,
-      status: analysis.canAutoReply ? 'auto_replied' : 'pending',
-      handledBy: analysis.canAutoReply ? 'AI' : 'pending_human',
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    };
+  /**
+   * Call OpenAI API for support
+   */
+  async callOpenAISupport(prompt, apiKey) {
+    const response = await axios.post(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        model: 'gpt-3.5-turbo',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are HabitOwl Support AI. Provide clear, helpful answers. Be concise and actionable.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        max_tokens: 400,
+        temperature: 0.7
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
 
-    // Save ticket to Firestore
-    const ticketRef = await addDoc(collection(db, 'support_tickets'), processedTicket);
-
-    // If AI can auto-reply, send response immediately
-    if (analysis.canAutoReply) {
-      await this.sendAutoReply(ticketRef.id, analysis.suggestedResponse, ticketData.userEmail);
-    }
-
-    return {
-      ticketId: ticketRef.id,
-      status: processedTicket.status,
-      autoReplied: analysis.canAutoReply,
-      response: analysis.suggestedResponse
-    };
+    return response.data.choices[0].message.content.trim();
   }
 
-  // Send auto-reply to user
-  async sendAutoReply(ticketId, response, userEmail) {
-    try {
-      // Add reply to ticket
-      await addDoc(collection(db, 'support_tickets', ticketId, 'replies'), {
-        message: response,
-        sender: 'AI Assistant',
-        isAI: true,
-        timestamp: serverTimestamp()
-      });
+  /**
+   * Analyze response confidence and escalation needs
+   */
+  analyzeResponse(ticketData, aiAnswer) {
+    let confidence = 0.8; // Default high confidence
+    let escalationReason = null;
 
-      // Update ticket status
-      await updateDoc(doc(db, 'support_tickets', ticketId), {
-        status: 'auto_replied',
-        lastReply: serverTimestamp(),
-        aiReplied: true
-      });
+    const message = ticketData.message.toLowerCase();
+    const answer = aiAnswer.toLowerCase();
 
-      console.log(`Auto-reply sent for ticket ${ticketId}`);
+    // Billing/payment issues = always escalate
+    if (
+      message.includes('payment') ||
+      message.includes('charge') ||
+      message.includes('refund') ||
+      message.includes('billing') ||
+      message.includes('subscription')
+    ) {
+      confidence = 0.3;
+      escalationReason = 'Billing/payment issue';
+    }
+
+    // Account access issues = escalate
+    else if (
+      message.includes('locked') ||
+      message.includes('banned') ||
+      message.includes('deleted account') ||
+      message.includes('cant login')
+    ) {
+      confidence = 0.4;
+      escalationReason = 'Account access issue';
+    }
+
+    // AI says to escalate
+    else if (
+      answer.includes('escalate') ||
+      answer.includes('support team') ||
+      answer.includes('human support')
+    ) {
+      confidence = 0.5;
+      escalationReason = 'AI recommends human review';
+    }
+
+    // Bug reports with detailed info = medium confidence
+    else if (ticketData.issueType === 'bug' && message.length > 200) {
+      confidence = 0.6;
+      escalationReason = 'Complex bug report';
+    }
+
+    return { confidence, escalationReason };
+  }
+
+  /**
+   * Determine if human escalation needed
+   */
+  needsHumanEscalation(ticketData, aiResponse) {
+    // Low confidence = needs human
+    if (aiResponse.confidence < 0.6) {
       return true;
-    } catch (error) {
-      console.error('Error sending auto-reply:', error);
-      return false;
     }
+
+    // Explicit escalation reason = needs human
+    if (aiResponse.escalationReason) {
+      return true;
+    }
+
+    // Premium users with urgent issues = prioritize
+    const message = ticketData.message.toLowerCase();
+    if (message.includes('urgent') || message.includes('emergency')) {
+      return true;
+    }
+
+    return false;
   }
 
-  // Get ticket statistics
-  async getStats() {
-    try {
-      const ticketsSnapshot = await getDocs(collection(db, 'support_tickets'));
-      const tickets = ticketsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-      const stats = {
-        total: tickets.length,
-        autoReplied: tickets.filter(t => t.status === 'auto_replied').length,
-        pendingHuman: tickets.filter(t => t.status === 'pending').length,
-        resolved: tickets.filter(t => t.status === 'resolved').length,
-        autoReplyRate: 0,
-        avgConfidence: 0
-      };
-
-      stats.autoReplyRate = stats.total > 0 ? (stats.autoReplied / stats.total * 100).toFixed(1) : 0;
+  /**
+   * Fallback responses when AI unavailable
+   */
+  getFallbackResponse(issueType) {
+    const fallbacks = {
+      general: "Thanks for contacting HabitOwl support! I'm here to help. For general questions, check out our Help Center in Settings. Our team typically responds within 24 hours. Was this helpful?",
       
-      const confidenceScores = tickets
-        .filter(t => t.aiAnalysis?.confidence)
-        .map(t => t.aiAnalysis.confidence);
+      bug: "Thanks for reporting this bug! Our team takes these seriously. Please include: 1) What you were doing, 2) What happened, 3) Your device type. We'll investigate and get back to you within 24 hours!",
       
-      stats.avgConfidence = confidenceScores.length > 0
-        ? (confidenceScores.reduce((a, b) => a + b, 0) / confidenceScores.length).toFixed(1)
-        : 0;
+      feature: "Great feature idea! We love hearing from users. All feature requests are reviewed by our product team. Keep the suggestions coming! Was this helpful?",
+      
+      account: "For account issues, please verify: 1) You're using the correct email, 2) Password is correct, 3) Try 'Forgot Password' reset. If still stuck, our support team will help within 24 hours!",
+      
+      billing: "For billing and subscription questions, please contact our support team directly. We'll review your account and respond within 24 hours. Thanks for your patience!",
+      
+      data: "For sync issues, try: 1) Check internet connection, 2) Sign out and sign back in, 3) Force quit and restart app. If problem persists, our team will investigate. Was this helpful?"
+    };
 
-      return stats;
-    } catch (error) {
-      console.error('Error getting stats:', error);
-      return null;
-    }
+    return fallbacks[issueType] || fallbacks.general;
   }
 
-  // Get pending tickets (need human review)
-  async getPendingTickets() {
+  /**
+   * Get all tickets for admin review
+   */
+  async getEscalatedTickets() {
     try {
       const q = query(
         collection(db, 'support_tickets'),
-        where('status', '==', 'pending'),
+        where('status', '==', 'escalated'),
         orderBy('createdAt', 'desc')
       );
-      
+
       const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
     } catch (error) {
-      console.error('Error getting pending tickets:', error);
+      console.error('Error fetching escalated tickets:', error);
       return [];
     }
   }
 
-  // Manual reply by human (marks ticket as resolved)
-  async sendHumanReply(ticketId, response, adminEmail) {
+  /**
+   * Get user's ticket history
+   */
+  async getUserTickets(userId) {
     try {
-      await addDoc(collection(db, 'support_tickets', ticketId, 'replies'), {
-        message: response,
-        sender: adminEmail,
-        isAI: false,
-        timestamp: serverTimestamp()
-      });
+      const q = query(
+        collection(db, 'support_tickets'),
+        where('userId', '==', userId),
+        orderBy('createdAt', 'desc')
+      );
 
-      await updateDoc(doc(db, 'support_tickets', ticketId), {
-        status: 'resolved',
-        handledBy: adminEmail,
-        lastReply: serverTimestamp(),
-        resolvedAt: serverTimestamp()
-      });
-
-      return true;
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
     } catch (error) {
-      console.error('Error sending human reply:', error);
-      return false;
+      console.error('Error fetching user tickets:', error);
+      return [];
     }
+  }
+
+  /**
+   * Admin: Respond to escalated ticket
+   */
+  async respondToTicket(ticketId, humanResponse) {
+    await this.updateTicket(ticketId, {
+      humanResponse: humanResponse,
+      status: 'resolved',
+      resolvedBy: 'human',
+      resolvedAt: new Date().toISOString()
+    });
   }
 }
 
-// Export singleton instance
 export default new AISupportService();

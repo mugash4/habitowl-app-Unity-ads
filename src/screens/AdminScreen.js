@@ -21,9 +21,11 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
+
 import AdminService from '../services/AdminService';
 import SecureAIService from '../services/SecureAIService';
 import FirebaseService from '../services/FirebaseService';
+import AISupportService from '../services/AISupportService';
 
 const AdminScreen = ({ navigation }) => {
   const [stats, setStats] = useState(null);
@@ -35,6 +37,8 @@ const AdminScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [isVerifyingAdmin, setIsVerifyingAdmin] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState(false);
+  const [escalatedTickets, setEscalatedTickets] = useState([]);
+  const [isLoadingTickets, setIsLoadingTickets] = useState(false);
 
   // Promo offer states
   const [promoTitle, setPromoTitle] = useState('');
@@ -94,6 +98,24 @@ const AdminScreen = ({ navigation }) => {
       setLoading(false);
     }
   };
+
+  // Load escalated tickets
+  const loadEscalatedTickets = async () => {
+    setIsLoadingTickets(true);
+    try {
+      const tickets = await AISupportService.getEscalatedTickets();
+      setEscalatedTickets(tickets);
+    } catch (error) {
+      console.error('Error loading tickets:', error);
+    } finally {
+      setIsLoadingTickets(false);
+    }
+  };
+
+  useEffect(() => {
+    loadEscalatedTickets();
+  }, []);
+
 
   const handleSetApiKey = async () => {
     if (!apiKey.trim()) {
@@ -296,6 +318,66 @@ const AdminScreen = ({ navigation }) => {
             ))}
           </View>
         </Card>
+
+        // Add this to your render:
+        <Card style={styles.card}>
+          <List.Subheader style={styles.subheader}>
+            Support Tickets ({escalatedTickets.length} escalated)
+          </List.Subheader>
+  
+          <Button 
+            mode="outlined" 
+            onPress={loadEscalatedTickets}
+            loading={isLoadingTickets}
+            style={styles.button}
+          >
+            Refresh Tickets
+          </Button>
+
+          {escalatedTickets.map((ticket) => (
+            <List.Item
+              key={ticket.id}
+              title={`${ticket.issueType}: ${ticket.userEmail}`}
+              description={`${ticket.message.substring(0, 100)}...`}
+              left={(props) => <List.Icon {...props} icon="alert-circle" color="#ef4444" />}
+              right={(props) => (
+                <Button
+                  mode="text"
+                  onPress={() => {
+                    Alert.alert(
+                      'Ticket Details',
+                      `Issue: ${ticket.message}\n\nAI Response: ${ticket.aiResponse}\n\nReason: ${ticket.escalationReason}`,
+                      [
+                        { text: 'Close' },
+                        {
+                          text: 'Mark Resolved',
+                          onPress: async () => {
+                            await AISupportService.respondToTicket(
+                              ticket.id,
+                              'Resolved by admin'
+                            );
+                            loadEscalatedTickets();
+                            Alert.alert('Success', 'Ticket marked as resolved');
+                          }
+                        }
+                      ]
+                    );
+                  }}
+                >
+                  View
+                </Button>
+              )}
+              style={styles.listItem}
+            />
+          ))}
+
+          {escalatedTickets.length === 0 && !isLoadingTickets && (
+            <View style={styles.emptyState}>
+              <Icon name="check-circle" size={48} color="#10b981" />
+              <Text style={styles.emptyText}>No escalated tickets!</Text>
+          </View>
+        )}
+      </Card>
 
         {/* Marketing Tools */}
         <Card style={styles.card}>
