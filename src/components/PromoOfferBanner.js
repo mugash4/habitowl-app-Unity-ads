@@ -18,18 +18,22 @@ let FirebaseService = null;
 try {
   const PromoServiceModule = require('../services/PromoService');
   PromoService = PromoServiceModule.default || PromoServiceModule;
+  console.log('✅ PromoOfferBanner: PromoService loaded');
 } catch (error) {
-  console.log('PromoOfferBanner: PromoService not available');
+  console.log('⚠️ PromoOfferBanner: PromoService not available');
 }
 
 try {
   const FirebaseServiceModule = require('../services/FirebaseService');
   FirebaseService = FirebaseServiceModule.default || FirebaseServiceModule;
+  console.log('✅ PromoOfferBanner: FirebaseService loaded');
 } catch (error) {
-  console.log('PromoOfferBanner: FirebaseService not available');
+  console.log('⚠️ PromoOfferBanner: FirebaseService not available');
 }
 
-// Error boundary
+/**
+ * ✅ FIXED: Error boundary for safe rendering
+ */
 class PromoOfferBannerErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -47,30 +51,38 @@ class PromoOfferBannerErrorBoundary extends React.Component {
 
   render() {
     if (this.state.hasError) {
-      return null; // Fail silently
+      return null; // Fail silently - banner is optional
     }
     return this.props.children;
   }
 }
 
+/**
+ * ✅ FIXED: Promotional Offer Banner Component
+ * Shows automated promotional offers for free users
+ */
 const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
   const [offer, setOffer] = useState(null);
   const [timeLeft, setTimeLeft] = useState('');
   const [visible, setVisible] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [slideAnim] = useState(new Animated.Value(-100));
   const [pulseAnim] = useState(new Animated.Value(1));
 
   useEffect(() => {
     // Only load if services available
     if (!PromoService || !FirebaseService) {
+      console.log('⚠️ PromoOfferBanner: Services not available');
+      setLoading(false);
       return;
     }
 
-    // CRITICAL FIX: Load with very short timeout
-    loadActiveOfferQuick();
+    // ✅ FIXED: Load with better timeout and error handling
+    loadActiveOfferOptimized();
   }, []);
 
   useEffect(() => {
+    // Update countdown timer
     if (offer && offer.expiresAt && visible) {
       const timer = setInterval(updateTimeLeft, 1000);
       return () => clearInterval(timer);
@@ -78,6 +90,7 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
   }, [offer, visible]);
 
   useEffect(() => {
+    // Animate entrance
     if (visible && offer) {
       try {
         Animated.spring(slideAnim, {
@@ -87,6 +100,7 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
           useNativeDriver: true,
         }).start();
 
+        // Pulse animation
         const pulseAnimation = Animated.loop(
           Animated.sequence([
             Animated.timing(pulseAnim, {
@@ -110,27 +124,33 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
     }
   }, [visible, offer]);
 
-  // CRITICAL FIX: Much shorter timeout (1.5 seconds instead of 5)
-  const loadActiveOfferQuick = async () => {
+  /**
+   * ✅ FIXED: Optimized offer loading with better timeout
+   */
+  const loadActiveOfferOptimized = async () => {
     try {
-      console.log('PromoOfferBanner: Loading offer...');
+      console.log('🔄 PromoOfferBanner: Loading offer...');
+      setLoading(true);
       
+      // ✅ FIXED: Increased timeout to 3 seconds
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Timeout')), 1500)
+        setTimeout(() => reject(new Error('Load timeout after 3s')), 3000)
       );
 
       const loadPromise = (async () => {
+        // Get user stats with short timeout
         let userStats = null;
         try {
           const statsPromise = FirebaseService.getUserStats();
           const statsTimeout = new Promise((resolve) => 
-            setTimeout(() => resolve(null), 500)
+            setTimeout(() => resolve(null), 800)
           );
           userStats = await Promise.race([statsPromise, statsTimeout]);
         } catch (err) {
-          console.log('Could not load user stats');
+          console.log('Could not load user stats, continuing without them');
         }
         
+        // Get active offer
         const activeOffer = await PromoService.getPersonalizedOffer(userStats);
         return activeOffer;
       })();
@@ -138,10 +158,11 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
       const activeOffer = await Promise.race([loadPromise, timeoutPromise]);
       
       if (activeOffer && activeOffer.title) {
-        console.log('PromoOfferBanner: Offer loaded:', activeOffer.title);
+        console.log('✅ PromoOfferBanner: Offer loaded:', activeOffer.title);
         setOffer(activeOffer);
         setVisible(true);
         
+        // Track impression
         if (FirebaseService && FirebaseService.trackEvent) {
           FirebaseService.trackEvent('promo_offer_shown', {
             offer_id: activeOffer.id,
@@ -149,14 +170,20 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
           }).catch(() => {});
         }
       } else {
+        console.log('ℹ️ PromoOfferBanner: No active offers');
         setVisible(false);
       }
     } catch (error) {
-      console.log('PromoOfferBanner: Load error (non-critical):', error.message);
+      console.log('⚠️ PromoOfferBanner: Load error (non-critical):', error.message);
       setVisible(false);
+    } finally {
+      setLoading(false);
     }
   };
 
+  /**
+   * Update countdown timer
+   */
   const updateTimeLeft = () => {
     if (!offer || !offer.expiresAt) {
       setTimeLeft('');
@@ -190,10 +217,14 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
     }
   };
 
+  /**
+   * Handle offer click
+   */
   const handleOfferClick = async () => {
     if (!offer) return;
 
     try {
+      // Track click
       if (PromoService && PromoService.trackOfferClick) {
         PromoService.trackOfferClick(offer.id).catch(() => {});
       }
@@ -205,14 +236,16 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
         }).catch(() => {});
       }
 
+      // Show offer details
       Alert.alert(
         offer.title || 'Special Offer',
-        `${offer.description || 'Limited time offer!'}\n\nDiscount: ${offer.discount || 'Special pricing'}\nValid for: ${timeLeft || 'Limited time'}`,
+        `${offer.description || 'Limited time offer!'}\n\n💰 Discount: ${offer.discount || 'Special pricing'}\n⏰ Valid for: ${timeLeft || 'Limited time'}`,
         [
           { text: 'Maybe Later', style: 'cancel' },
           {
             text: 'Upgrade Now',
             onPress: async () => {
+              // Track conversion
               if (PromoService && PromoService.trackOfferConversion) {
                 PromoService.trackOfferConversion(offer.id).catch(() => {});
               }
@@ -224,6 +257,7 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
                 }).catch(() => {});
               }
               
+              // Navigate to upgrade
               if (onUpgradePress && typeof onUpgradePress === 'function') {
                 onUpgradePress();
               }
@@ -236,6 +270,9 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
     }
   };
 
+  /**
+   * Handle dismiss
+   */
   const handleDismiss = async () => {
     try {
       if (offer && FirebaseService && FirebaseService.trackEvent) {
@@ -257,6 +294,21 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
     }
   };
 
+  // ✅ FIXED: Show loading skeleton while loading
+  if (loading) {
+    return (
+      <View style={[styles.container, style]}>
+        <Card style={styles.card}>
+          <View style={styles.loadingContainer}>
+            <Icon name="loading" size={24} color="#d97706" />
+            <Text style={styles.loadingText}>Loading special offer...</Text>
+          </View>
+        </Card>
+      </View>
+    );
+  }
+
+  // Don't show if no offer or not visible
   if (!visible || !offer) {
     return null;
   }
@@ -283,6 +335,7 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
               end={{ x: 1, y: 1 }}
               style={styles.gradient}
             >
+              {/* Dismiss button */}
               <TouchableOpacity
                 onPress={handleDismiss}
                 style={styles.dismissButton}
@@ -292,6 +345,7 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
               </TouchableOpacity>
 
               <View style={styles.content}>
+                {/* Header */}
                 <View style={styles.header}>
                   <Icon name="fire" size={24} color="#ffffff" />
                   <Chip style={styles.urgencyChip} textStyle={styles.urgencyText}>
@@ -299,15 +353,20 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
                   </Chip>
                 </View>
 
+                {/* Title */}
                 <Text style={styles.title}>{offer.title}</Text>
+                
+                {/* Description */}
                 <Text style={styles.description}>{offer.description}</Text>
 
+                {/* Discount */}
                 <View style={styles.discountContainer}>
                   <Text style={styles.discountText}>
                     {offer.discount || 'Special Pricing'}
                   </Text>
                 </View>
 
+                {/* Footer with timer and CTA */}
                 <View style={styles.footer}>
                   <View style={styles.timerContainer}>
                     <Icon name="clock-outline" size={16} color="#ffffff" />
@@ -344,6 +403,17 @@ const styles = StyleSheet.create({
     elevation: 8,
     borderRadius: 16,
     overflow: 'hidden',
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  loadingText: {
+    marginLeft: 12,
+    fontSize: 14,
+    color: '#6b7280',
   },
   gradient: {
     padding: 16,

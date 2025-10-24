@@ -1,6 +1,7 @@
 /**
  * PromoService - Automatic Promotional Offer Management
- * FIXED: Faster initialization, better error handling
+ * FIXED: Better initialization, error handling, and timeout management
+ * Version: 3.0 - Fully optimized
  */
 
 import { 
@@ -25,7 +26,9 @@ try {
 
 class PromoService {
   constructor() {
-    console.log('PromoService: Initializing...');
+    console.log('✅ PromoService: Initializing...');
+    this.isInitializing = false;
+    this.isInitialized = false;
     
     this.PROMO_TEMPLATES = [
       {
@@ -72,40 +75,62 @@ class PromoService {
       }
     ];
     
-    // CRITICAL FIX: Delayed background initialization (non-blocking)
+    // ✅ FIXED: Delayed background initialization with longer timeout
     setTimeout(() => {
       this.initializePromoSystemBackground();
-    }, 5000); // Increased to 5 seconds
+    }, 5000); // 5 seconds delay to not block UI
   }
 
-  // FIXED: Background initialization that won't block UI
+  /**
+   * ✅ FIXED: Background initialization that won't block UI
+   * Timeout increased to 5 seconds for better reliability
+   */
   async initializePromoSystemBackground() {
+    if (this.isInitializing || this.isInitialized) {
+      console.log('⚠️ PromoService: Already initializing or initialized');
+      return;
+    }
+
+    this.isInitializing = true;
+
     try {
-      console.log('PromoService: Background init starting...');
+      console.log('🔄 PromoService: Background init starting...');
       
+      // ✅ FIXED: Increased timeout to 5 seconds
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Init timeout')), 1000)
+        setTimeout(() => reject(new Error('Init timeout after 5s')), 5000)
       );
 
       const initPromise = (async () => {
         const needsUpdate = await this.checkIfOffersNeedUpdate();
         
         if (needsUpdate) {
+          console.log('📝 PromoService: Creating new offers...');
           await this.createWeeklyPromoOffers();
+        } else {
+          console.log('✅ PromoService: Active offers exist');
         }
         
+        // Cleanup in background
         this.cleanupExpiredOffers().catch(() => {});
         
         return true;
       })();
 
       await Promise.race([initPromise, timeoutPromise]);
-      console.log('PromoService: Background init complete');
+      
+      this.isInitialized = true;
+      console.log('✅ PromoService: Background init complete');
     } catch (error) {
-      console.log('PromoService: Background init error (non-critical):', error.message);
+      console.log('⚠️ PromoService: Background init error (non-critical):', error.message);
+    } finally {
+      this.isInitializing = false;
     }
   }
 
+  /**
+   * Check if new offers need to be created
+   */
   async checkIfOffersNeedUpdate() {
     try {
       const now = new Date().toISOString();
@@ -118,15 +143,19 @@ class PromoService {
       );
       
       const snapshot = await getDocs(q);
-      return snapshot.empty;
+      return snapshot.empty; // Return true if no active offers
     } catch (error) {
       console.log('PromoService: Check offers error:', error.message);
       return false;
     }
   }
 
+  /**
+   * ✅ Create weekly promo offers automatically
+   */
   async createWeeklyPromoOffers() {
     try {
+      // Select random template
       const template = this.PROMO_TEMPLATES[
         Math.floor(Math.random() * this.PROMO_TEMPLATES.length)
       ];
@@ -152,7 +181,7 @@ class PromoService {
       
       await setDoc(doc(db, 'promo_offers', offerId), offerData);
       
-      console.log('PromoService: Created offer:', template.title);
+      console.log('✅ PromoService: Created offer:', template.title);
       
       if (FirebaseService && FirebaseService.trackEvent) {
         FirebaseService.trackEvent('promo_offer_auto_created', {
@@ -163,11 +192,14 @@ class PromoService {
       
       return offerData;
     } catch (error) {
-      console.log('PromoService: Create offer error:', error.message);
+      console.log('❌ PromoService: Create offer error:', error.message);
       throw error;
     }
   }
 
+  /**
+   * Cleanup expired offers
+   */
   async cleanupExpiredOffers() {
     try {
       const now = new Date().toISOString();
@@ -181,6 +213,8 @@ class PromoService {
       const snapshot = await getDocs(q);
       
       if (!snapshot.empty) {
+        console.log(`🧹 PromoService: Cleaning up ${snapshot.size} expired offers`);
+        
         const updatePromises = snapshot.docs.map(docSnapshot =>
           setDoc(doc(db, 'promo_offers', docSnapshot.id), {
             isActive: false,
@@ -199,41 +233,59 @@ class PromoService {
     }
   }
 
+  /**
+   * ✅ Get personalized offer for user (with longer timeout)
+   */
   async getPersonalizedOffer(userStats) {
     try {
       const now = new Date().toISOString();
       
-      const q = query(
-        collection(db, 'promo_offers'),
-        where('isActive', '==', true),
-        where('expiresAt', '>', now),
-        orderBy('createdAt', 'desc'),
-        limit(1)
+      // ✅ FIXED: Added timeout for reliability
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Offer fetch timeout')), 3000)
       );
       
-      const snapshot = await getDocs(q);
-      
-      if (!snapshot.empty) {
-        const offer = {
-          id: snapshot.docs[0].id,
-          ...snapshot.docs[0].data()
-        };
+      const fetchPromise = (async () => {
+        const q = query(
+          collection(db, 'promo_offers'),
+          where('isActive', '==', true),
+          where('expiresAt', '>', now),
+          orderBy('createdAt', 'desc'),
+          limit(1)
+        );
         
-        this.trackOfferImpression(offer.id).catch(() => {});
+        const snapshot = await getDocs(q);
         
-        return offer;
-      }
+        if (!snapshot.empty) {
+          const offer = {
+            id: snapshot.docs[0].id,
+            ...snapshot.docs[0].data()
+          };
+          
+          // Track impression in background
+          this.trackOfferImpression(offer.id).catch(() => {});
+          
+          return offer;
+        }
+        
+        return null;
+      })();
       
-      return null;
+      return await Promise.race([fetchPromise, timeoutPromise]);
     } catch (error) {
       console.log('PromoService: Get offer error:', error.message);
       return null;
     }
   }
 
+  /**
+   * Track offer impression
+   */
   async trackOfferImpression(offerId) {
     try {
       const offerRef = doc(db, 'promo_offers', offerId);
+      
+      // Use Firestore increment if available
       const increment = FirebaseService && FirebaseService.increment 
         ? FirebaseService.increment(1) 
         : 1;
@@ -247,9 +299,13 @@ class PromoService {
     }
   }
 
+  /**
+   * Track offer click
+   */
   async trackOfferClick(offerId) {
     try {
       const offerRef = doc(db, 'promo_offers', offerId);
+      
       const increment = FirebaseService && FirebaseService.increment 
         ? FirebaseService.increment(1) 
         : 1;
@@ -263,9 +319,13 @@ class PromoService {
     }
   }
 
+  /**
+   * Track offer conversion
+   */
   async trackOfferConversion(offerId) {
     try {
       const offerRef = doc(db, 'promo_offers', offerId);
+      
       const increment = FirebaseService && FirebaseService.increment 
         ? FirebaseService.increment(1) 
         : 1;
@@ -279,10 +339,16 @@ class PromoService {
     }
   }
 
+  /**
+   * ✅ NEW: Force create new offer (for manual testing)
+   */
   async forceCreateNewOffer() {
     return await this.createWeeklyPromoOffers();
   }
 
+  /**
+   * Get all active offers
+   */
   async getAllActiveOffers() {
     try {
       const now = new Date().toISOString();
@@ -306,6 +372,9 @@ class PromoService {
     }
   }
 
+  /**
+   * Get offer statistics
+   */
   async getOfferStatistics() {
     try {
       const allOffersQuery = query(collection(db, 'promo_offers'));
@@ -347,6 +416,7 @@ class PromoService {
   }
 }
 
+// ✅ Export singleton instance
 const promoServiceInstance = new PromoService();
 export default promoServiceInstance;
 export { PromoService };
