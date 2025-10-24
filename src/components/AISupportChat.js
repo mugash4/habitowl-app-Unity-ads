@@ -22,7 +22,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import FirebaseService from '../services/FirebaseService';
-import AISupportService from '../services/aiSupportService';
+import AISupportService from '../services/AISupportService';
 
 /**
  * ✅ IMPROVED: AI Support Chat Component

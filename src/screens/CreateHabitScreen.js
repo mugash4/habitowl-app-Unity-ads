@@ -104,7 +104,54 @@ const CreateHabitScreen = ({ navigation, route }) => {
     return true;
   };
 
-  // 🔧 FIXED: Complete fix for habit creation and navigation
+  // 🔧 NEW: Check habit limit before creating
+  const checkHabitLimit = async () => {
+    try {
+      const userStats = await FirebaseService.getUserStats();
+      const isPremium = userStats?.isPremium || false;
+      
+      // Get current habits count
+      const userHabits = await FirebaseService.getUserHabits();
+      const currentHabitsCount = userHabits ? userHabits.length : 0;
+      
+      console.log(`User has ${currentHabitsCount} habits. Premium: ${isPremium}`);
+      
+      // Free users can only have 5 habits
+      const FREE_HABIT_LIMIT = 5;
+      
+      if (!isPremium && currentHabitsCount >= FREE_HABIT_LIMIT) {
+        return false;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error checking habit limit:', error);
+      // If there's an error, allow creation (fail gracefully)
+      return true;
+    }
+  };
+
+  // 🔧 NEW: Show upgrade prompt
+  const showUpgradePrompt = () => {
+    Alert.alert(
+      '🔒 Upgrade to Premium',
+      'Free users can create up to 5 habits. Upgrade to Premium to create unlimited habits and unlock all features!',
+      [
+        {
+          text: 'Not Now',
+          style: 'cancel'
+        },
+        {
+          text: 'Upgrade to Premium',
+          onPress: () => {
+            navigation.navigate('Premium');
+          }
+        }
+      ]
+    );
+  };
+
+  // 🔧 UPDATED: Complete fix for habit creation with limit check
   const handleCreateHabit = async () => {
     if (!validateForm()) return;
 
@@ -112,6 +159,15 @@ const CreateHabitScreen = ({ navigation, route }) => {
 
     try {
       setIsLoading(true);
+
+      // 🔧 NEW: Check habit limit before creating
+      const canCreate = await checkHabitLimit();
+      
+      if (!canCreate) {
+        setIsLoading(false);
+        showUpgradePrompt();
+        return;
+      }
 
       const habitData = {
         name: habitName.trim(),
@@ -128,7 +184,6 @@ const CreateHabitScreen = ({ navigation, route }) => {
 
       console.log('✅ Creating habit with data:', habitData.name);
       
-      // 🔧 FIXED: Create habit and wait for completion
       const newHabit = await FirebaseService.createHabit(habitData);
       console.log('✅ Habit created successfully with ID:', newHabit.id);
 
@@ -146,7 +201,6 @@ const CreateHabitScreen = ({ navigation, route }) => {
         has_reminder: reminderEnabled
       }).catch(err => console.error('⚠️ Tracking error:', err));
 
-      // 🔧 FIXED: Navigate back with refresh parameters
       console.log('🔄 Navigating back to Home with refresh...');
       
       // Use replace to ensure proper navigation

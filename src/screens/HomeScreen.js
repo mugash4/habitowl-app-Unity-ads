@@ -7,7 +7,8 @@ import {
   RefreshControl,
   Alert,
   Animated,
-  StatusBar
+  StatusBar,
+  TouchableOpacity
 } from 'react-native';
 import { FAB, Appbar, Button, Card, Chip } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -28,21 +29,19 @@ const HomeScreen = ({ navigation, route }) => {
   const [todayCompletions, setTodayCompletions] = useState(new Set());
   const [motivationalMessage, setMotivationalMessage] = useState('');
   const [fadeAnim] = useState(new Animated.Value(0));
-  const [screenKey, setScreenKey] = useState(0); // 🔧 FIX: Force refresh key
+  const [screenKey, setScreenKey] = useState(0);
+  const [isPremium, setIsPremium] = useState(false); // 🔧 NEW: Track premium status
 
-  // ✅ FIXED: Always reload on screen focus with proper cleanup
   useFocusEffect(
     useCallback(() => {
       console.log('🔄 HomeScreen FOCUSED - Reloading habits...');
       
-      let isActive = true; // Flag to prevent state updates after unmount
+      let isActive = true;
       
-      // Force a fresh reload
       const reloadData = async () => {
         try {
           await loadHabits(true, isActive);
           
-          // Animate screen entrance
           if (isActive) {
             Animated.timing(fadeAnim, {
               toValue: 1,
@@ -57,16 +56,14 @@ const HomeScreen = ({ navigation, route }) => {
       
       reloadData();
       
-      // Cleanup function
       return () => {
         console.log('👋 HomeScreen BLURRED - Cleaning up');
         isActive = false;
         fadeAnim.setValue(0);
       };
-    }, [screenKey]) // 🔧 FIX: Depend on screenKey to force reload
+    }, [screenKey])
   );
 
-  // ✅ FIXED: Enhanced loadHabits with proper state management
   const loadHabits = async (forceReload = false, isActive = true) => {
     try {
       if (forceReload) {
@@ -75,24 +72,27 @@ const HomeScreen = ({ navigation, route }) => {
       
       console.log('📱 Fetching habits from Firebase...');
       
-      // ✅ FIXED: Always fetch fresh data with a small delay to ensure Firestore sync
       await new Promise(resolve => setTimeout(resolve, 300));
       const userHabits = await FirebaseService.getUserHabits(true);
       
-      // Only update state if component is still active
+      // 🔧 NEW: Load premium status
+      const userStats = await FirebaseService.getUserStats();
+      const premiumStatus = userStats?.isPremium || false;
+      
       if (!isActive) {
         console.log('⚠️ Component unmounted, skipping state update');
         return;
       }
       
       console.log(`✅ Loaded ${userHabits ? userHabits.length : 0} habits`);
+      console.log(`Premium status: ${premiumStatus}`);
       
       if (userHabits && Array.isArray(userHabits)) {
         console.log('📝 Setting habits:', userHabits.map(h => h.name).join(', '));
         
         setHabits(userHabits);
+        setIsPremium(premiumStatus); // 🔧 NEW: Set premium status
         
-        // Check today's completions
         const today = new Date().toDateString();
         const completedToday = new Set();
         
@@ -104,7 +104,6 @@ const HomeScreen = ({ navigation, route }) => {
         
         setTodayCompletions(completedToday);
         
-        // Load motivational message
         if (userHabits.length > 0) {
           loadMotivationalMessage(userHabits, completedToday);
         } else {
@@ -115,12 +114,12 @@ const HomeScreen = ({ navigation, route }) => {
         setHabits([]);
         setTodayCompletions(new Set());
         setMotivationalMessage('');
+        setIsPremium(premiumStatus); // 🔧 NEW: Set premium status
       }
       
     } catch (error) {
       console.error('❌ Error loading habits:', error);
       
-      // Only update state if component is still active
       if (isActive) {
         setHabits([]);
         setTodayCompletions(new Set());
@@ -173,24 +172,21 @@ const HomeScreen = ({ navigation, route }) => {
   const onRefresh = async () => {
     console.log('🔄 Manual refresh triggered');
     setRefreshing(true);
-    setScreenKey(prev => prev + 1); // Force reload
+    setScreenKey(prev => prev + 1);
     await loadHabits(true);
   };
 
   const handleHabitComplete = async (habit, isNowCompleted) => {
     try {
-      // Update local state immediately for instant feedback
       const newCompletions = new Set(todayCompletions);
       if (isNowCompleted) {
         newCompletions.add(habit.id);
         
-        // Show celebration for milestones
         const newStreak = (habit.currentStreak || 0) + 1;
         if ([3, 7, 14, 30, 60, 100].includes(newStreak)) {
           await NotificationService.scheduleStreakCelebration(habit, newStreak);
         }
         
-        // Show ad occasionally
         setTimeout(async () => {
           try {
             await unityAdsService.showInterstitialAd('habit_completion');
@@ -204,18 +200,40 @@ const HomeScreen = ({ navigation, route }) => {
       
       setTodayCompletions(newCompletions);
       
-      // Reload habits to get updated data
-      setScreenKey(prev => prev + 1); // Force reload
+      setScreenKey(prev => prev + 1);
       await loadHabits(true);
       
     } catch (error) {
       Alert.alert('Error', error.message);
-      setScreenKey(prev => prev + 1); // Force reload even on error
+      setScreenKey(prev => prev + 1);
       await loadHabits(true);
     }
   };
 
+  // 🔧 UPDATED: Check limit before navigating to create habit
   const handleCreateHabit = async () => {
+    const FREE_HABIT_LIMIT = 5;
+    
+    if (!isPremium && habits.length >= FREE_HABIT_LIMIT) {
+      Alert.alert(
+        '🔒 Upgrade to Premium',
+        `Free users can create up to ${FREE_HABIT_LIMIT} habits. You currently have ${habits.length} habits.\n\nUpgrade to Premium to create unlimited habits and unlock all features!`,
+        [
+          {
+            text: 'Not Now',
+            style: 'cancel'
+          },
+          {
+            text: 'Upgrade to Premium',
+            onPress: () => {
+              navigation.navigate('Premium');
+            }
+          }
+        ]
+      );
+      return;
+    }
+    
     console.log('📝 Navigating to CreateHabit screen');
     navigation.navigate('CreateHabit');
   };
@@ -224,7 +242,6 @@ const HomeScreen = ({ navigation, route }) => {
     navigation.navigate('EditHabit', { 
       habit,
       onGoBack: () => {
-        // 🔧 FIX: Force reload when returning from edit
         console.log('🔄 Returned from EditHabit - forcing reload');
         setScreenKey(prev => prev + 1);
       }
@@ -234,7 +251,7 @@ const HomeScreen = ({ navigation, route }) => {
   const handleDeleteHabit = async (habitId) => {
     try {
       await FirebaseService.deleteHabit(habitId);
-      setScreenKey(prev => prev + 1); // Force reload
+      setScreenKey(prev => prev + 1);
       await loadHabits(true);
     } catch (error) {
       Alert.alert('Error', 'Failed to delete habit');
@@ -283,6 +300,21 @@ const HomeScreen = ({ navigation, route }) => {
             </View>
           ) : null}
           
+          {/* 🔧 NEW: Habit limit indicator for free users */}
+          {!isPremium && (
+            <TouchableOpacity 
+              style={styles.limitBanner}
+              onPress={() => navigation.navigate('Premium')}
+              activeOpacity={0.8}
+            >
+              <Icon name="crown" size={16} color="#f59e0b" />
+              <Text style={styles.limitText}>
+                {habits.length}/5 habits • Upgrade for unlimited
+              </Text>
+              <Icon name="chevron-right" size={16} color="#ffffff" />
+            </TouchableOpacity>
+          )}
+          
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
               <Text style={styles.statValue}>{completionRate}%</Text>
@@ -316,6 +348,11 @@ const HomeScreen = ({ navigation, route }) => {
       <Text style={styles.emptySubtitle}>
         Create your first habit and start building a better you
       </Text>
+      {!isPremium && (
+        <Text style={styles.emptyLimit}>
+          Free users can create up to 5 habits
+        </Text>
+      )}
       <Button
         mode="contained"
         onPress={handleCreateHabit}
@@ -435,13 +472,30 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   messageContainer: {
-    marginBottom: 20,
+    marginBottom: 12,
     minHeight: 24,
   },
   motivationalMessage: {
     fontSize: 16,
     color: '#e0e7ff',
     fontStyle: 'italic',
+  },
+  // 🔧 NEW: Limit banner styles
+  limitBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    gap: 6,
+  },
+  limitText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#ffffff',
+    fontWeight: '500',
   },
   statsRow: {
     flexDirection: 'row',
@@ -530,7 +584,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6b7280',
     textAlign: 'center',
-    marginBottom: 32,
+    marginBottom: 8,
+  },
+  // 🔧 NEW: Empty state limit text
+  emptyLimit: {
+    fontSize: 14,
+    color: '#9ca3af',
+    textAlign: 'center',
+    marginBottom: 24,
+    fontStyle: 'italic',
   },
   emptyButton: {
     backgroundColor: '#4f46e5',
