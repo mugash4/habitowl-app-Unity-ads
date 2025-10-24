@@ -243,8 +243,16 @@ const SettingsScreen = ({ navigation }) => {
   };
 
   const handleContactSupport = () => {
+    // ✅ IMPROVED: Provide immediate feedback
+    console.log('Opening support chat...');
     setShowContactSupport(true);
+  
+    // Track analytics
+    FirebaseService.trackEvent('support_chat_opened', {
+      from_screen: 'settings'
+    }).catch(err => console.log('Analytics tracking failed:', err));
   };
+
 
   const handlePrivacyPolicy = () => {
     Linking.openURL('https://habitowl-3405d.web.app/privacy').catch(() => 
