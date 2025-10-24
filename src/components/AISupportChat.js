@@ -22,7 +22,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import FirebaseService from '../services/FirebaseService';
-import AISupportService from '../services/AISupportService';
+import aiSupportService from '../services/aiSupportService';
 
 /**
  * ✅ IMPROVED: AI Support Chat Component
@@ -85,7 +85,7 @@ const AISupportChat = ({ visible, onDismiss }) => {
       console.log('📤 Sending support ticket...');
 
       // Send to AI Support Service
-      const result = await AISupportService.handleSupportTicket({
+      const result = await aiSupportService.handleSupportTicket({
         userEmail: userEmail.trim(),
         issueType: selectedIssue,
         message: message.trim(),

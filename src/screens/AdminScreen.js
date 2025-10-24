@@ -25,7 +25,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import AdminService from '../services/AdminService';
 import SecureAIService from '../services/SecureAIService';
 import FirebaseService from '../services/FirebaseService';
-import AISupportService from '../services/AISupportService';
+import aiSupportService from '../services/aiSupportService';
 
 const AdminScreen = ({ navigation }) => {
   const [stats, setStats] = useState(null);
@@ -103,7 +103,7 @@ const AdminScreen = ({ navigation }) => {
   const loadEscalatedTickets = async () => {
     setIsLoadingTickets(true);
     try {
-      const tickets = await AISupportService.getEscalatedTickets();
+      const tickets = await aiSupportService.getEscalatedTickets();
       setEscalatedTickets(tickets);
     } catch (error) {
       console.error('Error loading tickets:', error);
@@ -352,7 +352,7 @@ const AdminScreen = ({ navigation }) => {
                         {
                           text: 'Mark Resolved',
                           onPress: async () => {
-                            await AISupportService.respondToTicket(
+                            await aiSupportService.respondToTicket(
                               ticket.id,
                               'Resolved by admin'
                             );
