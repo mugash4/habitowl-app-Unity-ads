@@ -364,18 +364,33 @@ const SettingsScreen = ({ navigation }) => {
         <Card style={styles.card}>
           <List.Subheader style={styles.subheader}>AI & Personalization</List.Subheader>
           
-          <List.Item
-            title="AI Provider"
-            description={`Currently using: ${apiProvider.toUpperCase()}`}
-            left={(props) => <List.Icon {...props} icon="robot" />}
-            titleStyle={styles.listItemTitle}
-            descriptionStyle={styles.listItemDescription}
-          />
+          {isAdmin && (
+            <List.Item
+              title="AI Powered"
+              description={`Currently using: ${apiProvider.toUpperCase()}`}
+              left={(props) => <List.Icon {...props} icon="robot" />}
+              titleStyle={styles.listItemTitle}
+              descriptionStyle={styles.listItemDescription}
+            />
+          )}
 
           <List.Item
             title="Smart Coaching"
-            description="Powered by advanced AI"
+            description={isPremium ? "Powered by advanced AI" : "Upgrade to Premium to unlock AI coaching"}
             left={(props) => <List.Icon {...props} icon="brain" />}
+            right={(props) => !isPremium && <List.Icon {...props} icon="chevron-right" />}
+            onPress={() => {
+              if (!isPremium) {
+                Alert.alert(
+                  'Premium Feature',
+                  'Smart Coaching is available for Premium subscribers only. Upgrade now to get personalized AI-powered habit coaching!',
+                  [
+                    { text: 'Maybe Later', style: 'cancel' },
+                    { text: 'Upgrade to Premium', onPress: handlePremiumUpgrade }
+                  ]
+                );
+              }
+            }}
             titleStyle={styles.listItemTitle}
             descriptionStyle={styles.listItemDescription}
           />
@@ -392,6 +407,7 @@ const SettingsScreen = ({ navigation }) => {
             />
           )}
         </Card>
+
 
         <Card style={styles.card}>
           <List.Subheader style={styles.subheader}>Social & Sharing</List.Subheader>

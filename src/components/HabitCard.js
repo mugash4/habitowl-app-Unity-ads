@@ -24,8 +24,16 @@ const HabitCard = ({
   const [isLoading, setIsLoading] = useState(false);
   const [scaleAnim] = useState(new Animated.Value(1));
 
+  
   const handleComplete = async () => {
     if (isLoading) return;
+    
+    // ✅ FIXED: Validate habit object before proceeding
+    if (!habit || !habit.id) {
+      console.error('Invalid habit object:', habit);
+      Alert.alert('Error', 'Invalid habit data. Please refresh and try again.');
+      return;
+    }
 
     try {
       setIsLoading(true);
@@ -53,13 +61,18 @@ const HabitCard = ({
         await FirebaseService.completeHabit(habit.id);
       }
       
-      onComplete && onComplete(habit, !isCompleted);
+      // ✅ FIXED: Safely pass habit object to callback
+      if (onComplete && typeof onComplete === 'function') {
+        onComplete(habit, !isCompleted);
+      }
     } catch (error) {
-      Alert.alert('Error', error.message);
+      console.error('Error completing habit:', error);
+      Alert.alert('Error', error.message || 'Failed to update habit. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
+
 
   const handleDelete = () => {
     Alert.alert(
@@ -164,23 +177,23 @@ const HabitCard = ({
 
           <View style={styles.statsRow}>
             <View style={styles.stat}>
-              <Icon name="fire" size={16} color={getStreakColor(habit.currentStreak)} />
+              <Icon name="fire" size={16} color={getStreakColor(habit?.currentStreak || 0)} />
               <Text style={[styles.statText, isCompleted && styles.completedText]}>
-                {habit.currentStreak} day streak
+                {habit?.currentStreak || 0} day streak
               </Text>
             </View>
 
             <View style={styles.stat}>
-              <Icon name="trophy" size={16} color={getStreakColor(habit.longestStreak)} />
+              <Icon name="trophy" size={16} color={getStreakColor(habit?.longestStreak || 0)} />
               <Text style={[styles.statText, isCompleted && styles.completedText]}>
-                Best: {habit.longestStreak}
+                Best: {habit?.longestStreak || 0}
               </Text>
             </View>
 
             <View style={styles.stat}>
               <Icon name="check-all" size={16} color="#6b7280" />
               <Text style={[styles.statText, isCompleted && styles.completedText]}>
-                {habit.totalCompletions || 0} total
+                {habit?.totalCompletions || 0} total
               </Text>
             </View>
           </View>

@@ -90,12 +90,24 @@ const StatisticsScreen = ({ navigation }) => {
       
       data.push(completions);
       
+      // ✅ IMPROVED: Better label formatting for clarity
       if (selectedPeriod === 'week') {
+        // Show day names for week view
         labels.push(date.toLocaleDateString('en', { weekday: 'short' }));
       } else if (selectedPeriod === 'month') {
-        labels.push(date.getDate().toString());
+        // Show date with month for month view (every 3rd day to avoid crowding)
+        if (i % 3 === 0 || i === 0 || i === days - 1) {
+          labels.push(date.toLocaleDateString('en', { day: 'numeric', month: 'short' }));
+        } else {
+          labels.push('');
+        }
       } else {
-        labels.push(date.toLocaleDateString('en', { month: 'short' }));
+        // Show months for year view (every 30th day)
+        if (i % 30 === 0 || i === 0 || i === days - 1) {
+          labels.push(date.toLocaleDateString('en', { month: 'short' }));
+        } else {
+          labels.push('');
+        }
       }
     }
     
@@ -161,9 +173,18 @@ const StatisticsScreen = ({ navigation }) => {
     backgroundGradientFrom: '#ffffff',
     backgroundGradientTo: '#ffffff',
     color: (opacity = 1) => `rgba(79, 70, 229, ${opacity})`,
-    strokeWidth: 2,
+    strokeWidth: 3, // ✅ IMPROVED: Thicker line for better visibility
     barPercentage: 0.7,
     decimalPlaces: 0,
+    propsForDots: {
+      r: '4', // ✅ IMPROVED: Larger dots for data points
+      strokeWidth: '2',
+      stroke: '#4f46e5'
+    },
+    propsForLabels: {
+      fontSize: 10, // ✅ IMPROVED: Slightly larger font
+      fontWeight: '600' // ✅ IMPROVED: Bold labels
+    }
   };
 
   const renderOverviewCards = () => {
@@ -211,10 +232,18 @@ const StatisticsScreen = ({ navigation }) => {
     
     if (data.length === 0) return null;
 
+    // ✅ IMPROVED: Calculate max value for better Y-axis scaling
+    const maxValue = Math.max(...data, 1);
+
     return (
       <Card style={styles.chartCard}>
         <Card.Content>
-          <Text style={styles.chartTitle}>Completion Trend</Text>
+          <View style={styles.chartHeader}>
+            <Text style={styles.chartTitle}>Completion Trend</Text>
+            <Text style={styles.chartSubtitle}>
+              Track your daily habit completions
+            </Text>
+          </View>
           
           <View style={styles.periodSelector}>
             {['week', 'month', 'year'].map(period => (
@@ -232,14 +261,39 @@ const StatisticsScreen = ({ navigation }) => {
           <LineChart
             data={{
               labels,
-              datasets: [{ data }],
+              datasets: [{
+                data,
+                color: (opacity = 1) => `rgba(79, 70, 229, ${opacity})`,
+                strokeWidth: 3
+              }],
             }}
             width={screenWidth - 64}
-            height={220}
-            chartConfig={chartConfig}
+            height={240}
+            yAxisSuffix=" "
+            yAxisInterval={1}
+            chartConfig={{
+              ...chartConfig,
+              formatYLabel: (value) => Math.round(value).toString()
+            }}
             style={styles.chart}
             bezier
+            fromZero
+            segments={Math.min(maxValue, 5)} // ✅ IMPROVED: Better Y-axis segments
+            withInnerLines={true}
+            withOuterLines={true}
+            withVerticalLines={false}
+            withHorizontalLines={true}
+            withVerticalLabels={true}
+            withHorizontalLabels={true}
           />
+          
+          {/* ✅ NEW: Add legend for better understanding */}
+          <View style={styles.chartLegend}>
+            <Icon name="information-outline" size={16} color="#6b7280" />
+            <Text style={styles.chartLegendText}>
+              Showing completed habits per day
+            </Text>
+          </View>
         </Card.Content>
       </Card>
     );
@@ -486,6 +540,28 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6b7280',
   },
+  chartHeader: {
+    marginBottom: 8,
+  },
+  chartSubtitle: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginTop: 4,
+  },
+  chartLegend: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  chartLegendText: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginLeft: 6,
+  },
+
 });
 
 export default StatisticsScreen;
