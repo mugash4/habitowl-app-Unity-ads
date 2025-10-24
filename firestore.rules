@@ -19,40 +19,40 @@ service cloud.firestore {
         .data.admin_emails.hasAny([request.auth.token.email]);
     }
 
-    // Users collection
+    // ✅ FIXED: Users collection - Allow admins to read all users
     match /users/{userId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
-      allow update: if isSignedIn() && (isOwner(resource.data.uid) || request.resource.data.uid == request.auth.uid);
+      allow update: if isSignedIn() && (isOwner(resource.data.uid) || request.resource.data.uid == request.auth.uid || isAdmin());
     }
 
-    // Habits collection
+    // ✅ FIXED: Habits collection - Allow admins to read all habits
     match /habits/{habitId} {
-      allow read: if isSignedIn() && isOwner(resource.data.userId);
+      allow read: if isSignedIn() && (isOwner(resource.data.userId) || isAdmin());
       allow create: if isSignedIn();
-      allow update, delete: if isSignedIn() && isOwner(resource.data.userId);
+      allow update, delete: if isSignedIn() && (isOwner(resource.data.userId) || isAdmin());
     }
 
     // ✅ FIXED: Admin config - Allow admin writes
     match /admin_config/settings {
       allow read: if isSignedIn();
-      allow write: if isAdmin(); // ✅ Admins can update settings
+      allow write: if isAdmin();
     }
     
     match /admin_config/api_keys {
-      allow read: if isAdmin(); // ✅ Only admins can read API keys
-      allow write: if isAdmin(); // ✅ Only admins can write API keys
+      allow read: if isAdmin();
+      allow write: if isAdmin();
     }
 
     // Promo offers (read-only for users)
     match /promo_offers/{offerId} {
       allow read: if isSignedIn();
-      allow write: if isAdmin(); // ✅ Only admins can create promo offers
+      allow write: if isAdmin();
     }
 
-    // Analytics (write-only)
+    // ✅ FIXED: Analytics - Allow admins to read
     match /analytics/{analyticsId} {
-      allow read: if isAdmin(); // ✅ Only admins can read analytics
+      allow read: if isAdmin();
       allow create: if isSignedIn();
     }
 
@@ -62,12 +62,12 @@ service cloud.firestore {
       allow create: if isSignedIn();
     }
 
-    // Support Tickets - Users can create, read their own
+    // Support Tickets - Users can create, read their own, admins can read all
     match /support_tickets/{ticketId} {
       allow create: if isSignedIn();
       allow read: if isSignedIn() && 
         (resource.data.userId == request.auth.uid || isAdmin());
-      allow update: if isAdmin(); // ✅ Only admins can update tickets
+      allow update: if isAdmin();
     }
   }
 }
