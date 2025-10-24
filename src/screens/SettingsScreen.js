@@ -384,24 +384,34 @@ const SettingsScreen = ({ navigation }) => {
 
           <List.Item
             title="Smart Coaching"
-            description={isPremium ? "Powered by advanced AI" : "Upgrade to Premium to unlock AI coaching"}
+            description={isPremium ? "Get AI-powered habit insights" : "Upgrade to Premium to unlock AI coaching"}
             left={(props) => <List.Icon {...props} icon="brain" />}
-            right={(props) => !isPremium && <List.Icon {...props} icon="chevron-right" />}
+            right={(props) => <List.Icon {...props} icon="chevron-right" />}
             onPress={() => {
-              if (!isPremium) {
+              if (!isPremium && !isAdmin) {
                 Alert.alert(
                   'Premium Feature',
                   'Smart Coaching is available for Premium subscribers only. Upgrade now to get personalized AI-powered habit coaching!',
-                  [
-                    { text: 'Maybe Later', style: 'cancel' },
-                    { text: 'Upgrade to Premium', onPress: handlePremiumUpgrade }
-                  ]
-                );
-              }
-            }}
-            titleStyle={styles.listItemTitle}
-            descriptionStyle={styles.listItemDescription}
-          />
+                [
+                  { text: 'Maybe Later', style: 'cancel' },
+                  { text: 'Upgrade to Premium', onPress: handlePremiumUpgrade }
+                ]
+              );
+            } else {
+              // Navigate to AI Coaching screen
+              Alert.alert(
+                'AI Coaching',
+                'AI-powered coaching is available! Go to any habit and tap the lightbulb icon to get personalized insights and suggestions.',
+              [
+                { text: 'Got it!', style: 'default' }
+              ]
+            );
+          }
+        }}
+        titleStyle={styles.listItemTitle}
+        descriptionStyle={styles.listItemDescription}
+      />
+
           
           {isAdmin && (
             <List.Item
