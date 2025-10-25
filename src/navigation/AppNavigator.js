@@ -20,7 +20,7 @@ import AboutScreen from '../screens/AboutScreen';
 import FirebaseService from '../services/FirebaseService';
 import AdService from '../services/AdService';
 import NotificationService from '../services/NotificationService';
-import AdminService from '../services/AdminService';
+// ✅ REMOVED: AdminService import no longer needed in navigator
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -103,7 +103,7 @@ const MainTabNavigator = () => {
 const AppNavigator = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(null);
   const [isInitialized, setIsInitialized] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
+  // ✅ REMOVED: isAdmin state no longer needed - AdminScreen handles access control
 
   useEffect(() => {
     initializeApp();
@@ -120,20 +120,8 @@ const AppNavigator = () => {
       // Listen for auth state changes
       const unsubscribe = FirebaseService.onAuthStateChanged(async (user) => {
         setIsAuthenticated(!!user);
-        
-        if (user) {
-          try {
-            const adminStatus = await AdminService.checkAdminStatus(user.email);
-            setIsAdmin(adminStatus);
-          } catch (error) {
-            console.error('Error checking admin status:', error);
-            setIsAdmin(false);
-          }
-        } else {
-          setIsAdmin(false);
-        }
-        
         setIsInitialized(true);
+        // ✅ REMOVED: Admin check no longer needed here - AdminScreen handles it
       });
 
       return unsubscribe;
@@ -193,18 +181,17 @@ const AppNavigator = () => {
                   cardOverlayEnabled: true,
                 }}
               />
-              {isAdmin && (
-                <Stack.Screen 
-                  name="Admin" 
-                  component={AdminScreen}
-                  options={{
-                    headerShown: false,
-                    presentation: 'modal',
-                    gestureEnabled: true,
-                    cardOverlayEnabled: true,
-                  }}
-                />
-              )}
+              {/* ✅ FIXED: Always include Admin screen - it handles its own access control */}
+              <Stack.Screen 
+                name="Admin" 
+                component={AdminScreen}
+                options={{
+                  headerShown: false,
+                  presentation: 'modal',
+                  gestureEnabled: true,
+                  cardOverlayEnabled: true,
+                }}
+              />
               <Stack.Screen 
                 name="About" 
                 component={AboutScreen}
