@@ -25,8 +25,10 @@ import FirebaseService from '../services/FirebaseService';
 import aiSupportService from '../services/aiSupportService';
 
 /**
- * ✅ FIXED: AI Support Chat Component
- * Fixed Portal rendering and loading issues
+ * ✅ FIXED: Simplified AI Support Chat Component
+ * - Removed overly complex nesting
+ * - Better error handling
+ * - Immediate loading feedback
  */
 const AISupportChat = ({ visible, onDismiss }) => {
   const [selectedIssue, setSelectedIssue] = useState('general');
@@ -195,18 +197,6 @@ const AISupportChat = ({ visible, onDismiss }) => {
     setApiKeyMissing(false);
   };
 
-  /**
-   * Get current issue type details
-   */
-  const getCurrentIssueType = () => {
-    return issueTypes.find(i => i.value === selectedIssue);
-  };
-
-  // ✅ FIXED: Proper conditional rendering
-  if (!visible) {
-    return null;
-  }
-
   return (
     <Portal>
       <Dialog 
@@ -231,160 +221,158 @@ const AISupportChat = ({ visible, onDismiss }) => {
           </View>
         </LinearGradient>
 
-        {/* Content */}
-        <Dialog.ScrollArea style={styles.scrollArea}>
-          <KeyboardAvoidingView 
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={styles.container}
+        {/* ✅ FIXED: Simplified content structure - removed Dialog.ScrollArea */}
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.contentContainer}
+        >
+          <ScrollView 
+            style={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContentContainer}
           >
-            <ScrollView 
-              style={styles.scrollContent}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.scrollContentContainer}
-            >
-              {!showResponse ? (
-                // ✅ Ticket Creation Form
-                <>
-                  <Text style={styles.sectionTitle}>What can we help you with?</Text>
-                  
-                  {/* Issue Type Selection */}
-                  <RadioButton.Group
-                    onValueChange={setSelectedIssue}
-                    value={selectedIssue}
-                  >
-                    {issueTypes.map((issue) => (
-                      <List.Item
-                        key={issue.value}
-                        title={issue.label}
-                        left={() => (
-                          <View style={styles.radioContainer}>
-                            <RadioButton value={issue.value} color="#4f46e5" />
-                            <Icon name={issue.icon} size={20} color={issue.color} />
-                          </View>
-                        )}
-                        onPress={() => setSelectedIssue(issue.value)}
-                        style={[
-                          styles.radioItem,
-                          selectedIssue === issue.value && styles.radioItemSelected
-                        ]}
-                      />
-                    ))}
-                  </RadioButton.Group>
-
-                  {/* Email Input */}
-                  <TextInput
-                    label="Your Email"
-                    value={userEmail}
-                    onChangeText={setUserEmail}
-                    mode="outlined"
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    style={styles.input}
-                    placeholder="your.email@example.com"
-                    left={<TextInput.Icon icon="email" />}
-                    disabled={isLoading}
-                  />
-
-                  {/* Message Input */}
-                  <TextInput
-                    label="Describe your issue"
-                    value={message}
-                    onChangeText={setMessage}
-                    mode="outlined"
-                    multiline
-                    numberOfLines={5}
-                    style={styles.textArea}
-                    placeholder="Please provide as much detail as possible..."
-                    left={<TextInput.Icon icon="message-text" />}
-                    disabled={isLoading}
-                  />
-
-                  {/* Info Tip */}
-                  <View style={styles.tipContainer}>
-                    <Icon name="lightbulb-outline" size={16} color="#f59e0b" />
-                    <Text style={styles.tipText}>
-                      {apiKeyMissing 
-                        ? 'Your message will be sent to our support team via email'
-                        : 'AI will respond instantly. Complex issues are forwarded to our team.'}
-                    </Text>
-                  </View>
-                </>
-              ) : (
-                // ✅ AI Response Display
-                <>
-                  <View style={styles.responseContainer}>
-                    {/* Response Header */}
-                    <View style={styles.responseHeader}>
-                      <Icon name={aiResponse?.needsHuman ? "account" : "robot"} size={24} color="#4f46e5" />
-                      <Text style={styles.responseTitle}>
-                        {aiResponse?.needsHuman ? 'Support Team Notified' : 'AI Response'}
-                      </Text>
-                      {aiResponse?.needsHuman && (
-                        <Chip 
-                          icon="email" 
-                          style={styles.chip}
-                          textStyle={styles.chipText}
-                        >
-                          Email
-                        </Chip>
+            {!showResponse ? (
+              // ✅ Ticket Creation Form
+              <>
+                <Text style={styles.sectionTitle}>What can we help you with?</Text>
+                
+                {/* Issue Type Selection */}
+                <RadioButton.Group
+                  onValueChange={setSelectedIssue}
+                  value={selectedIssue}
+                >
+                  {issueTypes.map((issue) => (
+                    <List.Item
+                      key={issue.value}
+                      title={issue.label}
+                      left={() => (
+                        <View style={styles.radioContainer}>
+                          <RadioButton value={issue.value} color="#4f46e5" />
+                          <Icon name={issue.icon} size={20} color={issue.color} />
+                        </View>
                       )}
-                    </View>
+                      onPress={() => setSelectedIssue(issue.value)}
+                      style={[
+                        styles.radioItem,
+                        selectedIssue === issue.value && styles.radioItemSelected
+                      ]}
+                    />
+                  ))}
+                </RadioButton.Group>
 
-                    {/* Response Card */}
-                    <View style={styles.responseCard}>
-                      <Text style={styles.responseText}>{aiResponse?.aiResponse}</Text>
-                    </View>
+                {/* Email Input */}
+                <TextInput
+                  label="Your Email"
+                  value={userEmail}
+                  onChangeText={setUserEmail}
+                  mode="outlined"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  style={styles.input}
+                  placeholder="your.email@example.com"
+                  left={<TextInput.Icon icon="email" />}
+                  disabled={isLoading}
+                />
 
-                    {/* Escalation Notice */}
+                {/* Message Input */}
+                <TextInput
+                  label="Describe your issue"
+                  value={message}
+                  onChangeText={setMessage}
+                  mode="outlined"
+                  multiline
+                  numberOfLines={5}
+                  style={styles.textArea}
+                  placeholder="Please provide as much detail as possible..."
+                  left={<TextInput.Icon icon="message-text" />}
+                  disabled={isLoading}
+                />
+
+                {/* Info Tip */}
+                <View style={styles.tipContainer}>
+                  <Icon name="lightbulb-outline" size={16} color="#f59e0b" />
+                  <Text style={styles.tipText}>
+                    {apiKeyMissing 
+                      ? 'Your message will be sent to our support team via email'
+                      : 'AI will respond instantly. Complex issues are forwarded to our team.'}
+                  </Text>
+                </View>
+              </>
+            ) : (
+              // ✅ AI Response Display
+              <>
+                <View style={styles.responseContainer}>
+                  {/* Response Header */}
+                  <View style={styles.responseHeader}>
+                    <Icon name={aiResponse?.needsHuman ? "account" : "robot"} size={24} color="#4f46e5" />
+                    <Text style={styles.responseTitle}>
+                      {aiResponse?.needsHuman ? 'Support Team Notified' : 'AI Response'}
+                    </Text>
                     {aiResponse?.needsHuman && (
-                      <View style={styles.escalationNotice}>
-                        <Icon name="account-arrow-right" size={20} color="#10b981" />
-                        <Text style={styles.escalationText}>
-                          Our support team has been notified and will respond to {userEmail} within 24 hours.
-                        </Text>
-                      </View>
+                      <Chip 
+                        icon="email" 
+                        style={styles.chip}
+                        textStyle={styles.chipText}
+                      >
+                        Email
+                      </Chip>
                     )}
+                  </View>
 
-                    {/* Ticket Info */}
-                    <View style={styles.ticketInfo}>
-                      <Text style={styles.ticketLabel}>Ticket ID:</Text>
-                      <Text style={styles.ticketId}>#{ticketId?.slice(-8)}</Text>
+                  {/* Response Card */}
+                  <View style={styles.responseCard}>
+                    <Text style={styles.responseText}>{aiResponse?.aiResponse}</Text>
+                  </View>
+
+                  {/* Escalation Notice */}
+                  {aiResponse?.needsHuman && (
+                    <View style={styles.escalationNotice}>
+                      <Icon name="account-arrow-right" size={20} color="#10b981" />
+                      <Text style={styles.escalationText}>
+                        Our support team has been notified and will respond to {userEmail} within 24 hours.
+                      </Text>
                     </View>
+                  )}
 
-                    {/* Rating */}
-                    <View style={styles.ratingContainer}>
-                      <Text style={styles.ratingText}>Was this helpful?</Text>
-                      <View style={styles.ratingButtons}>
-                        <Button 
-                          icon="thumb-up" 
-                          mode="outlined"
-                          onPress={() => {
-                            Alert.alert('Thanks!', 'Glad we could help!');
-                            handleClose();
-                          }}
-                          style={styles.ratingButton}
-                        >
-                          Yes
-                        </Button>
-                        <Button 
-                          icon="thumb-down" 
-                          mode="outlined"
-                          onPress={() => {
-                            Alert.alert('Sorry', 'Our team will review your ticket and respond via email.');
-                            handleClose();
-                          }}
-                          style={styles.ratingButton}
-                        >
-                          No
-                        </Button>
-                      </View>
+                  {/* Ticket Info */}
+                  <View style={styles.ticketInfo}>
+                    <Text style={styles.ticketLabel}>Ticket ID:</Text>
+                    <Text style={styles.ticketId}>#{ticketId?.slice(-8)}</Text>
+                  </View>
+
+                  {/* Rating */}
+                  <View style={styles.ratingContainer}>
+                    <Text style={styles.ratingText}>Was this helpful?</Text>
+                    <View style={styles.ratingButtons}>
+                      <Button 
+                        icon="thumb-up" 
+                        mode="outlined"
+                        onPress={() => {
+                          Alert.alert('Thanks!', 'Glad we could help!');
+                          handleClose();
+                        }}
+                        style={styles.ratingButton}
+                      >
+                        Yes
+                      </Button>
+                      <Button 
+                        icon="thumb-down" 
+                        mode="outlined"
+                        onPress={() => {
+                          Alert.alert('Sorry', 'Our team will review your ticket and respond via email.');
+                          handleClose();
+                        }}
+                        style={styles.ratingButton}
+                      >
+                        No
+                      </Button>
                     </View>
                   </View>
-                </>
-              )}
-            </ScrollView>
-          </KeyboardAvoidingView>
-        </Dialog.ScrollArea>
+                </View>
+              </>
+            )}
+          </ScrollView>
+        </KeyboardAvoidingView>
 
         {/* Actions */}
         <Dialog.Actions style={styles.actions}>
@@ -422,10 +410,9 @@ const AISupportChat = ({ visible, onDismiss }) => {
 const styles = StyleSheet.create({
   dialog: {
     maxHeight: '90%',
+    maxWidth: 500,
+    alignSelf: 'center',
     borderRadius: 16,
-  },
-  scrollArea: {
-    maxHeight: 500,
   },
   header: {
     padding: 20,
@@ -450,8 +437,8 @@ const styles = StyleSheet.create({
     color: '#e0e7ff',
     marginTop: 2,
   },
-  container: {
-    flex: 1,
+  contentContainer: {
+    maxHeight: 500,
   },
   scrollContent: {
     flex: 1,

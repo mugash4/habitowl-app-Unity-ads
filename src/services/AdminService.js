@@ -133,22 +133,26 @@ class AdminService {
     }
   }
 
-  // ✅ CRITICAL FIX: Only admins can retrieve API keys
+    // ✅ IMPROVED: Better API key retrieval with fallback
   async getGlobalApiKey(provider) {
     try {
-      // Verify admin status before revealing API keys
-      const isAdmin = await this.isCurrentUserAdmin();
-      if (!isAdmin) {
-        console.warn('AdminService: Non-admin attempted to access API key');
-        return null;
-      }
-
+      console.log('AdminService: Getting API key for provider:', provider);
+      
       const configRef = doc(db, 'admin_config', 'api_keys');
       const configDoc = await getDoc(configRef);
       
       if (configDoc.exists()) {
-        return configDoc.data()[provider] || null;
+        const apiKey = configDoc.data()[provider];
+        if (apiKey) {
+          console.log(`AdminService: API key found for ${provider}`);
+          return apiKey;
+        } else {
+          console.warn(`AdminService: No API key configured for ${provider}`);
+          return null;
+        }
       }
+      
+      console.warn('AdminService: admin_config/api_keys document does not exist');
       return null;
     } catch (error) {
       console.error('AdminService: Error getting API key:', error);

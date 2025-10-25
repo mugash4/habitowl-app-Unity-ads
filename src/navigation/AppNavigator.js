@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Provider as PaperProvider, MD3LightTheme } from 'react-native-paper';
+import { Provider as PaperProvider, Portal, MD3LightTheme } from 'react-native-paper';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 // Screens
@@ -20,12 +20,10 @@ import AboutScreen from '../screens/AboutScreen';
 import FirebaseService from '../services/FirebaseService';
 import AdService from '../services/AdService';
 import NotificationService from '../services/NotificationService';
-// ✅ REMOVED: AdminService import no longer needed in navigator
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
-// ✅ FIXED: Properly extend MD3LightTheme instead of creating theme from scratch
 const theme = {
   ...MD3LightTheme,
   colors: {
@@ -103,7 +101,6 @@ const MainTabNavigator = () => {
 const AppNavigator = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(null);
   const [isInitialized, setIsInitialized] = useState(false);
-  // ✅ REMOVED: isAdmin state no longer needed - AdminScreen handles access control
 
   useEffect(() => {
     initializeApp();
@@ -121,7 +118,6 @@ const AppNavigator = () => {
       const unsubscribe = FirebaseService.onAuthStateChanged(async (user) => {
         setIsAuthenticated(!!user);
         setIsInitialized(true);
-        // ✅ REMOVED: Admin check no longer needed here - AdminScreen handles it
       });
 
       return unsubscribe;
@@ -137,77 +133,79 @@ const AppNavigator = () => {
 
   return (
     <PaperProvider theme={theme}>
-      <NavigationContainer>
-        <Stack.Navigator
-          screenOptions={{
-            headerShown: false,
-            cardStyle: { backgroundColor: '#f8fafc' },
-          }}
-        >
-          {isAuthenticated ? (
-            <>
-              <Stack.Screen 
-                name="Main" 
-                component={MainTabNavigator}
-                options={{ headerShown: false }}
-              />
-              <Stack.Screen 
-                name="CreateHabit" 
-                component={CreateHabitScreen}
-                options={{
-                  headerShown: false,
-                  presentation: 'modal',
-                  gestureEnabled: true,
-                  cardOverlayEnabled: true,
-                }}
-              />
-              <Stack.Screen 
-                name="EditHabit" 
-                component={EditHabitScreen}
-                options={{
-                  headerShown: false,
-                  presentation: 'modal',
-                  gestureEnabled: true,
-                  cardOverlayEnabled: true,
-                }}
-              />
-              <Stack.Screen 
-                name="Premium" 
-                component={PremiumScreen}
-                options={{
-                  headerShown: false,
-                  presentation: 'modal',
-                  gestureEnabled: true,
-                  cardOverlayEnabled: true,
-                }}
-              />
-              {/* ✅ FIXED: Always include Admin screen - it handles its own access control */}
-              <Stack.Screen 
-                name="Admin" 
-                component={AdminScreen}
-                options={{
-                  headerShown: false,
-                  presentation: 'modal',
-                  gestureEnabled: true,
-                  cardOverlayEnabled: true,
-                }}
-              />
-              <Stack.Screen 
-                name="About" 
-                component={AboutScreen}
-                options={{
-                  headerShown: false,
-                  presentation: 'modal',
-                  gestureEnabled: true,
-                  cardOverlayEnabled: true,
-                }}
-              />
-            </>
-          ) : (
-            <Stack.Screen name="Auth" component={AuthScreen} />
-          )}
-        </Stack.Navigator>
-      </NavigationContainer>
+      {/* ✅ CRITICAL FIX: Add Portal.Host for proper Portal rendering */}
+      <Portal.Host>
+        <NavigationContainer>
+          <Stack.Navigator
+            screenOptions={{
+              headerShown: false,
+              cardStyle: { backgroundColor: '#f8fafc' },
+            }}
+          >
+            {isAuthenticated ? (
+              <>
+                <Stack.Screen 
+                  name="Main" 
+                  component={MainTabNavigator}
+                  options={{ headerShown: false }}
+                />
+                <Stack.Screen 
+                  name="CreateHabit" 
+                  component={CreateHabitScreen}
+                  options={{
+                    headerShown: false,
+                    presentation: 'modal',
+                    gestureEnabled: true,
+                    cardOverlayEnabled: true,
+                  }}
+                />
+                <Stack.Screen 
+                  name="EditHabit" 
+                  component={EditHabitScreen}
+                  options={{
+                    headerShown: false,
+                    presentation: 'modal',
+                    gestureEnabled: true,
+                    cardOverlayEnabled: true,
+                  }}
+                />
+                <Stack.Screen 
+                  name="Premium" 
+                  component={PremiumScreen}
+                  options={{
+                    headerShown: false,
+                    presentation: 'modal',
+                    gestureEnabled: true,
+                    cardOverlayEnabled: true,
+                  }}
+                />
+                <Stack.Screen 
+                  name="Admin" 
+                  component={AdminScreen}
+                  options={{
+                    headerShown: false,
+                    presentation: 'modal',
+                    gestureEnabled: true,
+                    cardOverlayEnabled: true,
+                  }}
+                />
+                <Stack.Screen 
+                  name="About" 
+                  component={AboutScreen}
+                  options={{
+                    headerShown: false,
+                    presentation: 'modal',
+                    gestureEnabled: true,
+                    cardOverlayEnabled: true,
+                  }}
+                />
+              </>
+            ) : (
+              <Stack.Screen name="Auth" component={AuthScreen} />
+            )}
+          </Stack.Navigator>
+        </NavigationContainer>
+      </Portal.Host>
     </PaperProvider>
   );
 };
