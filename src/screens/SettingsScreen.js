@@ -384,7 +384,7 @@ const SettingsScreen = ({ navigation }) => {
 
           <List.Item
             title="Smart Coaching"
-            description={isPremium ? "Get AI-powered habit insights" : "Upgrade to Premium to unlock AI coaching"}
+            description={isPremium || isAdmin ? "AI-powered coaching is available! Go to any habit and tap the lightbulb icon to get personalized insights and suggestions." : "Upgrade to Premium to unlock AI coaching"}
             left={(props) => <List.Icon {...props} icon="brain" />}
             right={(props) => <List.Icon {...props} icon="chevron-right" />}
             onPress={() => {
@@ -397,20 +397,21 @@ const SettingsScreen = ({ navigation }) => {
                   { text: 'Upgrade to Premium', onPress: handlePremiumUpgrade }
                 ]
               );
-            } else {
-              // Navigate to AI Coaching screen
-              Alert.alert(
-                'AI Coaching',
-                'AI-powered coaching is available! Go to any habit and tap the lightbulb icon to get personalized insights and suggestions.',
-              [
-                { text: 'Got it!', style: 'default' }
-              ]
-            );
-          }
-        }}
-        titleStyle={styles.listItemTitle}
-        descriptionStyle={styles.listItemDescription}
-      />
+             } else {
+                // Show instructions for premium users
+                Alert.alert(
+                  '💡 How to Use AI Coaching',
+                  'AI-powered coaching is available!\n\n1. Go to Home screen\n2. Find any habit card\n3. Tap the lightbulb (💡) icon on the habit\n4. Ask questions and get personalized coaching!\n\nThe lightbulb icon is located next to each habit name.',
+                [
+                  { text: 'Got it!', style: 'default' }
+                ]
+              );
+            }
+          }}
+          titleStyle={styles.listItemTitle}
+          descriptionStyle={styles.listItemDescription}
+        />
+
 
           
           {isAdmin && (

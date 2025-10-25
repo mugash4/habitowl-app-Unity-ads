@@ -277,7 +277,7 @@ const AdminScreen = ({ navigation }) => {
     return null;
   }
 
-  // ✅ CRITICAL FIX: Render admin panel content
+  // ✅ SCROLL FIX: Properly structured layout with header outside and ScrollView with proper bounds
   return (
     <View style={styles.container}>
       <Appbar.Header style={styles.header}>
@@ -291,9 +291,11 @@ const AdminScreen = ({ navigation }) => {
       </Appbar.Header>
 
       <ScrollView 
-        style={styles.content} 
-        showsVerticalScrollIndicator={false}
+        style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={true}
+        bounces={true}
+        alwaysBounceVertical={true}
       >
         {/* Security Notice */}
         <Card style={[styles.card, styles.securityNotice]}>
@@ -510,11 +512,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     elevation: 2,
   },
-  content: {
+  // ✅ SCROLL FIX: Proper ScrollView styling
+  scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 20,
+    flexGrow: 1,
+    paddingBottom: 40,
   },
   sectionTitle: {
     fontSize: 20,
@@ -630,7 +634,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   bottomPadding: {
-    height: 20,
+    height: 40,
   },
 });
 
