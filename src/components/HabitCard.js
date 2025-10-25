@@ -26,24 +26,45 @@ const HabitCard = ({
   const [scaleAnim] = useState(new Animated.Value(1));
   const [showAICoaching, setShowAICoaching] = useState(false);
   const [isPremium, setIsPremium] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
-  // Check premium status on mount
+  // Check premium and admin status on mount
   React.useEffect(() => {
-    checkPremiumStatus();
+    checkPremiumAndAdminStatus();
   }, []);
 
-  const checkPremiumStatus = async () => {
+  const checkPremiumAndAdminStatus = async () => {
     try {
+      // Check premium status
       const userStats = await FirebaseService.getUserStats();
-      setIsPremium(userStats?.isPremium || false);
+      const premiumStatus = userStats?.isPremium || false;
+      setIsPremium(premiumStatus);
+      
+      // Check admin status
+      const user = FirebaseService.currentUser;
+      if (user && user.email) {
+        const AdminService = require('../services/AdminService').default;
+        const adminStatus = await AdminService.checkAdminStatus(user.email);
+        setIsAdmin(adminStatus);
+        
+        // If user is admin, grant premium access
+        if (adminStatus && !premiumStatus) {
+          console.log('✅ Admin detected in HabitCard, granting premium access');
+          setIsPremium(true);
+        }
+      }
     } catch (error) {
-      console.error('Error checking premium status:', error);
+      console.error('Error checking premium/admin status:', error);
       setIsPremium(false);
+      setIsAdmin(false);
     }
   };
 
   const handleAICoaching = () => {
-    if (!isPremium) {
+    // Check if user has premium access (either premium subscriber or admin)
+    const hasAccess = isPremium || isAdmin;
+    
+    if (!hasAccess) {
       Alert.alert(
         '🤖 AI Coaching - Premium Feature',
         'Smart Coaching with AI-powered insights is available for Premium subscribers!\n\nUpgrade now to get:\n• Personalized habit advice\n• Progress analysis\n• Custom recommendations\n• Unlimited coaching sessions',
@@ -52,7 +73,6 @@ const HabitCard = ({
           { 
             text: 'Upgrade to Premium', 
             onPress: () => {
-              // Navigate to premium screen (handled by parent)
               Alert.alert('Premium', 'Please upgrade from Settings → Premium');
             }
           }
@@ -61,7 +81,7 @@ const HabitCard = ({
       return;
     }
 
-    // Show AI Coaching Chat for premium users
+    // Show AI Coaching Chat for premium users and admins
     setShowAICoaching(true);
   };
 
@@ -170,6 +190,9 @@ const HabitCard = ({
     return (completionsLast7Days / last7Days) * 100;
   };
 
+  // Determine if lightbulb should be active (premium or admin)
+  const hasAIAccess = isPremium || isAdmin;
+
   return (
     <>
       <Animated.View style={[styles.container, { transform: [{ scale: scaleAnim }] }]}>
@@ -190,7 +213,7 @@ const HabitCard = ({
                     {habit.name}
                   </Text>
                   
-                  {/* 🔥 AI Coaching Lightbulb Button */}
+                  {/* 🔥 AI Coaching Lightbulb Button - Now works for Admin too */}
                   <TouchableOpacity 
                     style={styles.aiButton}
                     onPress={handleAICoaching}
@@ -198,7 +221,7 @@ const HabitCard = ({
                     <Icon 
                       name="lightbulb" 
                       size={24} 
-                      color={isPremium ? '#f59e0b' : '#9ca3af'} 
+                      color={hasAIAccess ? '#f59e0b' : '#9ca3af'} 
                     />
                   </TouchableOpacity>
                 </View>
@@ -260,7 +283,6 @@ const HabitCard = ({
               </Text>
             </View>
 
-            {/* 🔧 FIXED: Tags row with proper text display */}
             <View style={styles.tagsRow}>
               <View style={styles.chipWrapper}>
                 <Chip 
@@ -332,7 +354,7 @@ const HabitCard = ({
         </Card>
       </Animated.View>
 
-      {/* 🔥 AI Coaching Dialog */}
+      {/* 🔥 AI Coaching Dialog - Now works for Admin too */}
       <AICoachingChat
         visible={showAICoaching}
         onDismiss={() => setShowAICoaching(false)}
@@ -380,7 +402,6 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     flex: 1,
   },
-  // 🔥 AI Button styles
   aiButton: {
     padding: 4,
     marginLeft: 8,
@@ -435,14 +456,12 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     marginTop: 2,
   },
-  // 🔧 FIXED: Tags row with proper wrapping and spacing
   tagsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
     flexWrap: 'wrap',
   },
-  // 🔧 NEW: Wrapper for chips to ensure proper display
   chipWrapper: {
     marginRight: 8,
     marginBottom: 4,
