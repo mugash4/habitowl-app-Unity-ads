@@ -28,28 +28,24 @@ const HabitCard = ({
   const [isPremium, setIsPremium] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // Check premium and admin status on mount
   React.useEffect(() => {
     checkPremiumAndAdminStatus();
   }, []);
 
   const checkPremiumAndAdminStatus = async () => {
     try {
-      // Check premium status
       const userStats = await FirebaseService.getUserStats();
       const premiumStatus = userStats?.isPremium || false;
       setIsPremium(premiumStatus);
       
-      // Check admin status
       const user = FirebaseService.currentUser;
       if (user && user.email) {
         const AdminService = require('../services/AdminService').default;
         const adminStatus = await AdminService.checkAdminStatus(user.email);
         setIsAdmin(adminStatus);
         
-        // If user is admin, grant premium access
         if (adminStatus && !premiumStatus) {
-          console.log('✅ Admin detected in HabitCard, granting premium access');
+          console.log('✅ Admin detected in HabitCard, granting AI coaching access');
           setIsPremium(true);
         }
       }
@@ -61,7 +57,6 @@ const HabitCard = ({
   };
 
   const handleAICoaching = () => {
-    // Check if user has premium access (either premium subscriber or admin)
     const hasAccess = isPremium || isAdmin;
     
     if (!hasAccess) {
@@ -81,7 +76,6 @@ const HabitCard = ({
       return;
     }
 
-    // Show AI Coaching Chat for premium users and admins
     setShowAICoaching(true);
   };
 
@@ -190,7 +184,6 @@ const HabitCard = ({
     return (completionsLast7Days / last7Days) * 100;
   };
 
-  // Determine if lightbulb should be active (premium or admin)
   const hasAIAccess = isPremium || isAdmin;
 
   return (
@@ -213,7 +206,6 @@ const HabitCard = ({
                     {habit.name}
                   </Text>
                   
-                  {/* 🔥 AI Coaching Lightbulb Button - Now works for Admin too */}
                   <TouchableOpacity 
                     style={styles.aiButton}
                     onPress={handleAICoaching}
@@ -354,7 +346,6 @@ const HabitCard = ({
         </Card>
       </Animated.View>
 
-      {/* 🔥 AI Coaching Dialog - Now works for Admin too */}
       <AICoachingChat
         visible={showAICoaching}
         onDismiss={() => setShowAICoaching(false)}

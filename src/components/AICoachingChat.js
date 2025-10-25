@@ -23,8 +23,8 @@ import FirebaseService from '../services/FirebaseService';
 import SecureAIService from '../services/SecureAIService';
 
 /**
- * ✅ COMPLETE: AI Coaching Chat for Habits
- * Provides personalized habit coaching using AI
+ * ✅ FIXED: AI Coaching Chat for Habits
+ * Now works for both Premium users AND Admins
  */
 const AICoachingChat = ({ visible, onDismiss, habit }) => {
   const [message, setMessage] = useState('');
@@ -32,11 +32,12 @@ const AICoachingChat = ({ visible, onDismiss, habit }) => {
   const [aiResponse, setAiResponse] = useState(null);
   const [showResponse, setShowResponse] = useState(false);
   const [isPremium, setIsPremium] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [conversationHistory, setConversationHistory] = useState([]);
 
   useEffect(() => {
     if (visible) {
-      checkPremiumStatus();
+      checkAccessStatus();
       setShowResponse(false);
       setAiResponse(null);
       setMessage('');
@@ -44,20 +45,44 @@ const AICoachingChat = ({ visible, onDismiss, habit }) => {
     }
   }, [visible]);
 
-  const checkPremiumStatus = async () => {
+  const checkAccessStatus = async () => {
     try {
+      console.log('🔍 AICoachingChat: Checking user access status...');
+      
+      // Check premium status
       const userStats = await FirebaseService.getUserStats();
-      setIsPremium(userStats?.isPremium || false);
+      const premiumStatus = userStats?.isPremium || false;
+      setIsPremium(premiumStatus);
+      console.log('Premium status:', premiumStatus);
+      
+      // Check admin status
+      const user = FirebaseService.currentUser;
+      if (user && user.email) {
+        const AdminService = require('../services/AdminService').default;
+        const adminStatus = await AdminService.checkAdminStatus(user.email);
+        setIsAdmin(adminStatus);
+        console.log('Admin status:', adminStatus);
+        
+        // Grant premium access to admins
+        if (adminStatus && !premiumStatus) {
+          console.log('✅ Admin detected, granting AI access');
+          setIsPremium(true);
+        }
+      }
     } catch (error) {
-      console.error('Error checking premium status:', error);
+      console.error('Error checking access status:', error);
       setIsPremium(false);
+      setIsAdmin(false);
     }
   };
 
   const handleSendMessage = async () => {
-    if (!isPremium) {
+    // Check access (premium OR admin)
+    const hasAccess = isPremium || isAdmin;
+    
+    if (!hasAccess) {
       Alert.alert(
-        'Premium Feature',
+        '🔒 Premium Feature',
         'AI Coaching is available for Premium subscribers only. Upgrade now to get personalized habit coaching!',
         [
           { text: 'Maybe Later', style: 'cancel' },
@@ -77,6 +102,8 @@ const AICoachingChat = ({ visible, onDismiss, habit }) => {
       setShowResponse(false);
 
       console.log('📤 Requesting AI coaching...');
+      console.log('User is admin:', isAdmin);
+      console.log('User is premium:', isPremium);
 
       // Build coaching prompt
       const prompt = buildCoachingPrompt(habit, message.trim());
@@ -101,22 +128,30 @@ const AICoachingChat = ({ visible, onDismiss, habit }) => {
       // Track event
       await FirebaseService.trackEvent('ai_coaching_used', {
         habit_name: habit.name,
-        habit_category: habit.category
+        habit_category: habit.category,
+        is_admin: isAdmin
       }).catch(() => {});
 
     } catch (error) {
       console.error('❌ Error getting AI coaching:', error);
 
+      // Enhanced error handling with better messages
       if (error.message && error.message.includes('API key')) {
         Alert.alert(
-          'AI Coaching Unavailable',
-          'AI coaching is being set up. Please try again later or contact support.',
-          [{ text: 'OK' }]
+          '⚙️ Setup Required',
+          'AI Coaching needs to be configured.\n\nPlease:\n1. Go to Admin Settings\n2. Add your DeepSeek API key\n3. Save and try again\n\nGet your free API key at: https://platform.deepseek.com',
+          [{ text: 'Got It' }]
+        );
+      } else if (error.message && error.message.includes('not configured')) {
+        Alert.alert(
+          '⚙️ Setup Required',
+          error.message,
+          [{ text: 'Got It' }]
         );
       } else {
         Alert.alert(
-          'Error',
-          'Failed to get AI coaching. Please try again later.',
+          'Connection Error',
+          'Failed to get AI coaching. Please check your internet connection and try again.',
           [{ text: 'OK' }]
         );
       }
@@ -135,14 +170,17 @@ const AICoachingChat = ({ visible, onDismiss, habit }) => {
    * Build coaching prompt with habit context
    */
   const buildCoachingPrompt = (habit, userMessage) => {
+    const completionRate = calculateCompletionRate(habit);
+    
     const basePrompt = `You are HabitOwl AI Coach. Provide personalized, actionable habit coaching.
 
 HABIT DETAILS:
 - Name: ${habit.name}
 - Category: ${habit.category || 'General'}
-- Current Streak: ${habit.streak || 0} days
-- Completion Rate: ${calculateCompletionRate(habit)}%
-- Total Completions: ${habit.completedDates?.length || 0}
+- Current Streak: ${habit.currentStreak || 0} days
+- Longest Streak: ${habit.longestStreak || 0} days
+- Completion Rate: ${completionRate}%
+- Total Completions: ${habit.totalCompletions || 0}
 
 USER QUESTION:
 ${userMessage || 'Provide general coaching for this habit'}
@@ -162,10 +200,10 @@ YOUR COACHING:`;
   };
 
   /**
-   * Calculate habit completion rate
+   * Calculate habit completion rate (last 30 days)
    */
   const calculateCompletionRate = (habit) => {
-    if (!habit.completedDates || habit.completedDates.length === 0) {
+    if (!habit.completions || habit.completions.length === 0) {
       return 0;
     }
 
@@ -173,7 +211,7 @@ YOUR COACHING:`;
     const thirtyDaysAgo = new Date(today);
     thirtyDaysAgo.setDate(today.getDate() - 30);
 
-    const recentCompletions = habit.completedDates.filter(dateStr => {
+    const recentCompletions = habit.completions.filter(dateStr => {
       const date = new Date(dateStr);
       return date >= thirtyDaysAgo && date <= today;
     });
@@ -185,7 +223,7 @@ YOUR COACHING:`;
    * Get fallback coaching when AI is unavailable
    */
   const getFallbackCoaching = (habit) => {
-    const streak = habit.streak || 0;
+    const streak = habit.currentStreak || 0;
     const completionRate = calculateCompletionRate(habit);
 
     if (streak === 0) {
@@ -234,7 +272,7 @@ YOUR COACHING:`;
     setMessage('');
     setShowResponse(false);
     setAiResponse(null);
-    setConversationHistory([]);
+    // Keep conversation history for context
   };
 
   return (
@@ -257,6 +295,9 @@ YOUR COACHING:`;
               <Text style={styles.headerSubtitle}>
                 Personalized coaching for "{habit?.name}"
               </Text>
+              {isAdmin && (
+                <Text style={styles.adminBadge}>👑 Admin Access</Text>
+              )}
             </View>
           </View>
         </LinearGradient>
@@ -275,7 +316,7 @@ YOUR COACHING:`;
               <View style={styles.statsContainer}>
                 <View style={styles.statBox}>
                   <Icon name="fire" size={20} color="#ef4444" />
-                  <Text style={styles.statValue}>{habit?.streak || 0}</Text>
+                  <Text style={styles.statValue}>{habit?.currentStreak || 0}</Text>
                   <Text style={styles.statLabel}>Streak</Text>
                 </View>
                 <View style={styles.statBox}>
@@ -285,7 +326,7 @@ YOUR COACHING:`;
                 </View>
                 <View style={styles.statBox}>
                   <Icon name="check-circle" size={20} color="#3b82f6" />
-                  <Text style={styles.statValue}>{habit?.completedDates?.length || 0}</Text>
+                  <Text style={styles.statValue}>{habit?.totalCompletions || 0}</Text>
                   <Text style={styles.statLabel}>Total</Text>
                 </View>
               </View>
@@ -438,6 +479,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#e0e7ff',
     marginTop: 2,
+  },
+  adminBadge: {
+    fontSize: 12,
+    color: '#fbbf24',
+    marginTop: 4,
+    fontWeight: '600',
   },
   container: {
     flex: 1,

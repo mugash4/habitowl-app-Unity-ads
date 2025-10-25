@@ -51,14 +51,12 @@ const AdminScreen = ({ navigation }) => {
     verifyAdminAccess();
   }, []);
 
-  // ✅ CRITICAL FIX: Verify admin access with proper error handling
   const verifyAdminAccess = async () => {
     console.log('AdminScreen: Starting admin verification...');
     
     try {
       setIsVerifyingAdmin(true);
       
-      // Check admin status
       const isAdmin = await AdminService.isCurrentUserAdmin();
       console.log('AdminScreen: Admin check result:', isAdmin);
       
@@ -83,7 +81,6 @@ const AdminScreen = ({ navigation }) => {
       console.log('AdminScreen: Access granted - loading data');
       setIsAuthorized(true);
       
-      // Load admin data with error handling
       await loadAdminDataSafely();
       
     } catch (error) {
@@ -103,14 +100,12 @@ const AdminScreen = ({ navigation }) => {
     }
   };
 
-  // ✅ CRITICAL FIX: Load data with proper error handling and fallbacks
   const loadAdminDataSafely = async () => {
     console.log('AdminScreen: Loading admin data...');
     
     try {
       setLoading(true);
       
-      // Load stats with timeout
       const statsPromise = AdminService.getAppStatistics();
       const statsTimeout = new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Stats timeout')), 10000)
@@ -128,10 +123,8 @@ const AdminScreen = ({ navigation }) => {
         });
       } catch (statsError) {
         console.warn('AdminScreen: Stats loading failed:', statsError.message);
-        // Keep default stats
       }
       
-      // Load provider with timeout
       const providerPromise = AdminService.getDefaultAiProvider();
       const providerTimeout = new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Provider timeout')), 5000)
@@ -150,7 +143,6 @@ const AdminScreen = ({ navigation }) => {
       
     } catch (error) {
       console.error('AdminScreen: Data loading error:', error);
-      // Don't show alert, just log error and continue with defaults
     } finally {
       setLoading(false);
     }
@@ -262,7 +254,6 @@ const AdminScreen = ({ navigation }) => {
     );
   };
 
-  // ✅ CRITICAL FIX: Show loading screen while verifying
   if (isVerifyingAdmin) {
     return (
       <View style={[styles.container, styles.centerContent]}>
@@ -272,12 +263,10 @@ const AdminScreen = ({ navigation }) => {
     );
   }
 
-  // ✅ CRITICAL FIX: Don't render anything if not authorized
   if (!isAuthorized) {
     return null;
   }
 
-  // ✅✅✅ COMPLETE SCROLL FIX: Optimized ScrollView configuration for smooth scrolling
   return (
     <View style={styles.container}>
       <Appbar.Header style={styles.header}>
@@ -298,8 +287,8 @@ const AdminScreen = ({ navigation }) => {
         alwaysBounceVertical={false}
         nestedScrollEnabled={true}
         removeClippedSubviews={false}
+        scrollEventThrottle={16}
       >
-        {/* Security Notice */}
         <Card style={[styles.card, styles.securityNotice]}>
           <Card.Content>
             <View style={styles.noticeHeader}>
@@ -312,11 +301,9 @@ const AdminScreen = ({ navigation }) => {
           </Card.Content>
         </Card>
 
-        {/* App Statistics */}
         <Text style={styles.sectionTitle}>App Statistics</Text>
         {renderStats()}
 
-        {/* AI Configuration */}
         <Card style={styles.card}>
           <List.Subheader>🔐 AI Configuration (Admin Only)</List.Subheader>
           
@@ -349,7 +336,6 @@ const AdminScreen = ({ navigation }) => {
           </View>
         </Card>
 
-        {/* Marketing Tools */}
         <Card style={styles.card}>
           <List.Subheader>Marketing Tools</List.Subheader>
           
@@ -369,7 +355,6 @@ const AdminScreen = ({ navigation }) => {
           />
         </Card>
 
-        {/* Quick Actions */}
         <Card style={styles.card}>
           <List.Subheader>Quick Actions</List.Subheader>
           
@@ -388,11 +373,9 @@ const AdminScreen = ({ navigation }) => {
           />
         </Card>
 
-        {/* Extra padding at bottom to ensure last item is fully visible */}
         <View style={styles.bottomPadding} />
       </ScrollView>
 
-      {/* API Key Configuration Dialog */}
       <Portal>
         <Dialog visible={showApiDialog} onDismiss={() => setShowApiDialog(false)}>
           <Dialog.Title>🔐 Configure API Key (Admin Only)</Dialog.Title>
@@ -443,7 +426,6 @@ const AdminScreen = ({ navigation }) => {
         </Dialog>
       </Portal>
 
-      {/* Promotional Offer Dialog */}
       <Portal>
         <Dialog visible={showPromoDialog} onDismiss={() => setShowPromoDialog(false)}>
           <Dialog.Title>Create Promotional Offer</Dialog.Title>
@@ -515,12 +497,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     elevation: 2,
   },
-  // ✅✅✅ COMPLETE SCROLL FIX: Optimized scrolling styles
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 80,
+    paddingBottom: 100,
   },
   sectionTitle: {
     fontSize: 20,
@@ -636,7 +617,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   bottomPadding: {
-    height: 80,
+    height: 100,
   },
 });
 

@@ -75,19 +75,39 @@ class SecureAIService {
 
   async callSecureAI(prompt) {
     try {
-      // Check if user is premium
+      console.log('🤖 SecureAIService: Starting AI call...');
+      
+      // Check if user is premium or admin
       const userStats = await FirebaseService.getUserStats();
-      const isPremium = userStats?.isPremium || false;
+      let isPremium = userStats?.isPremium || false;
+      
+      // Double-check admin status
+      const user = FirebaseService.currentUser;
+      if (user && user.email && !isPremium) {
+        console.log('🔍 Checking admin status for:', user.email);
+        const isAdmin = await AdminService.checkAdminStatus(user.email);
+        if (isAdmin) {
+          console.log('✅ Admin detected, granting premium access');
+          isPremium = true;
+        }
+      }
+      
+      console.log('👤 User premium status:', isPremium);
       
       // Get the appropriate provider
       const provider = await this.getActiveProvider(isPremium);
+      console.log('🔧 Using AI provider:', provider);
       
       // Get API key from secure admin config
+      console.log('🔑 Fetching API key from Firestore...');
       const apiKey = await AdminService.getGlobalApiKey(provider);
       
       if (!apiKey) {
-        throw new Error(`No API key configured for ${provider}`);
+        console.error('❌ No API key found for provider:', provider);
+        throw new Error(`API_KEY_MISSING: No API key configured for ${provider}. Please add it in Admin Settings.`);
       }
+
+      console.log('✅ API key found, making AI request...');
 
       switch (provider) {
         case 'deepseek':
@@ -100,68 +120,101 @@ class SecureAIService {
           throw new Error('Invalid AI provider');
       }
     } catch (error) {
-      console.error('AI Service Error:', error);
+      console.error('❌ AI Service Error:', error);
+      
+      // Enhanced error messages for debugging
+      if (error.message && error.message.includes('API_KEY_MISSING')) {
+        throw new Error('AI coaching is not configured yet. Please contact admin to add API keys in Firestore admin_config/api_keys document.');
+      }
+      
       throw error;
     }
   }
 
   async callDeepSeek(prompt, apiKey) {
-    const response = await axios.post('https://api.deepseek.com/v1/chat/completions', {
-      model: 'deepseek-chat',
-      messages: [
-        { role: 'system', content: 'You are HabitOwl AI, a helpful habit coach. Always respond in the requested format and be encouraging.' },
-        { role: 'user', content: prompt }
-      ],
-      max_tokens: 500,
-      temperature: 0.7
-    }, {
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      }
-    });
+    console.log('📡 Calling DeepSeek API...');
+    
+    try {
+      const response = await axios.post('https://api.deepseek.com/v1/chat/completions', {
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: 'You are HabitOwl AI, a helpful habit coach. Always respond in the requested format and be encouraging.' },
+          { role: 'user', content: prompt }
+        ],
+        max_tokens: 500,
+        temperature: 0.7
+      }, {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000 // 30 second timeout
+      });
 
-    return response.data.choices[0].message.content;
+      console.log('✅ DeepSeek API response received');
+      return response.data.choices[0].message.content;
+    } catch (error) {
+      console.error('❌ DeepSeek API error:', error.response?.data || error.message);
+      throw new Error('DeepSeek API request failed. Please check API key and try again.');
+    }
   }
 
   async callOpenAI(prompt, apiKey) {
-    const response = await axios.post('https://api.openai.com/v1/chat/completions', {
-      model: 'gpt-3.5-turbo',
-      messages: [
-        { role: 'system', content: 'You are HabitOwl AI, a helpful habit coach. Always respond in the requested format and be encouraging.' },
-        { role: 'user', content: prompt }
-      ],
-      max_tokens: 500,
-      temperature: 0.7
-    }, {
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      }
-    });
+    console.log('📡 Calling OpenAI API...');
+    
+    try {
+      const response = await axios.post('https://api.openai.com/v1/chat/completions', {
+        model: 'gpt-3.5-turbo',
+        messages: [
+          { role: 'system', content: 'You are HabitOwl AI, a helpful habit coach. Always respond in the requested format and be encouraging.' },
+          { role: 'user', content: prompt }
+        ],
+        max_tokens: 500,
+        temperature: 0.7
+      }, {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000 // 30 second timeout
+      });
 
-    return response.data.choices[0].message.content;
+      console.log('✅ OpenAI API response received');
+      return response.data.choices[0].message.content;
+    } catch (error) {
+      console.error('❌ OpenAI API error:', error.response?.data || error.message);
+      throw new Error('OpenAI API request failed. Please check API key and try again.');
+    }
   }
 
   async callOpenRouter(prompt, apiKey) {
-    const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
-      model: 'openai/gpt-3.5-turbo',
-      messages: [
-        { role: 'system', content: 'You are HabitOwl AI, a helpful habit coach. Always respond in the requested format and be encouraging.' },
-        { role: 'user', content: prompt }
-      ],
-      max_tokens: 500,
-      temperature: 0.7
-    }, {
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://habitowl-app.web.app',
-        'X-Title': 'HabitOwl'
-      }
-    });
+    console.log('📡 Calling OpenRouter API...');
+    
+    try {
+      const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
+        model: 'openai/gpt-3.5-turbo',
+        messages: [
+          { role: 'system', content: 'You are HabitOwl AI, a helpful habit coach. Always respond in the requested format and be encouraging.' },
+          { role: 'user', content: prompt }
+        ],
+        max_tokens: 500,
+        temperature: 0.7
+      }, {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://habitowl-app.web.app',
+          'X-Title': 'HabitOwl'
+        },
+        timeout: 30000 // 30 second timeout
+      });
 
-    return response.data.choices[0].message.content;
+      console.log('✅ OpenRouter API response received');
+      return response.data.choices[0].message.content;
+    } catch (error) {
+      console.error('❌ OpenRouter API error:', error.response?.data || error.message);
+      throw new Error('OpenRouter API request failed. Please check API key and try again.');
+    }
   }
 
   getFallbackSuggestions() {
@@ -176,11 +229,11 @@ class SecureAIService {
 
   getFallbackMotivationalMessage(habit, streak) {
     const messages = [
-      `Amazing! ${streak} days strong with ${habit.name}! 🎉`,
+      `Amazing! ${streak} days strong with ${habit.name}! 🔥`,
       `You're crushing it! Day ${streak} of ${habit.name}! Keep going! 💪`,
       `${streak} days of consistency! You're building something great! 🌟`,
       `Day ${streak}! Your future self will thank you for ${habit.name}! 🚀`,
-      `${streak} days in a row! You're proving habits can stick! 🔥`
+      `${streak} days in a row! You're proving habits can stick! ✨`
     ];
     return messages[Math.floor(Math.random() * messages.length)];
   }
