@@ -5,7 +5,8 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  Platform
 } from 'react-native';
 import {
   Card,
@@ -283,11 +284,15 @@ const AdminScreen = ({ navigation }) => {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={true}
-        bounces={true}
-        alwaysBounceVertical={false}
+        keyboardShouldPersistTaps="handled"
         nestedScrollEnabled={true}
+        bounces={true}
+        scrollEnabled={true}
         removeClippedSubviews={false}
+        overScrollMode="always"
+        persistentScrollbar={Platform.OS === 'android'}
         scrollEventThrottle={16}
+        automaticallyAdjustKeyboardInsets={true}
       >
         <Card style={[styles.card, styles.securityNotice]}>
           <Card.Content>
@@ -305,7 +310,7 @@ const AdminScreen = ({ navigation }) => {
         {renderStats()}
 
         <Card style={styles.card}>
-          <List.Subheader>🔐 AI Configuration (Admin Only)</List.Subheader>
+          <List.Subheader>🤖 AI Configuration (Admin Only)</List.Subheader>
           
           <List.Item
             title="Configure API Keys"
@@ -337,7 +342,7 @@ const AdminScreen = ({ navigation }) => {
         </Card>
 
         <Card style={styles.card}>
-          <List.Subheader>Marketing Tools</List.Subheader>
+          <List.Subheader>📢 Marketing Tools</List.Subheader>
           
           <List.Item
             title="Create Promotional Offer"
@@ -356,7 +361,7 @@ const AdminScreen = ({ navigation }) => {
         </Card>
 
         <Card style={styles.card}>
-          <List.Subheader>Quick Actions</List.Subheader>
+          <List.Subheader>⚡ Quick Actions</List.Subheader>
           
           <List.Item
             title="Broadcast Notification"
@@ -501,7 +506,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 100,
+    paddingBottom: 300,
+    flexGrow: 1,
   },
   sectionTitle: {
     fontSize: 20,

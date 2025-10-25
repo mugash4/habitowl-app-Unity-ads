@@ -24,7 +24,10 @@ import SecureAIService from '../services/SecureAIService';
 
 /**
  * ✅ FIXED: AI Coaching Chat for Habits
- * Now works for both Premium users AND Admins
+ * - Fixed button activation issue
+ * - Improved quick suggestion flow
+ * - Better error handling
+ * - Works for both Premium users AND Admins
  */
 const AICoachingChat = ({ visible, onDismiss, habit }) => {
   const [message, setMessage] = useState('');
@@ -37,6 +40,7 @@ const AICoachingChat = ({ visible, onDismiss, habit }) => {
 
   useEffect(() => {
     if (visible) {
+      console.log('🎯 AICoachingChat: Modal opened');
       checkAccessStatus();
       setShowResponse(false);
       setAiResponse(null);
@@ -53,7 +57,7 @@ const AICoachingChat = ({ visible, onDismiss, habit }) => {
       const userStats = await FirebaseService.getUserStats();
       const premiumStatus = userStats?.isPremium || false;
       setIsPremium(premiumStatus);
-      console.log('Premium status:', premiumStatus);
+      console.log('💎 Premium status:', premiumStatus);
       
       // Check admin status
       const user = FirebaseService.currentUser;
@@ -61,7 +65,7 @@ const AICoachingChat = ({ visible, onDismiss, habit }) => {
         const AdminService = require('../services/AdminService').default;
         const adminStatus = await AdminService.checkAdminStatus(user.email);
         setIsAdmin(adminStatus);
-        console.log('Admin status:', adminStatus);
+        console.log('👑 Admin status:', adminStatus);
         
         // Grant premium access to admins
         if (adminStatus && !premiumStatus) {
@@ -70,15 +74,24 @@ const AICoachingChat = ({ visible, onDismiss, habit }) => {
         }
       }
     } catch (error) {
-      console.error('Error checking access status:', error);
+      console.error('❌ Error checking access status:', error);
       setIsPremium(false);
       setIsAdmin(false);
     }
   };
 
-  const handleSendMessage = async () => {
+  // ✅ FIX: Improved message sending with better validation and error handling
+  const handleSendMessage = async (customMessage = null) => {
+    const messageToSend = customMessage || message;
+    
     // Check access (premium OR admin)
     const hasAccess = isPremium || isAdmin;
+    
+    console.log('🚀 Send message clicked');
+    console.log('📝 Message:', messageToSend);
+    console.log('🔐 Has access:', hasAccess);
+    console.log('👤 Is premium:', isPremium);
+    console.log('👑 Is admin:', isAdmin);
     
     if (!hasAccess) {
       Alert.alert(
@@ -92,8 +105,8 @@ const AICoachingChat = ({ visible, onDismiss, habit }) => {
       return;
     }
 
-    if (!message.trim() && !showResponse) {
-      Alert.alert('Required', 'Please ask a question or request coaching');
+    if (!messageToSend || !messageToSend.trim()) {
+      Alert.alert('Required', 'Please enter a question or select a quick suggestion');
       return;
     }
 
@@ -102,68 +115,86 @@ const AICoachingChat = ({ visible, onDismiss, habit }) => {
       setShowResponse(false);
 
       console.log('📤 Requesting AI coaching...');
-      console.log('User is admin:', isAdmin);
-      console.log('User is premium:', isPremium);
+      console.log('👤 User is admin:', isAdmin);
+      console.log('💎 User is premium:', isPremium);
 
       // Build coaching prompt
-      const prompt = buildCoachingPrompt(habit, message.trim());
+      const prompt = buildCoachingPrompt(habit, messageToSend.trim());
 
-      // Call AI service
-      const response = await SecureAIService.callSecureAI(prompt);
+      console.log('🤖 Calling AI service...');
 
-      console.log('✅ AI coaching received');
+      // Call AI service with timeout
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout')), 45000)
+      );
+
+      const aiPromise = SecureAIService.callSecureAI(prompt);
+
+      const response = await Promise.race([aiPromise, timeoutPromise]);
+
+      console.log('✅ AI coaching received successfully');
 
       // Add to conversation history
       const newHistory = [
         ...conversationHistory,
-        { type: 'user', text: message.trim() },
+        { type: 'user', text: messageToSend.trim() },
         { type: 'ai', text: response }
       ];
       setConversationHistory(newHistory);
 
       setAiResponse(response);
       setShowResponse(true);
-      setMessage('');
+      setMessage(''); // Clear input after successful send
 
       // Track event
       await FirebaseService.trackEvent('ai_coaching_used', {
         habit_name: habit.name,
         habit_category: habit.category,
-        is_admin: isAdmin
+        is_admin: isAdmin,
+        message_length: messageToSend.trim().length
       }).catch(() => {});
 
     } catch (error) {
       console.error('❌ Error getting AI coaching:', error);
 
       // Enhanced error handling with better messages
+      let errorTitle = 'Connection Error';
+      let errorMessage = 'Failed to get AI coaching. Please check your internet connection and try again.';
+
       if (error.message && error.message.includes('API key')) {
-        Alert.alert(
-          '⚙️ Setup Required',
-          'AI Coaching needs to be configured.\n\nPlease:\n1. Go to Admin Settings\n2. Add your DeepSeek API key\n3. Save and try again\n\nGet your free API key at: https://platform.deepseek.com',
-          [{ text: 'Got It' }]
-        );
+        errorTitle = '⚙️ Setup Required';
+        errorMessage = 'AI Coaching needs to be configured by an admin.\n\nPlease ask the admin to:\n1. Go to Settings → Admin Panel\n2. Configure API Keys\n3. Add DeepSeek API key\n4. Save and try again\n\nGet API key at: https://platform.deepseek.com';
       } else if (error.message && error.message.includes('not configured')) {
-        Alert.alert(
-          '⚙️ Setup Required',
-          error.message,
-          [{ text: 'Got It' }]
-        );
-      } else {
-        Alert.alert(
-          'Connection Error',
-          'Failed to get AI coaching. Please check your internet connection and try again.',
-          [{ text: 'OK' }]
-        );
+        errorTitle = '⚙️ Setup Required';
+        errorMessage = error.message;
+      } else if (error.message && error.message.includes('timeout')) {
+        errorTitle = '⏱️ Timeout';
+        errorMessage = 'Request took too long. Please try again with a shorter question.';
       }
+
+      Alert.alert(errorTitle, errorMessage, [{ text: 'OK' }]);
 
       // Show fallback response
       const fallback = getFallbackCoaching(habit);
       setAiResponse(fallback);
       setShowResponse(true);
+      setMessage(''); // Clear input even on error
 
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // ✅ FIX: Improved quick suggestion handler to auto-send
+  const handleQuickSuggestion = async (suggestion) => {
+    console.log('💡 Quick suggestion selected:', suggestion);
+    setMessage(suggestion);
+    
+    // ✅ FIX: Auto-send the message immediately
+    // Small delay to allow UI to update
+    setTimeout(() => {
+      handleSendMessage(suggestion);
+    }, 100);
   };
 
   /**
@@ -238,23 +269,6 @@ YOUR COACHING:`;
   };
 
   /**
-   * Handle quick coaching suggestions
-   */
-  const handleQuickSuggestion = (suggestion) => {
-    setMessage(suggestion);
-  };
-
-  /**
-   * Quick suggestion chips
-   */
-  const quickSuggestions = [
-    'How can I stay consistent?',
-    'Tips to improve my streak',
-    'Why am I struggling?',
-    'How to make this easier?'
-  ];
-
-  /**
    * Close dialog and reset
    */
   const handleClose = () => {
@@ -274,6 +288,16 @@ YOUR COACHING:`;
     setAiResponse(null);
     // Keep conversation history for context
   };
+
+  /**
+   * Quick suggestion chips
+   */
+  const quickSuggestions = [
+    'How can I stay consistent?',
+    'Tips to improve my streak',
+    'Why am I struggling?',
+    'How to make this easier?'
+  ];
 
   return (
     <Portal>
@@ -303,7 +327,7 @@ YOUR COACHING:`;
         </LinearGradient>
 
         {/* Content */}
-        <Dialog.ScrollArea>
+        <Dialog.ScrollArea style={styles.scrollArea}>
           <KeyboardAvoidingView 
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.container}
@@ -311,6 +335,7 @@ YOUR COACHING:`;
             <ScrollView 
               style={styles.scrollContent}
               showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.scrollContainer}
             >
               {/* Habit Stats */}
               <View style={styles.statsContainer}>
@@ -337,6 +362,7 @@ YOUR COACHING:`;
                   <Text style={styles.sectionTitle}>Ask your AI coach:</Text>
 
                   {/* Quick Suggestions */}
+                  <Text style={styles.quickTitle}>Quick suggestions (tap to send):</Text>
                   <View style={styles.chipsContainer}>
                     {quickSuggestions.map((suggestion, index) => (
                       <Chip
@@ -345,6 +371,7 @@ YOUR COACHING:`;
                         onPress={() => handleQuickSuggestion(suggestion)}
                         style={styles.chip}
                         textStyle={styles.chipText}
+                        disabled={isLoading}
                       >
                         {suggestion}
                       </Chip>
@@ -353,7 +380,7 @@ YOUR COACHING:`;
 
                   {/* Message Input */}
                   <TextInput
-                    label="Your question or request"
+                    label="Or type your own question"
                     value={message}
                     onChangeText={setMessage}
                     mode="outlined"
@@ -427,9 +454,9 @@ YOUR COACHING:`;
                 Cancel
               </Button>
               <Button
-                onPress={handleSendMessage}
+                onPress={() => handleSendMessage()}
                 loading={isLoading}
-                disabled={isLoading || !message.trim()}
+                disabled={isLoading}
                 mode="contained"
                 buttonColor="#4f46e5"
               >
@@ -447,6 +474,17 @@ YOUR COACHING:`;
             </>
           )}
         </Dialog.Actions>
+
+        {/* ✅ FIX: Loading overlay */}
+        {isLoading && (
+          <View style={styles.loadingOverlay}>
+            <View style={styles.loadingCard}>
+              <ActivityIndicator size="large" color="#4f46e5" />
+              <Text style={styles.loadingText}>Getting your personalized coaching...</Text>
+              <Text style={styles.loadingSubtext}>This may take a few seconds</Text>
+            </View>
+          </View>
+        )}
       </Dialog>
     </Portal>
   );
@@ -486,12 +524,19 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontWeight: '600',
   },
+  scrollArea: {
+    maxHeight: 500,
+  },
   container: {
     flex: 1,
   },
   scrollContent: {
+    flex: 1,
+  },
+  scrollContainer: {
     paddingHorizontal: 16,
     paddingTop: 16,
+    paddingBottom: 16,
   },
   statsContainer: {
     flexDirection: 'row',
@@ -520,6 +565,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#374151',
     marginBottom: 12,
+  },
+  quickTitle: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#6b7280',
+    marginBottom: 8,
   },
   chipsContainer: {
     flexDirection: 'row',
@@ -609,6 +660,34 @@ const styles = StyleSheet.create({
   actions: {
     paddingHorizontal: 16,
     paddingVertical: 12,
+  },
+  // ✅ FIX: Loading overlay styles
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 16,
+  },
+  loadingCard: {
+    backgroundColor: '#ffffff',
+    padding: 24,
+    borderRadius: 16,
+    alignItems: 'center',
+    minWidth: 200,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2937',
+    textAlign: 'center',
+  },
+  loadingSubtext: {
+    marginTop: 4,
+    fontSize: 13,
+    color: '#6b7280',
+    textAlign: 'center',
   },
 });
 

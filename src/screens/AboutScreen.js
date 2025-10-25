@@ -4,7 +4,8 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Linking
+  Linking,
+  Platform
 } from 'react-native';
 import {
   Card,
@@ -78,7 +79,20 @@ const AboutScreen = ({ navigation }) => {
         <Appbar.Content title="About HabitOwl" />
       </Appbar.Header>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={true}
+        keyboardShouldPersistTaps="handled"
+        nestedScrollEnabled={true}
+        bounces={true}
+        scrollEnabled={true}
+        removeClippedSubviews={false}
+        overScrollMode="always"
+        persistentScrollbar={Platform.OS === 'android'}
+        scrollEventThrottle={16}
+        automaticallyAdjustKeyboardInsets={true}
+      >
         {/* App Header */}
         <LinearGradient colors={['#4f46e5', '#7c3aed']} style={styles.header}>
           <Icon name="owl" size={80} color="#ffffff" />
@@ -283,6 +297,10 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
+  scrollContent: {
+    paddingBottom: 300,
+    flexGrow: 1,
+  },
   header: {
     alignItems: 'center',
     padding: 40,
@@ -397,7 +415,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   bottomPadding: {
-    height: 20,
+    height: 100,
   },
 });
 
