@@ -186,11 +186,11 @@ const HabitCard = ({
                     size={24} 
                     color={isCompleted ? '#ffffff' : '#4f46e5'} 
                   />
-                  <Text style={[styles.title, isCompleted && styles.completedText]}>
+                  <Text style={[styles.title, isCompleted && styles.completedText]} numberOfLines={2}>
                     {habit.name}
                   </Text>
                   
-                  {/* 🔥 NEW: AI Coaching Lightbulb Button */}
+                  {/* 🔥 AI Coaching Lightbulb Button */}
                   <TouchableOpacity 
                     style={styles.aiButton}
                     onPress={handleAICoaching}
@@ -204,7 +204,7 @@ const HabitCard = ({
                 </View>
                 
                 {habit.description && (
-                  <Text style={[styles.description, isCompleted && styles.completedText]}>
+                  <Text style={[styles.description, isCompleted && styles.completedText]} numberOfLines={2}>
                     {habit.description}
                   </Text>
                 )}
@@ -226,21 +226,21 @@ const HabitCard = ({
             <View style={styles.statsRow}>
               <View style={styles.stat}>
                 <Icon name="fire" size={16} color={getStreakColor(habit?.currentStreak || 0)} />
-                <Text style={[styles.statText, isCompleted && styles.completedText]}>
+                <Text style={[styles.statText, isCompleted && styles.completedText]} numberOfLines={1}>
                   {habit?.currentStreak || 0} day streak
                 </Text>
               </View>
 
               <View style={styles.stat}>
                 <Icon name="trophy" size={16} color={getStreakColor(habit?.longestStreak || 0)} />
-                <Text style={[styles.statText, isCompleted && styles.completedText]}>
+                <Text style={[styles.statText, isCompleted && styles.completedText]} numberOfLines={1}>
                   Best: {habit?.longestStreak || 0}
                 </Text>
               </View>
 
               <View style={styles.stat}>
                 <Icon name="check-all" size={16} color="#6b7280" />
-                <Text style={[styles.statText, isCompleted && styles.completedText]}>
+                <Text style={[styles.statText, isCompleted && styles.completedText]} numberOfLines={1}>
                   {habit?.totalCompletions || 0} total
                 </Text>
               </View>
@@ -260,24 +260,29 @@ const HabitCard = ({
               </Text>
             </View>
 
+            {/* 🔧 FIXED: Tags row with proper text display */}
             <View style={styles.tagsRow}>
-              <Chip 
-                mode="outlined" 
-                compact
-                textStyle={[styles.chipText, isCompleted && styles.completedText]}
-                style={[styles.chip, isCompleted && styles.completedChip]}
-              >
-                {habit.category}
-              </Chip>
+              <View style={styles.chipWrapper}>
+                <Chip 
+                  mode="outlined" 
+                  compact
+                  textStyle={[styles.chipText, isCompleted && styles.completedText]}
+                  style={[styles.chip, isCompleted && styles.completedChip]}
+                >
+                  {habit.category}
+                </Chip>
+              </View>
               
-              <Chip 
-                mode="outlined" 
-                compact
-                textStyle={[styles.chipText, isCompleted && styles.completedText]}
-                style={[styles.chip, isCompleted && styles.completedChip]}
-              >
-                {habit.estimatedTime || '5 min'}
-              </Chip>
+              <View style={styles.chipWrapper}>
+                <Chip 
+                  mode="outlined" 
+                  compact
+                  textStyle={[styles.chipText, isCompleted && styles.completedText]}
+                  style={[styles.chip, isCompleted && styles.completedChip]}
+                >
+                  {habit.estimatedTime || '5 min'}
+                </Chip>
+              </View>
               
               <View style={styles.difficultyContainer}>
                 {[...Array(5)].map((_, i) => (
@@ -327,7 +332,7 @@ const HabitCard = ({
         </Card>
       </Animated.View>
 
-      {/* 🔥 NEW: AI Coaching Dialog */}
+      {/* 🔥 AI Coaching Dialog */}
       <AICoachingChat
         visible={showAICoaching}
         onDismiss={() => setShowAICoaching(false)}
@@ -375,7 +380,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     flex: 1,
   },
-  // 🔥 NEW: AI Button styles
+  // 🔥 AI Button styles
   aiButton: {
     padding: 4,
     marginLeft: 8,
@@ -409,6 +414,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6b7280',
     marginLeft: 4,
+    flexShrink: 1,
   },
   progressSection: {
     marginBottom: 12,
@@ -429,25 +435,32 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     marginTop: 2,
   },
+  // 🔧 FIXED: Tags row with proper wrapping and spacing
   tagsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
+    flexWrap: 'wrap',
+  },
+  // 🔧 NEW: Wrapper for chips to ensure proper display
+  chipWrapper: {
+    marginRight: 8,
+    marginBottom: 4,
   },
   chip: {
-    marginRight: 8,
     height: 28,
   },
   completedChip: {
     borderColor: '#ffffff',
   },
   chipText: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#6b7280',
   },
   difficultyContainer: {
     flexDirection: 'row',
     marginLeft: 'auto',
+    marginBottom: 4,
   },
   actionsRow: {
     flexDirection: 'row',
