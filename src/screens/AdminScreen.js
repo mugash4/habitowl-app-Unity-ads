@@ -277,7 +277,7 @@ const AdminScreen = ({ navigation }) => {
     return null;
   }
 
-  // ✅ SCROLL FIX: Properly structured layout with header outside and ScrollView with proper bounds
+  // ✅✅✅ COMPLETE SCROLL FIX: Optimized ScrollView configuration for smooth scrolling
   return (
     <View style={styles.container}>
       <Appbar.Header style={styles.header}>
@@ -295,7 +295,9 @@ const AdminScreen = ({ navigation }) => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={true}
         bounces={true}
-        alwaysBounceVertical={true}
+        alwaysBounceVertical={false}
+        nestedScrollEnabled={true}
+        removeClippedSubviews={false}
       >
         {/* Security Notice */}
         <Card style={[styles.card, styles.securityNotice]}>
@@ -386,6 +388,7 @@ const AdminScreen = ({ navigation }) => {
           />
         </Card>
 
+        {/* Extra padding at bottom to ensure last item is fully visible */}
         <View style={styles.bottomPadding} />
       </ScrollView>
 
@@ -512,13 +515,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     elevation: 2,
   },
-  // ✅ SCROLL FIX: Proper ScrollView styling
+  // ✅✅✅ COMPLETE SCROLL FIX: Optimized scrolling styles
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    flexGrow: 1,
-    paddingBottom: 40,
+    paddingBottom: 80,
   },
   sectionTitle: {
     fontSize: 20,
@@ -634,7 +636,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   bottomPadding: {
-    height: 40,
+    height: 80,
   },
 });
 
