@@ -25,8 +25,8 @@ import FirebaseService from '../services/FirebaseService';
 import aiSupportService from '../services/aiSupportService';
 
 /**
- * ✅ IMPROVED: AI Support Chat Component
- * Now with better error handling and user feedback
+ * ✅ FIXED: AI Support Chat Component
+ * Fixed Portal rendering and loading issues
  */
 const AISupportChat = ({ visible, onDismiss }) => {
   const [selectedIssue, setSelectedIssue] = useState('general');
@@ -49,6 +49,8 @@ const AISupportChat = ({ visible, onDismiss }) => {
 
   useEffect(() => {
     if (visible) {
+      console.log('✅ AI Support Chat opened');
+      
       // Pre-fill user email if logged in
       const user = FirebaseService.currentUser;
       if (user?.email) {
@@ -59,11 +61,13 @@ const AISupportChat = ({ visible, onDismiss }) => {
       setShowResponse(false);
       setAiResponse(null);
       setApiKeyMissing(false);
+      setMessage('');
+      setSelectedIssue('general');
     }
   }, [visible]);
 
   /**
-   * ✅ IMPROVED: Send support message with better error handling
+   * ✅ FIXED: Send support message with better error handling
    */
   const handleSendMessage = async () => {
     // Validation
@@ -198,6 +202,11 @@ const AISupportChat = ({ visible, onDismiss }) => {
     return issueTypes.find(i => i.value === selectedIssue);
   };
 
+  // ✅ FIXED: Proper conditional rendering
+  if (!visible) {
+    return null;
+  }
+
   return (
     <Portal>
       <Dialog 
@@ -223,7 +232,7 @@ const AISupportChat = ({ visible, onDismiss }) => {
         </LinearGradient>
 
         {/* Content */}
-        <Dialog.ScrollArea>
+        <Dialog.ScrollArea style={styles.scrollArea}>
           <KeyboardAvoidingView 
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.container}
@@ -231,6 +240,7 @@ const AISupportChat = ({ visible, onDismiss }) => {
             <ScrollView 
               style={styles.scrollContent}
               showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.scrollContentContainer}
             >
               {!showResponse ? (
                 // ✅ Ticket Creation Form
@@ -411,8 +421,11 @@ const AISupportChat = ({ visible, onDismiss }) => {
 
 const styles = StyleSheet.create({
   dialog: {
-    maxHeight: '95%',
+    maxHeight: '90%',
     borderRadius: 16,
+  },
+  scrollArea: {
+    maxHeight: 500,
   },
   header: {
     padding: 20,
@@ -441,8 +454,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
+    flex: 1,
+  },
+  scrollContentContainer: {
     paddingHorizontal: 16,
     paddingTop: 16,
+    paddingBottom: 16,
   },
   sectionTitle: {
     fontSize: 16,
