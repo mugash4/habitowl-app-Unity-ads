@@ -24,6 +24,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
 import FirebaseService from '../services/FirebaseService';
+import AdminService from '../services/AdminService';
 
 const { height } = Dimensions.get('window');
 
@@ -70,6 +71,33 @@ const AuthScreen = ({ navigation }) => {
 
     return unsubscribe;
   }, []);
+
+  // ✅ NEW: Function to check admin status and grant premium access
+  const checkAndGrantAdminPremium = async (userEmail) => {
+    try {
+      console.log('🔍 Checking admin status for:', userEmail);
+      
+      // Check if user is admin
+      const isAdmin = await AdminService.checkAdminStatus(userEmail);
+      
+      if (isAdmin) {
+        console.log('✅ Admin user detected! Granting premium access...');
+        
+        // Grant premium status
+        await FirebaseService.updateUserPremiumStatus(true);
+        
+        console.log('✅ Premium status granted to admin:', userEmail);
+        
+        return true;
+      } else {
+        console.log('ℹ️ Regular user (not admin):', userEmail);
+        return false;
+      }
+    } catch (error) {
+      console.error('❌ Error checking admin status:', error);
+      return false;
+    }
+  };
 
   const validateEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -127,17 +155,21 @@ const AuthScreen = ({ navigation }) => {
       setLoading(true);
       console.log('Loading state set to true');
 
+      let user;
       if (isLogin) {
         console.log('Attempting sign in...');
-        const user = await FirebaseService.signIn(email.trim(), password);
+        user = await FirebaseService.signIn(email.trim(), password);
         console.log('Sign in successful:', user.uid);
-        Alert.alert('Success', 'Welcome back!');
       } else {
         console.log('Attempting sign up...');
-        const user = await FirebaseService.signUp(email.trim(), password, displayName.trim());
+        user = await FirebaseService.signUp(email.trim(), password, displayName.trim());
         console.log('Sign up successful:', user.uid);
-        Alert.alert('Success', 'Account created successfully!');
       }
+
+      // ✅ NEW: Check admin status and grant premium immediately after login
+      await checkAndGrantAdminPremium(user.email);
+
+      Alert.alert('Success', isLogin ? 'Welcome back!' : 'Account created successfully!');
 
       // Navigation is handled by the auth state listener
     } catch (error) {
@@ -195,8 +227,13 @@ const AuthScreen = ({ navigation }) => {
       
       console.log('Authenticating with Firebase...');
       // Sign in to Firebase with the Google credential
-      await FirebaseService.signInWithGoogleCredential(idToken);
+      const user = await FirebaseService.signInWithGoogleCredential(idToken);
       console.log('Firebase authentication successful!');
+      
+      // ✅ NEW: Check admin status and grant premium immediately after Google login
+      if (user && user.email) {
+        await checkAndGrantAdminPremium(user.email);
+      }
       
       Alert.alert('Success', 'Signed in with Google successfully!');
       

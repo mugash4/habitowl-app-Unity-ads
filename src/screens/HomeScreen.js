@@ -69,41 +69,56 @@ const HomeScreen = ({ navigation, route }) => {
       if (forceReload) {
         setLoading(true);
       }
-      
+    
       console.log('📱 Fetching habits from Firebase...');
-      
+    
       await new Promise(resolve => setTimeout(resolve, 300));
       const userHabits = await FirebaseService.getUserHabits(true);
-      
-      // 🔧 NEW: Load premium status
+    
+      // 🔧 IMPROVED: Load premium status with admin check fallback
       const userStats = await FirebaseService.getUserStats();
-      const premiumStatus = userStats?.isPremium || false;
-      
+      let premiumStatus = userStats?.isPremium || false;
+    
+      // 🔧 NEW: Double-check admin status if not premium
+      if (!premiumStatus) {
+        const user = FirebaseService.currentUser;
+        if (user && user.email) {
+          const AdminService = require('../services/AdminService').default;
+          const isAdmin = await AdminService.checkAdminStatus(user.email);
+          if (isAdmin) {
+            console.log('✅ Admin detected, granting premium access');
+            premiumStatus = true;
+            // Update in database
+            await FirebaseService.updateUserPremiumStatus(true);
+          }
+        }
+      }
+    
       if (!isActive) {
         console.log('⚠️ Component unmounted, skipping state update');
         return;
       }
-      
+    
       console.log(`✅ Loaded ${userHabits ? userHabits.length : 0} habits`);
       console.log(`Premium status: ${premiumStatus}`);
-      
+    
       if (userHabits && Array.isArray(userHabits)) {
         console.log('📝 Setting habits:', userHabits.map(h => h.name).join(', '));
-        
+      
         setHabits(userHabits);
-        setIsPremium(premiumStatus); // 🔧 NEW: Set premium status
-        
+        setIsPremium(premiumStatus);
+      
         const today = new Date().toDateString();
         const completedToday = new Set();
-        
+      
         userHabits.forEach(habit => {
           if (habit.completions && habit.completions.includes(today)) {
             completedToday.add(habit.id);
           }
         });
-        
+      
         setTodayCompletions(completedToday);
-        
+      
         if (userHabits.length > 0) {
           loadMotivationalMessage(userHabits, completedToday);
         } else {
@@ -114,17 +129,17 @@ const HomeScreen = ({ navigation, route }) => {
         setHabits([]);
         setTodayCompletions(new Set());
         setMotivationalMessage('');
-        setIsPremium(premiumStatus); // 🔧 NEW: Set premium status
+        setIsPremium(premiumStatus);
       }
-      
+    
     } catch (error) {
       console.error('❌ Error loading habits:', error);
-      
+    
       if (isActive) {
         setHabits([]);
         setTodayCompletions(new Set());
         setMotivationalMessage('');
-        
+      
         if (error.message && error.message.includes('network')) {
           Alert.alert(
             'Connection Issue',
@@ -132,17 +147,18 @@ const HomeScreen = ({ navigation, route }) => {
             [
               { text: 'Retry', onPress: () => loadHabits(true) },
               { text: 'Cancel', style: 'cancel' }
-            ]
-          );
-        }
-      }
-    } finally {
-      if (isActive) {
-        setLoading(false);
-        setRefreshing(false);
+          ]
+        );
       }
     }
-  };
+  } finally {
+    if (isActive) {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }
+};
+
 
   const loadMotivationalMessage = async (userHabits, completedToday) => {
     try {
