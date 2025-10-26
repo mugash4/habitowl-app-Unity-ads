@@ -24,9 +24,9 @@ import SecureAIService from '../services/SecureAIService';
 
 /**
  * ✅ FIXED: AI Coaching Chat for Habits
- * - Fixed dialog not opening issue
- * - Improved access control
- * - Better error handling
+ * - Fixed Dialog.ScrollArea maxHeight issue
+ * - Removed nested ScrollView conflicts
+ * - Improved modal rendering
  * - Works for both Premium users AND Admins
  */
 const AICoachingChat = ({ visible, onDismiss, habit }) => {
@@ -326,16 +326,17 @@ YOUR COACHING:`;
           </View>
         </LinearGradient>
 
-        {/* Content */}
-        <Dialog.ScrollArea style={styles.scrollArea}>
+        {/* ✅ CRITICAL FIX: Remove Dialog.ScrollArea and use Dialog.Content instead */}
+        <Dialog.Content style={styles.dialogContent}>
           <KeyboardAvoidingView 
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={styles.container}
+            style={styles.keyboardAvoidingView}
           >
             <ScrollView 
-              style={styles.scrollContent}
+              style={styles.scrollView}
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.scrollContainer}
+              contentContainerStyle={styles.scrollContentContainer}
+              nestedScrollEnabled={true}
             >
               {/* Habit Stats */}
               <View style={styles.statsContainer}>
@@ -444,7 +445,7 @@ YOUR COACHING:`;
               )}
             </ScrollView>
           </KeyboardAvoidingView>
-        </Dialog.ScrollArea>
+        </Dialog.Content>
 
         {/* Actions */}
         <Dialog.Actions style={styles.actions}>
@@ -475,7 +476,7 @@ YOUR COACHING:`;
           )}
         </Dialog.Actions>
 
-        {/* ✅ FIX: Loading overlay */}
+        {/* ✅ Loading overlay */}
         {isLoading && (
           <View style={styles.loadingOverlay}>
             <View style={styles.loadingCard}>
@@ -492,7 +493,7 @@ YOUR COACHING:`;
 
 const styles = StyleSheet.create({
   dialog: {
-    maxHeight: '95%',
+    maxHeight: '90%',
     borderRadius: 16,
   },
   header: {
@@ -524,17 +525,19 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontWeight: '600',
   },
-  scrollArea: {
+  // ✅ CRITICAL FIX: Updated styles for proper scrolling
+  dialogContent: {
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+  },
+  keyboardAvoidingView: {
     maxHeight: 500,
   },
-  container: {
-    flex: 1,
+  scrollView: {
+    maxHeight: 500,
   },
-  scrollContent: {
-    flex: 1,
-  },
-  scrollContainer: {
-    paddingHorizontal: 16,
+  scrollContentContainer: {
+    paddingHorizontal: 20,
     paddingTop: 16,
     paddingBottom: 16,
   },
@@ -661,7 +664,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
-  // ✅ FIX: Loading overlay styles
+  // Loading overlay styles
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',

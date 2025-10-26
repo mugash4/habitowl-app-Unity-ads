@@ -79,19 +79,11 @@ const AboutScreen = ({ navigation }) => {
         <Appbar.Content title="About HabitOwl" />
       </Appbar.Header>
 
+      {/* ✅ FIX: Removed nested ScrollView and fixed layout */}
       <ScrollView 
-        style={styles.content} 
+        style={styles.content}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={true}
-        keyboardShouldPersistTaps="handled"
-        nestedScrollEnabled={true}
-        bounces={true}
-        scrollEnabled={true}
-        removeClippedSubviews={false}
-        overScrollMode="always"
-        persistentScrollbar={Platform.OS === 'android'}
-        scrollEventThrottle={16}
-        automaticallyAdjustKeyboardInsets={true}
       >
         {/* App Header */}
         <LinearGradient colors={['#4f46e5', '#7c3aed']} style={styles.header}>
@@ -283,7 +275,8 @@ const AboutScreen = ({ navigation }) => {
           </Text>
         </View>
 
-        <View style={styles.bottomPadding} />
+        {/* Extra padding at bottom for safe scrolling */}
+        <View style={styles.bottomSpacer} />
       </ScrollView>
     </View>
   );
@@ -294,12 +287,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8fafc',
   },
+  // ✅ FIX: Proper ScrollView styling
   content: {
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 300,
-    flexGrow: 1,
+    paddingBottom: 40, // Reduced from 300
   },
   header: {
     alignItems: 'center',
@@ -414,8 +407,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 4,
   },
-  bottomPadding: {
-    height: 100,
+  // ✅ FIX: Bottom spacer for safe scrolling
+  bottomSpacer: {
+    height: 40,
   },
 });
 

@@ -280,19 +280,11 @@ const AdminScreen = ({ navigation }) => {
         />
       </Appbar.Header>
 
+      {/* ✅ FIX: Removed nested ScrollView and fixed layout */}
       <ScrollView 
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={true}
-        keyboardShouldPersistTaps="handled"
-        nestedScrollEnabled={true}
-        bounces={true}
-        scrollEnabled={true}
-        removeClippedSubviews={false}
-        overScrollMode="always"
-        persistentScrollbar={Platform.OS === 'android'}
-        scrollEventThrottle={16}
-        automaticallyAdjustKeyboardInsets={true}
       >
         <Card style={[styles.card, styles.securityNotice]}>
           <Card.Content>
@@ -378,12 +370,13 @@ const AdminScreen = ({ navigation }) => {
           />
         </Card>
 
-        <View style={styles.bottomPadding} />
+        {/* Extra padding at bottom for safe scrolling */}
+        <View style={styles.bottomSpacer} />
       </ScrollView>
 
       <Portal>
         <Dialog visible={showApiDialog} onDismiss={() => setShowApiDialog(false)}>
-          <Dialog.Title>🔐 Configure API Key (Admin Only)</Dialog.Title>
+          <Dialog.Title>🔑 Configure API Key (Admin Only)</Dialog.Title>
           <Dialog.Content>
             <Text style={styles.dialogDescription}>
               Select provider and enter API key:
@@ -502,12 +495,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     elevation: 2,
   },
+  // ✅ FIX: Proper ScrollView styling
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 300,
-    flexGrow: 1,
+    paddingBottom: 40, // Reduced from 300
   },
   sectionTitle: {
     fontSize: 20,
@@ -622,8 +615,9 @@ const styles = StyleSheet.create({
     color: '#991b1b',
     marginLeft: 8,
   },
-  bottomPadding: {
-    height: 100,
+  // ✅ FIX: Bottom spacer for safe scrolling
+  bottomSpacer: {
+    height: 40,
   },
 });
 
