@@ -24,8 +24,8 @@ import SecureAIService from '../services/SecureAIService';
 
 /**
  * ✅ FIXED: AI Coaching Chat for Habits
- * - Fixed button activation issue
- * - Improved quick suggestion flow
+ * - Fixed dialog not opening issue
+ * - Improved access control
  * - Better error handling
  * - Works for both Premium users AND Admins
  */
@@ -40,7 +40,7 @@ const AICoachingChat = ({ visible, onDismiss, habit }) => {
 
   useEffect(() => {
     if (visible) {
-      console.log('🎯 AICoachingChat: Modal opened');
+      console.log('🎯 AICoachingChat: Modal opened for habit:', habit?.name);
       checkAccessStatus();
       setShowResponse(false);
       setAiResponse(null);
