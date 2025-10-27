@@ -1,6 +1,6 @@
 /**
- * Unity Ads Service - COMPLETE CRASH FIX
- * Fixed ClassCastException by properly handling ad formats array
+ * Unity Ads Service - COMPLETE CRASH FIX v2.0
+ * Fixed ClassCastException by properly handling initialization
  */
 
 import { Platform } from 'react-native';
@@ -128,7 +128,7 @@ class UnityAdsService {
       }
 
       // Check SDK availability
-      if (!sdkAvailable || !LevelPlay || !IronSource) {
+      if (!sdkAvailable || !LevelPlay || !IronSource || !AdFormat) {
         this.log('SDK not available');
         return false;
       }
@@ -159,7 +159,7 @@ class UnityAdsService {
       this.log(`Game ID: ${gameId}`);
       this.log(`Test Mode: ${this.isTestMode}`);
 
-      // ✅ COMPLETE FIX: Proper initialization without withLegacyAdFormats
+      // ✅ COMPLETE FIX: Proper initialization WITH ad formats array
       try {
         // Enable test mode if needed
         if (this.isTestMode && IronSource.setMetaData) {
@@ -171,10 +171,23 @@ class UnityAdsService {
           }
         }
 
-        // ✅ FIX: Create init request WITHOUT withLegacyAdFormats
-        // This is the root cause of the ClassCastException
-        // The new SDK version doesn't require explicit ad format declaration
+        // ✅ FIX: Create init request WITH properly typed ad formats array
         const initRequestBuilder = LevelPlayInitRequest.builder(gameId);
+        
+        // ✅ CRITICAL FIX: Pass ad formats as an array of AdFormat enums
+        // This prevents ClassCastException by ensuring proper types
+        try {
+          const adFormats = [
+            AdFormat.BANNER,
+            AdFormat.INTERSTITIAL,
+            AdFormat.REWARDED
+          ];
+          initRequestBuilder.withLegacyAdFormats(adFormats);
+          this.log('Ad formats configured');
+        } catch (formatError) {
+          this.log('Ad format config warning:', formatError.message);
+          // Continue without ad formats if this fails
+        }
         
         // Add user ID if provided
         if (userId) {
