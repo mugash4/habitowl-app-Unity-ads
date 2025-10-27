@@ -280,17 +280,18 @@ const AdminScreen = ({ navigation }) => {
         />
       </Appbar.Header>
 
-      {/* ✅ FIX: Removed nested ScrollView and fixed layout */}
+      {/* ✅ FIX: Proper smooth scrolling */}
       <ScrollView 
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={true}
+        bounces={true}
       >
         <Card style={[styles.card, styles.securityNotice]}>
           <Card.Content>
             <View style={styles.noticeHeader}>
               <Icon name="shield-lock" size={24} color="#ef4444" />
-              <Text style={styles.noticeTitle}>Admin Access</Text>
+              <Text style={styles.noticeTitle}>🔒 Admin Access</Text>
             </View>
             <Text style={styles.noticeText}>
               You have administrative privileges. API keys and sensitive data are visible only to verified admins.
@@ -298,7 +299,7 @@ const AdminScreen = ({ navigation }) => {
           </Card.Content>
         </Card>
 
-        <Text style={styles.sectionTitle}>App Statistics</Text>
+        <Text style={styles.sectionTitle}>📊 App Statistics</Text>
         {renderStats()}
 
         <Card style={styles.card}>
@@ -370,53 +371,55 @@ const AdminScreen = ({ navigation }) => {
           />
         </Card>
 
-        {/* Extra padding at bottom for safe scrolling */}
+        {/* ✅ FIX: Extra bottom padding for smooth scroll to bottom */}
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
       <Portal>
         <Dialog visible={showApiDialog} onDismiss={() => setShowApiDialog(false)}>
           <Dialog.Title>🔑 Configure API Key (Admin Only)</Dialog.Title>
-          <Dialog.Content>
-            <Text style={styles.dialogDescription}>
-              Select provider and enter API key:
-            </Text>
-
-            <View style={styles.providerSelection}>
-              {['deepseek', 'openai', 'openrouter'].map((provider) => (
-                <Chip
-                  key={provider}
-                  selected={selectedProvider === provider}
-                  onPress={() => setSelectedProvider(provider)}
-                  style={styles.dialogChip}
-                >
-                  {provider.toUpperCase()}
-                </Chip>
-              ))}
-            </View>
-            
-            <TextInput
-              label={`${selectedProvider.toUpperCase()} API Key`}
-              value={apiKey}
-              onChangeText={setApiKey}
-              mode="outlined"
-              secureTextEntry
-              style={styles.dialogInput}
-            />
-
-            <Text style={styles.helpText}>
-              {selectedProvider === 'deepseek' && 'Get API key from: https://platform.deepseek.com'}
-              {selectedProvider === 'openai' && 'Get API key from: https://platform.openai.com'}
-              {selectedProvider === 'openrouter' && 'Get API key from: https://openrouter.ai'}
-            </Text>
-            
-            <View style={styles.warningBox}>
-              <Icon name="alert" size={20} color="#ef4444" />
-              <Text style={styles.warningText}>
-                API keys are stored securely and only accessible to admins.
+          <Dialog.ScrollArea>
+            <ScrollView contentContainerStyle={styles.dialogScrollContent}>
+              <Text style={styles.dialogDescription}>
+                Select provider and enter API key:
               </Text>
-            </View>
-          </Dialog.Content>
+
+              <View style={styles.providerSelection}>
+                {['deepseek', 'openai', 'openrouter'].map((provider) => (
+                  <Chip
+                    key={provider}
+                    selected={selectedProvider === provider}
+                    onPress={() => setSelectedProvider(provider)}
+                    style={styles.dialogChip}
+                  >
+                    {provider.toUpperCase()}
+                  </Chip>
+                ))}
+              </View>
+              
+              <TextInput
+                label={`${selectedProvider.toUpperCase()} API Key`}
+                value={apiKey}
+                onChangeText={setApiKey}
+                mode="outlined"
+                secureTextEntry
+                style={styles.dialogInput}
+              />
+
+              <Text style={styles.helpText}>
+                {selectedProvider === 'deepseek' && 'Get API key from: https://platform.deepseek.com'}
+                {selectedProvider === 'openai' && 'Get API key from: https://platform.openai.com'}
+                {selectedProvider === 'openrouter' && 'Get API key from: https://openrouter.ai'}
+              </Text>
+              
+              <View style={styles.warningBox}>
+                <Icon name="alert" size={20} color="#ef4444" />
+                <Text style={styles.warningText}>
+                  API keys are stored securely and only accessible to admins.
+                </Text>
+              </View>
+            </ScrollView>
+          </Dialog.ScrollArea>
           <Dialog.Actions>
             <Button onPress={() => setShowApiDialog(false)}>Cancel</Button>
             <Button onPress={handleSetApiKey} loading={loading}>Save</Button>
@@ -426,46 +429,48 @@ const AdminScreen = ({ navigation }) => {
 
       <Portal>
         <Dialog visible={showPromoDialog} onDismiss={() => setShowPromoDialog(false)}>
-          <Dialog.Title>Create Promotional Offer</Dialog.Title>
-          <Dialog.Content>
-            <TextInput
-              label="Offer Title"
-              value={promoTitle}
-              onChangeText={setPromoTitle}
-              mode="outlined"
-              style={styles.dialogInput}
-              placeholder="e.g., Limited Time: 50% Off Premium"
-            />
+          <Dialog.Title>🏷️ Create Promotional Offer</Dialog.Title>
+          <Dialog.ScrollArea>
+            <ScrollView contentContainerStyle={styles.dialogScrollContent}>
+              <TextInput
+                label="Offer Title"
+                value={promoTitle}
+                onChangeText={setPromoTitle}
+                mode="outlined"
+                style={styles.dialogInput}
+                placeholder="e.g., Limited Time: 50% Off Premium"
+              />
 
-            <TextInput
-              label="Description"
-              value={promoDescription}
-              onChangeText={setPromoDescription}
-              mode="outlined"
-              multiline
-              numberOfLines={3}
-              style={styles.dialogInput}
-              placeholder="Describe the offer details..."
-            />
+              <TextInput
+                label="Description"
+                value={promoDescription}
+                onChangeText={setPromoDescription}
+                mode="outlined"
+                multiline
+                numberOfLines={3}
+                style={styles.dialogInput}
+                placeholder="Describe the offer details..."
+              />
 
-            <TextInput
-              label="Discount"
-              value={promoDiscount}
-              onChangeText={setPromoDiscount}
-              mode="outlined"
-              style={styles.dialogInput}
-              placeholder="e.g., 50% OFF, $2.99/month"
-            />
+              <TextInput
+                label="Discount"
+                value={promoDiscount}
+                onChangeText={setPromoDiscount}
+                mode="outlined"
+                style={styles.dialogInput}
+                placeholder="e.g., 50% OFF, $2.99/month"
+              />
 
-            <TextInput
-              label="Valid for (days)"
-              value={promoValidDays}
-              onChangeText={setPromoValidDays}
-              mode="outlined"
-              keyboardType="numeric"
-              style={styles.dialogInput}
-            />
-          </Dialog.Content>
+              <TextInput
+                label="Valid for (days)"
+                value={promoValidDays}
+                onChangeText={setPromoValidDays}
+                mode="outlined"
+                keyboardType="numeric"
+                style={styles.dialogInput}
+              />
+            </ScrollView>
+          </Dialog.ScrollArea>
           <Dialog.Actions>
             <Button onPress={() => setShowPromoDialog(false)}>Cancel</Button>
             <Button onPress={handleCreatePromoOffer} loading={loading}>Create</Button>
@@ -495,12 +500,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     elevation: 2,
   },
-  // ✅ FIX: Proper ScrollView styling
+  // ✅ FIX: Smooth scrolling with proper padding
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 40, // Reduced from 300
+    paddingBottom: 100, // Increased for better scrolling
   },
   sectionTitle: {
     fontSize: 20,
@@ -578,6 +583,9 @@ const styles = StyleSheet.create({
   providerChip: {
     marginBottom: 4,
   },
+  dialogScrollContent: {
+    paddingHorizontal: 24,
+  },
   dialogDescription: {
     fontSize: 16,
     color: '#6b7280',
@@ -615,9 +623,9 @@ const styles = StyleSheet.create({
     color: '#991b1b',
     marginLeft: 8,
   },
-  // ✅ FIX: Bottom spacer for safe scrolling
+  // ✅ FIX: Proper bottom spacing for smooth scrolling
   bottomSpacer: {
-    height: 40,
+    height: 80,
   },
 });
 

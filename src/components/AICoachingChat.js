@@ -24,8 +24,8 @@ import SecureAIService from '../services/SecureAIService';
 
 /**
  * ✅ FIXED: AI Coaching Chat for Habits
- * - Fixed Dialog.ScrollArea maxHeight issue
- * - Removed nested ScrollView conflicts
+ * - Fixed Dialog buttons visibility issue
+ * - Added proper ScrollView with fixed height
  * - Improved modal rendering
  * - Works for both Premium users AND Admins
  */
@@ -40,7 +40,7 @@ const AICoachingChat = ({ visible, onDismiss, habit }) => {
 
   useEffect(() => {
     if (visible) {
-      console.log('🎯 AICoachingChat: Modal opened for habit:', habit?.name);
+      console.log('🦉 AICoachingChat: Modal opened for habit:', habit?.name);
       checkAccessStatus();
       setShowResponse(false);
       setAiResponse(null);
@@ -258,13 +258,13 @@ YOUR COACHING:`;
     const completionRate = calculateCompletionRate(habit);
 
     if (streak === 0) {
-      return `Great job starting "${habit.name}"! 🎯\n\nHere's how to build consistency:\n\n1. Start small - just 5 minutes today\n2. Pick a specific time (e.g., "after breakfast")\n3. Stack it with an existing habit\n4. Track your progress daily\n\nRemember: The first 3 days are the hardest. You've got this! 💪`;
+      return `Great job starting "${habit.name}"! 🦉\n\nHere's how to build consistency:\n\n1. Start small - just 5 minutes today\n2. Pick a specific time (e.g., "after breakfast")\n3. Stack it with an existing habit\n4. Track your progress daily\n\nRemember: The first 3 days are the hardest. You've got this! 💪`;
     } else if (streak < 7) {
       return `Awesome ${streak}-day streak on "${habit.name}"! 🔥\n\nYou're building momentum:\n\n1. Keep the same time/place for consistency\n2. Celebrate each completion\n3. Plan ahead for tomorrow\n4. Don't break the chain!\n\nYou're ${7 - streak} days from your first week. Keep going! 🚀`;
     } else if (completionRate >= 80) {
       return `Incredible work on "${habit.name}"! 🌟\n\nYour ${completionRate}% completion rate is outstanding!\n\nNext level strategies:\n\n1. Increase difficulty slightly\n2. Help someone else build this habit\n3. Reflect on your progress weekly\n4. Set a new personal best\n\nYou're crushing it! Keep pushing! 💪`;
     } else {
-      return `You're making progress on "${habit.name}"! 📈\n\nCurrent completion rate: ${completionRate}%\n\nBoost your consistency:\n\n1. Remove friction - make it easier to start\n2. Set a specific daily trigger\n3. Prepare the night before\n4. Focus on just showing up\n\nSmall improvements lead to big results! 🎯`;
+      return `You're making progress on "${habit.name}"! 📈\n\nCurrent completion rate: ${completionRate}%\n\nBoost your consistency:\n\n1. Remove friction - make it easier to start\n2. Set a specific daily trigger\n3. Prepare the night before\n4. Focus on just showing up\n\nSmall improvements lead to big results! 🦉`;
     }
   };
 
@@ -326,128 +326,122 @@ YOUR COACHING:`;
           </View>
         </LinearGradient>
 
-        {/* ✅ CRITICAL FIX: Remove Dialog.ScrollArea and use Dialog.Content instead */}
-        <Dialog.Content style={styles.dialogContent}>
-          <KeyboardAvoidingView 
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={styles.keyboardAvoidingView}
+        {/* ✅ CRITICAL FIX: Use Dialog.ScrollArea with proper maxHeight */}
+        <Dialog.ScrollArea style={styles.scrollArea}>
+          <ScrollView 
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={true}
+            nestedScrollEnabled={true}
           >
-            <ScrollView 
-              style={styles.scrollView}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.scrollContentContainer}
-              nestedScrollEnabled={true}
-            >
-              {/* Habit Stats */}
-              <View style={styles.statsContainer}>
-                <View style={styles.statBox}>
-                  <Icon name="fire" size={20} color="#ef4444" />
-                  <Text style={styles.statValue}>{habit?.currentStreak || 0}</Text>
-                  <Text style={styles.statLabel}>Streak</Text>
-                </View>
-                <View style={styles.statBox}>
-                  <Icon name="chart-line" size={20} color="#10b981" />
-                  <Text style={styles.statValue}>{calculateCompletionRate(habit)}%</Text>
-                  <Text style={styles.statLabel}>Rate</Text>
-                </View>
-                <View style={styles.statBox}>
-                  <Icon name="check-circle" size={20} color="#3b82f6" />
-                  <Text style={styles.statValue}>{habit?.totalCompletions || 0}</Text>
-                  <Text style={styles.statLabel}>Total</Text>
-                </View>
+            {/* Habit Stats */}
+            <View style={styles.statsContainer}>
+              <View style={styles.statBox}>
+                <Icon name="fire" size={20} color="#ef4444" />
+                <Text style={styles.statValue}>{habit?.currentStreak || 0}</Text>
+                <Text style={styles.statLabel}>Streak</Text>
               </View>
+              <View style={styles.statBox}>
+                <Icon name="chart-line" size={20} color="#10b981" />
+                <Text style={styles.statValue}>{calculateCompletionRate(habit)}%</Text>
+                <Text style={styles.statLabel}>Rate</Text>
+              </View>
+              <View style={styles.statBox}>
+                <Icon name="check-circle" size={20} color="#3b82f6" />
+                <Text style={styles.statValue}>{habit?.totalCompletions || 0}</Text>
+                <Text style={styles.statLabel}>Total</Text>
+              </View>
+            </View>
 
-              {!showResponse ? (
-                // Input Form
-                <>
-                  <Text style={styles.sectionTitle}>Ask your AI coach:</Text>
+            {!showResponse ? (
+              // Input Form
+              <>
+                <Text style={styles.sectionTitle}>Ask your AI coach:</Text>
 
-                  {/* Quick Suggestions */}
-                  <Text style={styles.quickTitle}>Quick suggestions (tap to send):</Text>
-                  <View style={styles.chipsContainer}>
-                    {quickSuggestions.map((suggestion, index) => (
-                      <Chip
-                        key={index}
-                        mode="outlined"
-                        onPress={() => handleQuickSuggestion(suggestion)}
-                        style={styles.chip}
-                        textStyle={styles.chipText}
-                        disabled={isLoading}
-                      >
-                        {suggestion}
-                      </Chip>
-                    ))}
+                {/* Quick Suggestions */}
+                <Text style={styles.quickTitle}>Quick suggestions (tap to send):</Text>
+                <View style={styles.chipsContainer}>
+                  {quickSuggestions.map((suggestion, index) => (
+                    <Chip
+                      key={index}
+                      mode="outlined"
+                      onPress={() => handleQuickSuggestion(suggestion)}
+                      style={styles.chip}
+                      textStyle={styles.chipText}
+                      disabled={isLoading}
+                    >
+                      {suggestion}
+                    </Chip>
+                  ))}
+                </View>
+
+                {/* Message Input */}
+                <TextInput
+                  label="Or type your own question"
+                  value={message}
+                  onChangeText={setMessage}
+                  mode="outlined"
+                  multiline
+                  numberOfLines={4}
+                  style={styles.textArea}
+                  placeholder="e.g., How can I build consistency with this habit?"
+                  disabled={isLoading}
+                />
+
+                <View style={styles.tipContainer}>
+                  <Icon name="lightbulb-outline" size={16} color="#f59e0b" />
+                  <Text style={styles.tipText}>
+                    Get personalized advice based on your habit progress and patterns
+                  </Text>
+                </View>
+              </>
+            ) : (
+              // AI Response Display
+              <>
+                <View style={styles.responseContainer}>
+                  <View style={styles.responseHeader}>
+                    <Icon name="robot" size={24} color="#4f46e5" />
+                    <Text style={styles.responseTitle}>Your Coach Says:</Text>
                   </View>
 
-                  {/* Message Input */}
-                  <TextInput
-                    label="Or type your own question"
-                    value={message}
-                    onChangeText={setMessage}
-                    mode="outlined"
-                    multiline
-                    numberOfLines={4}
-                    style={styles.textArea}
-                    placeholder="e.g., How can I build consistency with this habit?"
-                    disabled={isLoading}
-                  />
-
-                  <View style={styles.tipContainer}>
-                    <Icon name="lightbulb-outline" size={16} color="#f59e0b" />
-                    <Text style={styles.tipText}>
-                      Get personalized advice based on your habit progress and patterns
-                    </Text>
+                  <View style={styles.responseCard}>
+                    <Text style={styles.responseText}>{aiResponse}</Text>
                   </View>
-                </>
-              ) : (
-                // AI Response Display
-                <>
-                  <View style={styles.responseContainer}>
-                    <View style={styles.responseHeader}>
-                      <Icon name="robot" size={24} color="#4f46e5" />
-                      <Text style={styles.responseTitle}>Your Coach Says:</Text>
-                    </View>
 
-                    <View style={styles.responseCard}>
-                      <Text style={styles.responseText}>{aiResponse}</Text>
+                  {/* Conversation History */}
+                  {conversationHistory.length > 2 && (
+                    <View style={styles.historyContainer}>
+                      <Text style={styles.historyTitle}>Conversation History:</Text>
+                      {conversationHistory.slice(0, -2).map((item, index) => (
+                        <View key={index} style={styles.historyItem}>
+                          <Icon 
+                            name={item.type === 'user' ? 'account' : 'robot'} 
+                            size={16} 
+                            color={item.type === 'user' ? '#3b82f6' : '#8b5cf6'} 
+                          />
+                          <Text style={styles.historyText}>{item.text}</Text>
+                        </View>
+                      ))}
                     </View>
+                  )}
 
-                    {/* Conversation History */}
-                    {conversationHistory.length > 2 && (
-                      <View style={styles.historyContainer}>
-                        <Text style={styles.historyTitle}>Conversation History:</Text>
-                        {conversationHistory.slice(0, -2).map((item, index) => (
-                          <View key={index} style={styles.historyItem}>
-                            <Icon 
-                              name={item.type === 'user' ? 'account' : 'robot'} 
-                              size={16} 
-                              color={item.type === 'user' ? '#3b82f6' : '#8b5cf6'} 
-                            />
-                            <Text style={styles.historyText}>{item.text}</Text>
-                          </View>
-                        ))}
-                      </View>
-                    )}
-
-                    {/* Action Buttons */}
-                    <View style={styles.actionButtons}>
-                      <Button
-                        mode="outlined"
-                        onPress={handleNewConversation}
-                        icon="message-plus"
-                        style={styles.actionButton}
-                      >
-                        Ask Another Question
-                      </Button>
-                    </View>
+                  {/* Action Buttons */}
+                  <View style={styles.actionButtons}>
+                    <Button
+                      mode="outlined"
+                      onPress={handleNewConversation}
+                      icon="message-plus"
+                      style={styles.actionButton}
+                    >
+                      Ask Another Question
+                    </Button>
                   </View>
-                </>
-              )}
-            </ScrollView>
-          </KeyboardAvoidingView>
-        </Dialog.Content>
+                </View>
+              </>
+            )}
+          </ScrollView>
+        </Dialog.ScrollArea>
 
-        {/* Actions */}
+        {/* ✅ CRITICAL FIX: Actions outside ScrollArea to always be visible */}
         <Dialog.Actions style={styles.actions}>
           {!showResponse ? (
             <>
@@ -493,7 +487,8 @@ YOUR COACHING:`;
 
 const styles = StyleSheet.create({
   dialog: {
-    maxHeight: '90%',
+    maxHeight: '85%',
+    marginVertical: 60,
     borderRadius: 16,
   },
   header: {
@@ -525,21 +520,14 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontWeight: '600',
   },
-  // ✅ CRITICAL FIX: Updated styles for proper scrolling
-  dialogContent: {
+  // ✅ CRITICAL FIX: Proper ScrollArea styling
+  scrollArea: {
+    maxHeight: 400,
     paddingHorizontal: 0,
-    paddingVertical: 0,
   },
-  keyboardAvoidingView: {
-    maxHeight: 500,
-  },
-  scrollView: {
-    maxHeight: 500,
-  },
-  scrollContentContainer: {
+  scrollContent: {
     paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 16,
+    paddingVertical: 16,
   },
   statsContainer: {
     flexDirection: 'row',
@@ -660,9 +648,12 @@ const styles = StyleSheet.create({
   actionButton: {
     marginBottom: 8,
   },
+  // ✅ CRITICAL FIX: Actions always visible
   actions: {
     paddingHorizontal: 16,
     paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
   },
   // Loading overlay styles
   loadingOverlay: {
