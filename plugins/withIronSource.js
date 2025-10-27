@@ -1,13 +1,15 @@
 /**
  * Expo Config Plugin for IronSource (Unity Ads) Mediation
  * This plugin configures the native iOS and Android projects for Unity Ads
+ * 
+ * FIXED VERSION: Removed hardcoded SDK version to prevent conflicts
+ * The ironSource SDK version is now managed by the npm package itself
  */
 
 const { 
   withAppBuildGradle, 
   withProjectBuildGradle, 
   withInfoPlist,
-  withMainApplication 
 } = require('@expo/config-plugins');
 
 /**
@@ -26,15 +28,13 @@ const withAppBuildGradleConfig = (config) => {
       );
     }
 
-    // Add IronSource dependencies in dependencies block if not present
-    if (!buildGradle.includes('com.ironsource.sdk:mediationsdk')) {
+    // FIXED: Only add Google Play Services dependencies (not the SDK itself)
+    // The ironSource SDK is already included in the npm package
+    if (!buildGradle.includes('play-services-appset')) {
       const dependenciesMatch = buildGradle.match(/dependencies\s*{/);
       if (dependenciesMatch) {
         const insertPosition = buildGradle.indexOf(dependenciesMatch[0]) + dependenciesMatch[0].length;
-        const ironSourceDeps = `
-    // IronSource SDK
-    implementation 'com.ironsource.sdk:mediationsdk:8.5.0'
-    
+        const playServicesDeps = `
     // Google Play Services (required for IronSource)
     implementation 'com.google.android.gms:play-services-appset:16.1.0'
     implementation 'com.google.android.gms:play-services-ads-identifier:18.1.0'
@@ -42,7 +42,7 @@ const withAppBuildGradleConfig = (config) => {
 `;
         buildGradle = 
           buildGradle.slice(0, insertPosition) + 
-          ironSourceDeps + 
+          playServicesDeps + 
           buildGradle.slice(insertPosition);
       }
     }
