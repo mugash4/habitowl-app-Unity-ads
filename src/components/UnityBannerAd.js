@@ -1,15 +1,15 @@
 /**
- * Unity Banner Ad Component - FIXED VERSION
- * Displays banner ads at the bottom of screens using IronSource SDK
+ * Unity Banner Ad Component - COMPLETE FIX
  * 
- * FIXES:
- * - Waits for premium status to load before rendering
- * - Properly subscribes to premium status changes
+ * ✅ FIXED ISSUES:
+ * - No more "Loading..." text
  * - Better error handling
+ * - Proper premium status subscription
+ * - Graceful fallback when ads fail
  */
 
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, Platform, Text } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
 import unityAdsService from '../services/UnityAdsService';
 
 // Import banner component
@@ -18,26 +18,24 @@ try {
   const ironSourceModule = require('ironsource-mediation');
   LevelPlayBannerAdView = ironSourceModule.LevelPlayBannerAdView;
 } catch (error) {
-  console.log('IronSource banner not available');
+  console.log('[Banner] IronSource not available');
 }
 
 const UnityBannerAd = ({ style = {} }) => {
   const [shouldShow, setShouldShow] = useState(false);
   const [placementId, setPlacementId] = useState(null);
-  const [premiumStatusLoaded, setPremiumStatusLoaded] = useState(false); // 🔧 NEW
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    // 🔧 FIXED: Subscribe to premium status changes
+    // Subscribe to premium status changes
     const unsubscribe = unityAdsService.onPremiumStatusChange((isPremium) => {
-      console.log('[UnityBannerAd] Premium status changed:', isPremium);
-      setPremiumStatusLoaded(true);
-      initializeBanner();
+      console.log('[Banner] Premium status:', isPremium);
+      checkAndInitialize();
     });
 
-    // Initial check (in case premium status already loaded)
+    // Initial check
     if (unityAdsService.premiumStatusLoaded) {
-      setPremiumStatusLoaded(true);
-      initializeBanner();
+      checkAndInitialize();
     }
 
     return () => {
@@ -45,80 +43,69 @@ const UnityBannerAd = ({ style = {} }) => {
     };
   }, []);
 
-  const initializeBanner = () => {
-    // Don't show on web
+  const checkAndInitialize = () => {
+    // Platform check
     if (Platform.OS === 'web') {
-      console.log('[UnityBannerAd] Web platform, skipping banner');
-      return;
-    }
-
-    // 🔧 FIXED: Wait for premium status to be loaded
-    if (!unityAdsService.premiumStatusLoaded) {
-      console.log('[UnityBannerAd] Waiting for premium status to load...');
-      return;
-    }
-
-    // Check if ads should be shown
-    if (!unityAdsService.shouldShowAds()) {
-      console.log('[UnityBannerAd] Ads disabled (premium or not initialized)');
       setShouldShow(false);
       return;
     }
 
-    // Get banner configuration
+    // Wait for premium status
+    if (!unityAdsService.premiumStatusLoaded) {
+      setShouldShow(false);
+      return;
+    }
+
+    // Check if should show ads
+    if (!unityAdsService.shouldShowAds()) {
+      console.log('[Banner] Ads disabled');
+      setShouldShow(false);
+      return;
+    }
+
+    // Get banner config
     const bannerConfig = unityAdsService.getBannerConfig();
     if (!bannerConfig || !bannerConfig.Component) {
-      console.log('[UnityBannerAd] Banner configuration not available');
+      console.log('[Banner] Config not available');
       setShouldShow(false);
       return;
     }
 
-    console.log('[UnityBannerAd] ✅ Banner ready to show with placement:', bannerConfig.placementId);
+    console.log('[Banner] ✅ Ready with placement:', bannerConfig.placementId);
     setPlacementId(bannerConfig.placementId);
+    setIsReady(true);
     setShouldShow(true);
   };
 
   const handleAdLoaded = (adInfo) => {
-    console.log('[UnityBannerAd] ✅ Banner ad loaded:', adInfo);
+    console.log('[Banner] ✅ Ad loaded');
     unityAdsService.trackAdImpression('banner', 'loaded');
   };
 
   const handleAdLoadFailed = (error) => {
-    console.log('[UnityBannerAd] ❌ Banner ad failed to load:', error);
-    // Don't hide banner container, just log the error
-    // The SDK will auto-retry
+    console.log('[Banner] ❌ Load failed:', error);
+    // Keep showing container - SDK will retry
   };
 
   const handleAdClicked = (adInfo) => {
-    console.log('[UnityBannerAd] 👆 Banner ad clicked:', adInfo);
+    console.log('[Banner] 👆 Clicked');
     unityAdsService.trackAdImpression('banner', 'click');
   };
 
   const handleAdDisplayed = (adInfo) => {
-    console.log('[UnityBannerAd] 👁️ Banner ad displayed:', adInfo);
+    console.log('[Banner] 👁️ Displayed');
   };
 
   const handleAdDisplayFailed = (error) => {
-    console.log('[UnityBannerAd] ❌ Banner ad display failed:', error);
+    console.log('[Banner] ❌ Display failed:', error);
   };
 
   const handleAdLeftApplication = (adInfo) => {
-    console.log('[UnityBannerAd] 🚪 Banner ad left application:', adInfo);
+    console.log('[Banner] 🚪 Left app');
   };
 
-  // 🔧 FIXED: Show loading state while waiting for premium status
-  if (!premiumStatusLoaded) {
-    return (
-      <View style={[styles.container, style]}>
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Loading...</Text>
-        </View>
-      </View>
-    );
-  }
-
-  // Don't render if we shouldn't show ads
-  if (!shouldShow || !LevelPlayBannerAdView || Platform.OS === 'web' || !placementId) {
+  // Don't render if shouldn't show
+  if (!shouldShow || !isReady || !LevelPlayBannerAdView || Platform.OS === 'web' || !placementId) {
     return null;
   }
 
@@ -150,15 +137,6 @@ const styles = StyleSheet.create({
   banner: {
     width: '100%',
     height: 50,
-  },
-  loadingContainer: {
-    height: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 12,
-    color: '#9ca3af',
   },
 });
 
