@@ -1,6 +1,11 @@
 /**
- * Unity Ads Service
+ * Unity Ads Service - FIXED VERSION
  * Handles all ad operations using IronSource Mediation SDK (Unity Ads)
+ * 
+ * FIXES:
+ * - Premium status loading race condition
+ * - Ad initialization timing
+ * - Better error handling and logging
  */
 
 import { Platform } from 'react-native';
@@ -40,6 +45,7 @@ class UnityAdsService {
   constructor() {
     this.isInitialized = false;
     this.isPremium = false;
+    this.premiumStatusLoaded = false; // 🔧 NEW: Track if premium status is loaded
     this.isTestMode = __DEV__ && UNITY_ADS_CONFIG.ENABLE_TEST_ADS_IN_DEV;
     
     // Ad instances
@@ -56,11 +62,66 @@ class UnityAdsService {
     // Initialization state
     this.initializationAttempted = false;
     this.initializationError = null;
+    
+    // 🔧 NEW: Callbacks for when premium status changes
+    this.premiumStatusListeners = [];
+  }
+
+  /**
+   * 🔧 NEW: Pre-load premium status BEFORE initialization
+   */
+  async preloadPremiumStatus() {
+    try {
+      const premium = await AsyncStorage.getItem('user_premium_status');
+      this.isPremium = premium === 'true';
+      this.premiumStatusLoaded = true;
+      this.log('✅ Premium status pre-loaded:', this.isPremium);
+      
+      // Notify listeners
+      this.notifyPremiumStatusChange(this.isPremium);
+      
+      return this.isPremium;
+    } catch (error) {
+      this.log('⚠️ Error loading premium status:', error);
+      this.isPremium = false;
+      this.premiumStatusLoaded = true;
+      return false;
+    }
+  }
+
+  /**
+   * 🔧 NEW: Listen to premium status changes
+   */
+  onPremiumStatusChange(callback) {
+    this.premiumStatusListeners.push(callback);
+    // Immediately call with current status if already loaded
+    if (this.premiumStatusLoaded) {
+      callback(this.isPremium);
+    }
+    // Return unsubscribe function
+    return () => {
+      this.premiumStatusListeners = this.premiumStatusListeners.filter(cb => cb !== callback);
+    };
+  }
+
+  /**
+   * 🔧 NEW: Notify all listeners when premium status changes
+   */
+  notifyPremiumStatusChange(isPremium) {
+    this.premiumStatusListeners.forEach(listener => {
+      try {
+        listener(isPremium);
+      } catch (error) {
+        this.log('Error in premium status listener:', error);
+      }
+    });
   }
 
   /**
    * Initialize Unity Ads SDK
    * Call this once when the app starts
+   * 
+   * 🔧 FIXED: Now requires premium status to be pre-loaded
    */
   async initialize(userId = null) {
     try {
@@ -89,8 +150,11 @@ class UnityAdsService {
 
       this.log('🚀 Initializing Unity Ads...');
 
-      // Load premium status
-      await this.loadPremiumStatus();
+      // 🔧 FIXED: Ensure premium status is loaded first
+      if (!this.premiumStatusLoaded) {
+        this.log('⏳ Waiting for premium status to load...');
+        await this.preloadPremiumStatus();
+      }
 
       // Get Game ID for current platform
       const gameId = Platform.OS === 'ios' 
@@ -106,6 +170,8 @@ class UnityAdsService {
       }
 
       this.log(`Game ID: ${gameId}`);
+      this.log(`Premium User: ${this.isPremium ? 'YES' : 'NO'}`);
+      this.log(`Should Show Ads: ${!this.isPremium ? 'YES' : 'NO'}`);
 
       // Enable debug mode in development
       if (UNITY_ADS_CONFIG.DEBUG_MODE && IronSource) {
@@ -148,10 +214,10 @@ class UnityAdsService {
           
           // Setup ad units if not premium
           if (!this.isPremium) {
-            this.log('Setting up ad units (non-premium user)');
+            this.log('🎯 Non-premium user: Setting up ad units');
             this.setupAdUnits();
           } else {
-            this.log('Premium user detected - ads disabled');
+            this.log('👑 Premium user: Ads disabled');
           }
         }
       };
@@ -218,8 +284,10 @@ class UnityAdsService {
           this.interstitialLoaded = false;
           // Try to reload after delay
           setTimeout(() => {
-            this.log('Retrying interstitial ad load...');
-            this.loadInterstitialAd();
+            if (this.shouldShowAds()) {
+              this.log('Retrying interstitial ad load...');
+              this.loadInterstitialAd();
+            }
           }, 10000);
         },
         onAdDisplayed: (adInfo) => {
@@ -469,26 +537,39 @@ class UnityAdsService {
 
   /**
    * Load premium status from storage
+   * 🔧 DEPRECATED: Use preloadPremiumStatus() instead
    */
   async loadPremiumStatus() {
-    try {
-      const premium = await AsyncStorage.getItem('user_premium_status');
-      this.isPremium = premium === 'true';
-      this.log('Premium status:', this.isPremium);
-    } catch (error) {
-      this.log('Error loading premium status:', error);
-      this.isPremium = false;
-    }
+    return await this.preloadPremiumStatus();
   }
 
   /**
    * Set premium status
+   * 🔧 FIXED: Now notifies listeners when status changes
    */
   async setPremiumStatus(isPremium) {
     try {
+      const oldStatus = this.isPremium;
       this.isPremium = isPremium;
+      this.premiumStatusLoaded = true;
       await AsyncStorage.setItem('user_premium_status', isPremium.toString());
       this.log('Premium status updated:', isPremium);
+      
+      // 🔧 NEW: Notify listeners if status changed
+      if (oldStatus !== isPremium) {
+        this.notifyPremiumStatusChange(isPremium);
+        
+        // If user became premium, cleanup ad instances
+        if (isPremium) {
+          this.log('User upgraded to premium, cleaning up ads...');
+          this.cleanup();
+        }
+        // If user lost premium, reinitialize ads
+        else if (this.isInitialized) {
+          this.log('User lost premium, setting up ads...');
+          this.setupAdUnits();
+        }
+      }
     } catch (error) {
       this.log('Error setting premium status:', error);
     }
@@ -496,17 +577,39 @@ class UnityAdsService {
 
   /**
    * Check if ads should be shown
+   * 🔧 IMPROVED: Better logging for debugging
    */
   shouldShowAds() {
-    const should = this.isInitialized && !this.isPremium && Platform.OS !== 'web' && sdkAvailable;
-    if (!should) {
-      const reasons = [];
-      if (!this.isInitialized) reasons.push('not initialized');
-      if (this.isPremium) reasons.push('premium user');
-      if (Platform.OS === 'web') reasons.push('web platform');
-      if (!sdkAvailable) reasons.push('SDK not available');
-      this.log(`Ads disabled: ${reasons.join(', ')}`);
+    const reasons = [];
+    
+    if (!this.premiumStatusLoaded) {
+      reasons.push('premium status not loaded yet');
     }
+    if (!this.isInitialized) {
+      reasons.push('not initialized');
+    }
+    if (this.isPremium) {
+      reasons.push('premium user');
+    }
+    if (Platform.OS === 'web') {
+      reasons.push('web platform');
+    }
+    if (!sdkAvailable) {
+      reasons.push('SDK not available');
+    }
+
+    const should = this.isInitialized && 
+                   !this.isPremium && 
+                   Platform.OS !== 'web' && 
+                   sdkAvailable &&
+                   this.premiumStatusLoaded;
+
+    if (!should && reasons.length > 0) {
+      this.log(`❌ Ads disabled: ${reasons.join(', ')}`);
+    } else if (should) {
+      this.log('✅ Ads enabled');
+    }
+
     return should;
   }
 
@@ -573,6 +676,7 @@ class UnityAdsService {
       initializationAttempted: this.initializationAttempted,
       initializationError: this.initializationError,
       isPremium: this.isPremium,
+      premiumStatusLoaded: this.premiumStatusLoaded, // 🔧 NEW
       sdkAvailable: sdkAvailable,
       platform: Platform.OS,
       interstitialLoaded: this.interstitialLoaded,
@@ -611,6 +715,8 @@ class UnityAdsService {
     this.log('Cleaning up Unity Ads Service');
     this.interstitialAd = null;
     this.rewardedAd = null;
+    this.interstitialLoaded = false;
+    this.rewardedLoaded = false;
   }
 }
 
