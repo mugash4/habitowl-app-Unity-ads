@@ -158,7 +158,7 @@ const PremiumScreen = ({ navigation }) => {
       if (success) {
         // Purchase was successful (or is being processed)
         Alert.alert(
-          '🎉 Welcome to Premium!',
+          ' Welcome to Premium!',
           'Your 7-day free trial has started! You can cancel anytime before the trial ends.',
           [
             {
@@ -244,9 +244,15 @@ const PremiumScreen = ({ navigation }) => {
 
   if (isLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4f46e5" />
-        <Text style={styles.loadingText}>Loading subscription options...</Text>
+      <View style={styles.container}>
+        <Appbar.Header>
+          <Appbar.BackAction onPress={() => navigation.goBack()} />
+          <Appbar.Content title="Upgrade to Premium" />
+        </Appbar.Header>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#4f46e5" />
+          <Text style={styles.loadingText}>Loading subscription options...</Text>
+        </View>
       </View>
     );
   }
@@ -258,8 +264,13 @@ const PremiumScreen = ({ navigation }) => {
         <Appbar.Content title="Upgrade to Premium" />
       </Appbar.Header>
 
-      <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
-        <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollViewContent}
+        showsVerticalScrollIndicator={false}
+        bounces={true}
+      >
+        <Animated.View style={{ opacity: fadeAnim }}>
           {/* Header */}
           <LinearGradient colors={['#4f46e5', '#7c3aed']} style={styles.header}>
             <Icon name="crown" size={60} color="#f59e0b" />
@@ -282,10 +293,10 @@ const PremiumScreen = ({ navigation }) => {
                 </View>
               </View>
               <Text style={styles.trialHighlightDescription}>
-                • Cancel anytime during trial{'\n'}
-                • No charges until trial ends{'\n'}
-                • Full access to all premium features{'\n'}
-                • Manage subscription in Google Play Store
+                 Cancel anytime during trial{'\n'}
+                 No charges until trial ends{'\n'}
+                 Full access to all premium features{'\n'}
+                 Manage subscription in Google Play Store
               </Text>
             </Card.Content>
           </Card>
@@ -367,8 +378,8 @@ const PremiumScreen = ({ navigation }) => {
           </View>
 
           <View style={styles.bottomPadding} />
-        </ScrollView>
-      </Animated.View>
+        </Animated.View>
+      </ScrollView>
     </View>
   );
 };
@@ -389,8 +400,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6b7280',
   },
-  content: {
+  scrollView: {
     flex: 1,
+  },
+  scrollViewContent: {
+    flexGrow: 1,
+    paddingBottom: 20,
   },
   header: {
     alignItems: 'center',
