@@ -79,12 +79,13 @@ const AboutScreen = ({ navigation }) => {
         <Appbar.Content title="About HabitOwl" />
       </Appbar.Header>
 
-      {/* ✅ FIX: Proper smooth scrolling */}
+      {/* ✅ FIX: Proper smooth scrolling similar to AI Coaching Modal */}
       <ScrollView 
         style={styles.content}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={true}
         bounces={true}
+        nestedScrollEnabled={true}
       >
         {/* App Header */}
         <LinearGradient colors={['#4f46e5', '#7c3aed']} style={styles.header}>

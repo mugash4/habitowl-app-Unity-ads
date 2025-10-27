@@ -275,6 +275,7 @@ const HabitCard = ({
               </Text>
             </View>
 
+            {/* ✅ FIX: Proper spacing and visibility for category and time */}
             <View style={styles.tagsRow}>
               <View style={styles.chipWrapper}>
                 <Chip 
@@ -447,18 +448,22 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     marginTop: 2,
   },
+  // ✅ FIX: Proper spacing to prevent cut-off
   tagsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16, // Increased from 12 to 16
     flexWrap: 'wrap',
+    minHeight: 36, // Ensures minimum height for chips
   },
   chipWrapper: {
     marginRight: 8,
-    marginBottom: 4,
+    marginBottom: 6, // Increased from 4 to 6 for better spacing
+    paddingVertical: 2, // Added to prevent vertical clipping
   },
   chip: {
     height: 28,
+    marginVertical: 0,
   },
   completedChip: {
     borderColor: '#ffffff',
@@ -466,11 +471,13 @@ const styles = StyleSheet.create({
   chipText: {
     fontSize: 11,
     color: '#6b7280',
+    lineHeight: 16, // Added for better text rendering
   },
   difficultyContainer: {
     flexDirection: 'row',
     marginLeft: 'auto',
-    marginBottom: 4,
+    marginBottom: 6, // Increased from 4 to 6
+    paddingVertical: 2, // Added for alignment
   },
   actionsRow: {
     flexDirection: 'row',

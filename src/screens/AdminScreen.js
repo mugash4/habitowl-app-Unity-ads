@@ -280,18 +280,19 @@ const AdminScreen = ({ navigation }) => {
         />
       </Appbar.Header>
 
-      {/* ✅ FIX: Proper smooth scrolling */}
+      {/* ✅ FIX: Proper smooth scrolling similar to AI Coaching Modal */}
       <ScrollView 
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={true}
         bounces={true}
+        nestedScrollEnabled={true}
       >
         <Card style={[styles.card, styles.securityNotice]}>
           <Card.Content>
             <View style={styles.noticeHeader}>
               <Icon name="shield-lock" size={24} color="#ef4444" />
-              <Text style={styles.noticeTitle}>🔒 Admin Access</Text>
+              <Text style={styles.noticeTitle}> Admin Access</Text>
             </View>
             <Text style={styles.noticeText}>
               You have administrative privileges. API keys and sensitive data are visible only to verified admins.
@@ -299,11 +300,11 @@ const AdminScreen = ({ navigation }) => {
           </Card.Content>
         </Card>
 
-        <Text style={styles.sectionTitle}>📊 App Statistics</Text>
+        <Text style={styles.sectionTitle}> App Statistics</Text>
         {renderStats()}
 
         <Card style={styles.card}>
-          <List.Subheader>🤖 AI Configuration (Admin Only)</List.Subheader>
+          <List.Subheader> AI Configuration (Admin Only)</List.Subheader>
           
           <List.Item
             title="Configure API Keys"
@@ -335,7 +336,7 @@ const AdminScreen = ({ navigation }) => {
         </Card>
 
         <Card style={styles.card}>
-          <List.Subheader>📢 Marketing Tools</List.Subheader>
+          <List.Subheader> Marketing Tools</List.Subheader>
           
           <List.Item
             title="Create Promotional Offer"
@@ -354,7 +355,7 @@ const AdminScreen = ({ navigation }) => {
         </Card>
 
         <Card style={styles.card}>
-          <List.Subheader>⚡ Quick Actions</List.Subheader>
+          <List.Subheader> Quick Actions</List.Subheader>
           
           <List.Item
             title="Broadcast Notification"
@@ -377,7 +378,7 @@ const AdminScreen = ({ navigation }) => {
 
       <Portal>
         <Dialog visible={showApiDialog} onDismiss={() => setShowApiDialog(false)}>
-          <Dialog.Title>🔑 Configure API Key (Admin Only)</Dialog.Title>
+          <Dialog.Title> Configure API Key (Admin Only)</Dialog.Title>
           <Dialog.ScrollArea>
             <ScrollView contentContainerStyle={styles.dialogScrollContent}>
               <Text style={styles.dialogDescription}>
@@ -429,7 +430,7 @@ const AdminScreen = ({ navigation }) => {
 
       <Portal>
         <Dialog visible={showPromoDialog} onDismiss={() => setShowPromoDialog(false)}>
-          <Dialog.Title>🏷️ Create Promotional Offer</Dialog.Title>
+          <Dialog.Title> Create Promotional Offer</Dialog.Title>
           <Dialog.ScrollArea>
             <ScrollView contentContainerStyle={styles.dialogScrollContent}>
               <TextInput
