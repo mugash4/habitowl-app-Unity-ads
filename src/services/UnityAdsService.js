@@ -2,6 +2,7 @@
  * Unity Ads Service - COMPLETE ClassCastException FIX
  * 
  * ✅ FIXED: Removed withLegacyAdFormats() which causes ClassCastException
+ * ✅ FIXED: Removed unused AdFormat import that could cause issues
  * The SDK automatically detects all ad formats without explicit configuration
  */
 
@@ -15,7 +16,7 @@ let LevelPlayInitRequest = null;
 let LevelPlayBannerAdView = null;
 let LevelPlayInterstitialAd = null;
 let LevelPlayRewardedAd = null;
-let AdFormat = null;
+// ✅ REMOVED: AdFormat - not needed and can cause issues
 let IronSource = null;
 let LevelPlayAdSize = null;
 
@@ -30,7 +31,7 @@ try {
   LevelPlayBannerAdView = ironSourceModule.LevelPlayBannerAdView;
   LevelPlayInterstitialAd = ironSourceModule.LevelPlayInterstitialAd;
   LevelPlayRewardedAd = ironSourceModule.LevelPlayRewardedAd;
-  AdFormat = ironSourceModule.AdFormat;
+  // ✅ REMOVED: AdFormat = ironSourceModule.AdFormat;
   IronSource = ironSourceModule.IronSource;
   LevelPlayAdSize = ironSourceModule.LevelPlayAdSize;
   sdkAvailable = true;
