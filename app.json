@@ -62,6 +62,7 @@
     },
     "plugins": [
       "./plugins/withIronSource",
+      "react-native-iap",
       [
         "expo-build-properties",
         {
