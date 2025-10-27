@@ -79,13 +79,11 @@ const AboutScreen = ({ navigation }) => {
         <Appbar.Content title="About HabitOwl" />
       </Appbar.Header>
 
-      {/* ✅ FIX: Proper smooth scrolling similar to AI Coaching Modal */}
       <ScrollView 
-        style={styles.content}
+        style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={true}
         bounces={true}
-        nestedScrollEnabled={true}
       >
         {/* App Header */}
         <LinearGradient colors={['#4f46e5', '#7c3aed']} style={styles.header}>
@@ -276,9 +274,6 @@ const AboutScreen = ({ navigation }) => {
             Made with ❤️ for habit builders everywhere
           </Text>
         </View>
-
-        {/* ✅ FIX: Extra bottom padding for smooth scroll to bottom */}
-        <View style={styles.bottomSpacer} />
       </ScrollView>
     </View>
   );
@@ -289,12 +284,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8fafc',
   },
-  // ✅ FIX: Smooth scrolling with proper padding
-  content: {
+  scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 100, // Increased for better scrolling
+    flexGrow: 1,
+    paddingBottom: 32,
   },
   header: {
     alignItems: 'center',
@@ -408,10 +403,6 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     textAlign: 'center',
     marginBottom: 4,
-  },
-  // ✅ FIX: Proper bottom spacing for smooth scrolling
-  bottomSpacer: {
-    height: 80,
   },
 });
 

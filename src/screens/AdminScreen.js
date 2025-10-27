@@ -280,19 +280,17 @@ const AdminScreen = ({ navigation }) => {
         />
       </Appbar.Header>
 
-      {/* ✅ FIX: Proper smooth scrolling similar to AI Coaching Modal */}
       <ScrollView 
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={true}
         bounces={true}
-        nestedScrollEnabled={true}
       >
         <Card style={[styles.card, styles.securityNotice]}>
           <Card.Content>
             <View style={styles.noticeHeader}>
               <Icon name="shield-lock" size={24} color="#ef4444" />
-              <Text style={styles.noticeTitle}> Admin Access</Text>
+              <Text style={styles.noticeTitle}>🔒 Admin Access</Text>
             </View>
             <Text style={styles.noticeText}>
               You have administrative privileges. API keys and sensitive data are visible only to verified admins.
@@ -300,11 +298,11 @@ const AdminScreen = ({ navigation }) => {
           </Card.Content>
         </Card>
 
-        <Text style={styles.sectionTitle}> App Statistics</Text>
+        <Text style={styles.sectionTitle}>📊 App Statistics</Text>
         {renderStats()}
 
         <Card style={styles.card}>
-          <List.Subheader> AI Configuration (Admin Only)</List.Subheader>
+          <List.Subheader>🤖 AI Configuration (Admin Only)</List.Subheader>
           
           <List.Item
             title="Configure API Keys"
@@ -336,7 +334,7 @@ const AdminScreen = ({ navigation }) => {
         </Card>
 
         <Card style={styles.card}>
-          <List.Subheader> Marketing Tools</List.Subheader>
+          <List.Subheader>📢 Marketing Tools</List.Subheader>
           
           <List.Item
             title="Create Promotional Offer"
@@ -355,7 +353,7 @@ const AdminScreen = ({ navigation }) => {
         </Card>
 
         <Card style={styles.card}>
-          <List.Subheader> Quick Actions</List.Subheader>
+          <List.Subheader>⚡ Quick Actions</List.Subheader>
           
           <List.Item
             title="Broadcast Notification"
@@ -371,14 +369,11 @@ const AdminScreen = ({ navigation }) => {
             onPress={() => Alert.alert('Coming Soon', 'Data export coming soon')}
           />
         </Card>
-
-        {/* ✅ FIX: Extra bottom padding for smooth scroll to bottom */}
-        <View style={styles.bottomSpacer} />
       </ScrollView>
 
       <Portal>
         <Dialog visible={showApiDialog} onDismiss={() => setShowApiDialog(false)}>
-          <Dialog.Title> Configure API Key (Admin Only)</Dialog.Title>
+          <Dialog.Title>🔑 Configure API Key (Admin Only)</Dialog.Title>
           <Dialog.ScrollArea>
             <ScrollView contentContainerStyle={styles.dialogScrollContent}>
               <Text style={styles.dialogDescription}>
@@ -430,7 +425,7 @@ const AdminScreen = ({ navigation }) => {
 
       <Portal>
         <Dialog visible={showPromoDialog} onDismiss={() => setShowPromoDialog(false)}>
-          <Dialog.Title> Create Promotional Offer</Dialog.Title>
+          <Dialog.Title>🎁 Create Promotional Offer</Dialog.Title>
           <Dialog.ScrollArea>
             <ScrollView contentContainerStyle={styles.dialogScrollContent}>
               <TextInput
@@ -501,12 +496,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     elevation: 2,
   },
-  // ✅ FIX: Smooth scrolling with proper padding
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 100, // Increased for better scrolling
+    flexGrow: 1,
+    paddingBottom: 32,
   },
   sectionTitle: {
     fontSize: 20,
@@ -586,6 +581,7 @@ const styles = StyleSheet.create({
   },
   dialogScrollContent: {
     paddingHorizontal: 24,
+    flexGrow: 1,
   },
   dialogDescription: {
     fontSize: 16,
@@ -623,10 +619,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#991b1b',
     marginLeft: 8,
-  },
-  // ✅ FIX: Proper bottom spacing for smooth scrolling
-  bottomSpacer: {
-    height: 80,
   },
 });
 
