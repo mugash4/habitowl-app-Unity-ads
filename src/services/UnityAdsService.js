@@ -1,13 +1,13 @@
 /**
  * Unity Ads Service - COMPLETE FIX FOR FREE PLAN
  * 
- * ✅ FIXED ISSUES:
- * - Corrected API usage for LevelPlayInterstitialAd and LevelPlayRewardedAd
- * - Fixed placement ID handling
- * - Proper initialization sequence
- * - Better error handling and logging
- * 
- * CRITICAL FIX: Changed from createInterstitialAd/createRewardedAd to proper constructor usage
+ * ✅ CRITICAL FIXES APPLIED:
+ * 1. Changed from "new Constructor()" to static factory methods
+ *    - WRONG: new LevelPlayInterstitialAd(placementId)
+ *    - RIGHT: LevelPlayInterstitialAd.createInterstitialAd(placementId)
+ * 2. Added proper test mode activation using IronSource.setMetaData()
+ * 3. Fixed initialization sequence
+ * 4. Better error handling and logging
  */
 
 import { Platform } from 'react-native';
@@ -81,7 +81,7 @@ class UnityAdsService {
   }
 
   /**
-   * 🆕 Pre-load premium status BEFORE initialization
+   * Pre-load premium status BEFORE initialization
    */
   async preloadPremiumStatus() {
     try {
@@ -190,40 +190,34 @@ class UnityAdsService {
       this.initializationDetails.push(`Premium: ${this.isPremium}`);
       this.initializationDetails.push(`Test Mode: ${this.isTestMode}`);
 
-      // 🆕 Enable test mode if configured
-      if (this.isTestMode) {
+      // ✅ CRITICAL FIX #1: Enable test mode BEFORE initialization
+      if (this.isTestMode && IronSource.setMetaData) {
         try {
           this.log('🧪 Enabling test mode...');
           
-          // Enable test mode in SDK
-          if (IronSource && IronSource.validateIntegration) {
-            await IronSource.validateIntegration();
-            this.log('✅ Integration validated');
-          }
+          // Enable test mode using metadata
+          await IronSource.setMetaData('is_test_suite', 'enable');
+          this.log('✅ Test mode enabled via metadata');
           
           // Enable adapters debug
-          if (IronSource && IronSource.setAdaptersDebug) {
+          if (IronSource.setAdaptersDebug) {
             await IronSource.setAdaptersDebug(true);
             this.log('✅ Adapters debug enabled');
           }
           
-          // Enable console logs (if available)
-          if (IronSource && IronSource.setConsoleLogLevel) {
-            await IronSource.setConsoleLogLevel('DEBUG');
-            this.log('✅ Console log level set to DEBUG');
-          }
+          this.initializationDetails.push('✅ Test mode activated');
         } catch (error) {
-          this.log('⚠️ Could not enable full test mode:', error.message);
-          // Continue anyway
+          this.log('⚠️ Could not enable test mode:', error.message);
+          this.initializationDetails.push('⚠️ Test mode setup failed (continuing anyway)');
         }
       }
 
       // Create initialization request
       const initRequestBuilder = LevelPlayInitRequest.builder(gameId)
         .withLegacyAdFormats([
-          AdFormat.REWARDED,
+          AdFormat.BANNER,
           AdFormat.INTERSTITIAL,
-          AdFormat.BANNER
+          AdFormat.REWARDED
         ]);
 
       // Add user ID if provided
@@ -289,7 +283,7 @@ class UnityAdsService {
   }
 
   /**
-   * 🆕 Get placement ID with fallback support
+   * Get placement ID with fallback support
    */
   getPlacementId(adType) {
     const platform = Platform.OS;
@@ -313,7 +307,7 @@ class UnityAdsService {
   }
 
   /**
-   * Setup all ad units - CRITICAL FIX HERE
+   * Setup all ad units
    */
   setupAdUnits() {
     this.log('Setting up ad units...');
@@ -330,7 +324,7 @@ class UnityAdsService {
   }
 
   /**
-   * Setup Interstitial Ads - FIXED API USAGE
+   * Setup Interstitial Ads - ✅ CRITICAL FIX #2: Using static factory method
    */
   setupInterstitialAd() {
     try {
@@ -344,8 +338,15 @@ class UnityAdsService {
 
       this.log(`🎬 Setting up interstitial: ${placementId}`);
 
-      // ✅ CRITICAL FIX: Use "new" constructor instead of "createInterstitialAd"
-      this.interstitialAd = new LevelPlayInterstitialAd(placementId);
+      // ✅ CRITICAL FIX: Use static factory method, NOT constructor
+      // WRONG: this.interstitialAd = new LevelPlayInterstitialAd(placementId);
+      // RIGHT: Use the factory method
+      if (typeof LevelPlayInterstitialAd.createInterstitialAd === 'function') {
+        this.interstitialAd = LevelPlayInterstitialAd.createInterstitialAd(placementId);
+      } else {
+        // Fallback for different SDK versions
+        this.interstitialAd = new LevelPlayInterstitialAd(placementId);
+      }
 
       // Set up listeners
       const listener = {
@@ -397,7 +398,7 @@ class UnityAdsService {
   }
 
   /**
-   * Setup Rewarded Ads - FIXED API USAGE
+   * Setup Rewarded Ads - ✅ CRITICAL FIX #3: Using static factory method
    */
   setupRewardedAd() {
     try {
@@ -411,8 +412,15 @@ class UnityAdsService {
 
       this.log(`🎁 Setting up rewarded: ${placementId}`);
 
-      // ✅ CRITICAL FIX: Use "new" constructor instead of "createRewardedAd"
-      this.rewardedAd = new LevelPlayRewardedAd(placementId);
+      // ✅ CRITICAL FIX: Use static factory method, NOT constructor
+      // WRONG: this.rewardedAd = new LevelPlayRewardedAd(placementId);
+      // RIGHT: Use the factory method
+      if (typeof LevelPlayRewardedAd.createRewardedAd === 'function') {
+        this.rewardedAd = LevelPlayRewardedAd.createRewardedAd(placementId);
+      } else {
+        // Fallback for different SDK versions
+        this.rewardedAd = new LevelPlayRewardedAd(placementId);
+      }
 
       // Set up listeners
       const listener = {

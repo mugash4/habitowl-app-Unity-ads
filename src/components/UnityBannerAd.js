@@ -1,15 +1,14 @@
 /**
  * Unity Banner Ad Component - COMPLETE FIX FOR FREE PLAN
  * 
- * ✅ FIXED ISSUES:
- * - Proper LevelPlayBannerAdView usage with correct props
- * - Better error handling
- * - Proper premium status subscription
- * - Graceful fallback when ads fail
- * - Uses proper adUnitId prop instead of placementName
+ * ✅ CRITICAL FIXES APPLIED:
+ * 1. Removed manual loadAd() call - let the component auto-load
+ * 2. Simplified props - only use adUnitId (not both adUnitId and placementName)
+ * 3. Better error handling and state management
+ * 4. Proper initialization checks
  */
 
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
 import unityAdsService from '../services/UnityAdsService';
 
@@ -28,7 +27,6 @@ const UnityBannerAd = ({ style = {} }) => {
   const [shouldShow, setShouldShow] = useState(false);
   const [adUnitId, setAdUnitId] = useState(null);
   const [isReady, setIsReady] = useState(false);
-  const bannerRef = useRef(null);
 
   useEffect(() => {
     // Subscribe to premium status changes
@@ -62,7 +60,7 @@ const UnityBannerAd = ({ style = {} }) => {
 
     // Check if should show ads
     if (!unityAdsService.shouldShowAds()) {
-      console.log('[Banner] Ads disabled');
+      console.log('[Banner] Ads disabled (premium or not initialized)');
       setShouldShow(false);
       return;
     }
@@ -88,7 +86,7 @@ const UnityBannerAd = ({ style = {} }) => {
 
   const handleAdLoadFailed = useCallback((error) => {
     console.log('[Banner] ❌ Load failed:', error);
-    // Keep showing container - SDK will retry
+    // Keep showing container - SDK will retry automatically
   }, []);
 
   const handleAdClicked = useCallback((adInfo) => {
@@ -117,14 +115,6 @@ const UnityBannerAd = ({ style = {} }) => {
     console.log('[Banner] 📐 Collapsed');
   }, []);
 
-  // Load ad when component is laid out
-  const loadAd = useCallback(() => {
-    if (bannerRef.current && bannerRef.current.loadAd) {
-      console.log('[Banner] 📥 Loading ad...');
-      bannerRef.current.loadAd();
-    }
-  }, []);
-
   // Don't render if shouldn't show
   if (!shouldShow || !isReady || !LevelPlayBannerAdView || Platform.OS === 'web' || !adUnitId) {
     return null;
@@ -135,10 +125,8 @@ const UnityBannerAd = ({ style = {} }) => {
   return (
     <View style={[styles.container, style]}>
       <LevelPlayBannerAdView
-        ref={bannerRef}
         adUnitId={adUnitId}
         adSize={adSize}
-        placementName={adUnitId}
         listener={{
           onAdLoaded: handleAdLoaded,
           onAdLoadFailed: handleAdLoadFailed,
@@ -150,7 +138,6 @@ const UnityBannerAd = ({ style = {} }) => {
           onAdCollapsed: handleAdCollapsed,
         }}
         style={styles.banner}
-        onLayout={loadAd}
       />
     </View>
   );
