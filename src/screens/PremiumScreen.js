@@ -5,27 +5,33 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
-  Animated
+  Animated,
+  Platform
 } from 'react-native';
 import {
   Card,
   Button,
   List,
   Chip,
-  Appbar
+  Appbar,
+  ActivityIndicator
 } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 import FirebaseService from '../services/FirebaseService';
-import AdService from '../services/AdService';
+import SubscriptionService from '../services/SubscriptionService';
 
 const PremiumScreen = ({ navigation }) => {
   const [selectedPlan, setSelectedPlan] = useState('monthly');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isPurchasing, setIsPurchasing] = useState(false);
+  const [subscriptions, setSubscriptions] = useState([]);
   const [fadeAnim] = useState(new Animated.Value(0));
 
   useEffect(() => {
+    initializeSubscriptions();
+    
     Animated.timing(fadeAnim, {
       toValue: 1,
       duration: 600,
@@ -33,22 +39,70 @@ const PremiumScreen = ({ navigation }) => {
     }).start();
   }, []);
 
+  const initializeSubscriptions = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Initialize IAP
+      const initialized = await SubscriptionService.initialize();
+      
+      if (!initialized) {
+        Alert.alert(
+          'Store Unavailable',
+          'Unable to connect to the app store. Please try again later.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+      
+      // Get available subscriptions
+      const products = await SubscriptionService.getSubscriptions();
+      console.log('Loaded products:', products);
+      
+      setSubscriptions(products);
+    } catch (error) {
+      console.error('Error initializing subscriptions:', error);
+      Alert.alert(
+        'Error',
+        'Failed to load subscription options. Please try again.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Map product IDs to plan types
+  const getProductForPlan = (planType) => {
+    if (subscriptions.length === 0) return null;
+    
+    const productId = planType === 'monthly' 
+      ? (Platform.OS === 'android' ? 'habitowl_premium_monthly' : 'com.habitowl.app.monthly')
+      : (Platform.OS === 'android' ? 'habitowl_premium_yearly' : 'com.habitowl.app.yearly');
+    
+    return subscriptions.find(sub => sub.productId === productId);
+  };
+
   const plans = {
     monthly: {
       id: 'monthly',
       name: 'Monthly',
-      price: '$4.99',
+      productId: Platform.OS === 'android' ? 'habitowl_premium_monthly' : 'com.habitowl.app.monthly',
+      price: getProductForPlan('monthly')?.localizedPrice || '$4.99',
       period: '/month',
       savings: null,
       popular: false,
+      trial: '7-day free trial'
     },
     yearly: {
       id: 'yearly',
       name: 'Yearly',
-      price: '$39.99',
+      productId: Platform.OS === 'android' ? 'habitowl_premium_yearly' : 'com.habitowl.app.yearly',
+      price: getProductForPlan('yearly')?.localizedPrice || '$39.99',
       period: '/year',
       savings: 'Save 33%',
       popular: true,
+      trial: '7-day free trial'
     }
   };
 
@@ -62,7 +116,7 @@ const PremiumScreen = ({ navigation }) => {
     {
       icon: 'infinity',
       title: 'Unlimited Habits',
-      description: 'Create as many habits as you need',
+      description: 'Create as many habits as you need (Free: 5 habits)',
       premium: true
     },
     {
@@ -78,21 +132,9 @@ const PremiumScreen = ({ navigation }) => {
       premium: true
     },
     {
-      icon: 'account-group',
-      title: 'Family Sharing',
-      description: 'Share habits with family members',
-      premium: true
-    },
-    {
       icon: 'cloud-sync',
       title: 'Cloud Backup',
       description: 'Never lose your progress across devices',
-      premium: true
-    },
-    {
-      icon: 'palette',
-      title: 'Custom Themes',
-      description: 'Personalize your app appearance',
       premium: true
     },
     {
@@ -105,92 +147,109 @@ const PremiumScreen = ({ navigation }) => {
 
   const handleSubscribe = async () => {
     try {
-      setIsLoading(true);
+      setIsPurchasing(true);
       
-      // In a real app, you would integrate with a payment processor like Stripe
-      // For this demo, we'll simulate the subscription process
+      const selectedProductId = plans[selectedPlan].productId;
+      console.log('Purchasing:', selectedProductId);
       
-      Alert.alert(
-        'Subscription Demo',
-        `This would normally process a ${plans[selectedPlan].price} ${plans[selectedPlan].period} subscription. For this demo, we'll activate premium features.`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Activate Demo Premium',
-            onPress: async () => {
-              try {
-                // Update user's premium status
-                await FirebaseService.updateUserStats({ isPremium: true });
-                await AdService.setPremiumStatus(true);
-                
-                // Track the upgrade
-                await FirebaseService.trackEvent('premium_upgrade', {
-                  plan: selectedPlan,
-                  price: plans[selectedPlan].price
+      // Request purchase
+      const success = await SubscriptionService.purchaseSubscription(selectedProductId);
+      
+      if (success) {
+        // Purchase was successful (or is being processed)
+        Alert.alert(
+          '🎉 Welcome to Premium!',
+          'Your 7-day free trial has started! You can cancel anytime before the trial ends.',
+          [
+            {
+              text: 'Great!',
+              onPress: () => {
+                // Reload user stats to reflect premium status
+                FirebaseService.getUserStats().then(() => {
+                  navigation.goBack();
                 });
-                
-                Alert.alert(
-                  'Welcome to Premium! 🎉',
-                  'You now have access to all premium features. Enjoy your ad-free experience!',
-                  [
-                    {
-                      text: 'Great!',
-                      onPress: () => navigation.goBack()
-                    }
-                  ]
-                );
-              } catch (error) {
-                Alert.alert('Error', 'Failed to activate premium features');
               }
             }
-          }
-        ]
-      );
+          ]
+        );
+      }
     } catch (error) {
-      Alert.alert('Error', 'Failed to process subscription');
+      console.error('Purchase error:', error);
+      
+      if (error.message && !error.message.includes('E_USER_CANCELLED')) {
+        Alert.alert(
+          'Purchase Failed',
+          'Unable to complete the purchase. Please try again.',
+          [{ text: 'OK' }]
+        );
+      }
     } finally {
-      setIsLoading(false);
+      setIsPurchasing(false);
     }
   };
 
-  const handleRestorePurchases = () => {
-    Alert.alert(
-      'Restore Purchases',
-      'This would restore any previous premium purchases from your app store account.',
-      [{ text: 'OK' }]
+  const handleRestorePurchases = async () => {
+    try {
+      setIsPurchasing(true);
+      await SubscriptionService.restorePurchases();
+    } catch (error) {
+      console.error('Restore error:', error);
+    } finally {
+      setIsPurchasing(false);
+    }
+  };
+
+  const renderPlanCard = (plan) => {
+    const product = getProductForPlan(plan.id);
+    const actualPrice = product?.localizedPrice || plan.price;
+    
+    return (
+      <Card
+        key={plan.id}
+        style={[
+          styles.planCard,
+          selectedPlan === plan.id && styles.selectedPlan,
+          plan.popular && styles.popularPlan
+        ]}
+        onPress={() => setSelectedPlan(plan.id)}
+      >
+        {plan.popular && (
+          <View style={styles.popularBadge}>
+            <Text style={styles.popularText}>Most Popular</Text>
+          </View>
+        )}
+        
+        <Card.Content style={styles.planContent}>
+          <Text style={styles.planName}>{plan.name}</Text>
+          
+          {/* 7-Day Trial Badge */}
+          <View style={styles.trialBadgeSmall}>
+            <Icon name="gift" size={14} color="#10b981" />
+            <Text style={styles.trialBadgeText}>{plan.trial}</Text>
+          </View>
+          
+          <View style={styles.priceContainer}>
+            <Text style={styles.planPrice}>{actualPrice}</Text>
+            <Text style={styles.planPeriod}>{plan.period}</Text>
+          </View>
+          {plan.savings && (
+            <Chip style={styles.savingsChip} textStyle={styles.savingsText}>
+              {plan.savings}
+            </Chip>
+          )}
+        </Card.Content>
+      </Card>
     );
   };
 
-  const renderPlanCard = (plan) => (
-    <Card
-      key={plan.id}
-      style={[
-        styles.planCard,
-        selectedPlan === plan.id && styles.selectedPlan,
-        plan.popular && styles.popularPlan
-      ]}
-      onPress={() => setSelectedPlan(plan.id)}
-    >
-      {plan.popular && (
-        <View style={styles.popularBadge}>
-          <Text style={styles.popularText}>Most Popular</Text>
-        </View>
-      )}
-      
-      <Card.Content style={styles.planContent}>
-        <Text style={styles.planName}>{plan.name}</Text>
-        <View style={styles.priceContainer}>
-          <Text style={styles.planPrice}>{plan.price}</Text>
-          <Text style={styles.planPeriod}>{plan.period}</Text>
-        </View>
-        {plan.savings && (
-          <Chip style={styles.savingsChip} textStyle={styles.savingsText}>
-            {plan.savings}
-          </Chip>
-        )}
-      </Card.Content>
-    </Card>
-  );
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#4f46e5" />
+        <Text style={styles.loadingText}>Loading subscription options...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -206,9 +265,30 @@ const PremiumScreen = ({ navigation }) => {
             <Icon name="crown" size={60} color="#f59e0b" />
             <Text style={styles.headerTitle}>Unlock Premium Features</Text>
             <Text style={styles.headerSubtitle}>
-              Take your habit building to the next level
+              Start with a 7-day free trial
             </Text>
           </LinearGradient>
+
+          {/* 7-Day Free Trial Highlight - PROMINENT */}
+          <Card style={styles.trialHighlight}>
+            <Card.Content>
+              <View style={styles.trialHighlightHeader}>
+                <Icon name="star" size={32} color="#f59e0b" />
+                <View style={styles.trialHighlightTextContainer}>
+                  <Text style={styles.trialHighlightTitle}>7-Day Free Trial</Text>
+                  <Text style={styles.trialHighlightSubtitle}>
+                    Try all premium features risk-free
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.trialHighlightDescription}>
+                • Cancel anytime during trial{'\n'}
+                • No charges until trial ends{'\n'}
+                • Full access to all premium features{'\n'}
+                • Manage subscription in Google Play Store
+              </Text>
+            </Card.Content>
+          </Card>
 
           {/* Pricing Plans */}
           <View style={styles.plansContainer}>
@@ -248,34 +328,21 @@ const PremiumScreen = ({ navigation }) => {
             ))}
           </View>
 
-          {/* 7-Day Free Trial Notice */}
-          <Card style={styles.trialCard}>
-            <Card.Content>
-              <View style={styles.trialHeader}>
-                <Icon name="calendar-clock" size={24} color="#10b981" />
-                <Text style={styles.trialTitle}>7-Day Free Trial</Text>
-              </View>
-              <Text style={styles.trialDescription}>
-                Try all premium features risk-free for 7 days. Cancel anytime before your trial ends to avoid charges.
-              </Text>
-            </Card.Content>
-          </Card>
-
           {/* Subscribe Button */}
           <View style={styles.subscribeContainer}>
             <Button
               mode="contained"
               onPress={handleSubscribe}
-              loading={isLoading}
-              disabled={isLoading}
+              loading={isPurchasing}
+              disabled={isPurchasing || subscriptions.length === 0}
               style={styles.subscribeButton}
               contentStyle={styles.subscribeButtonContent}
             >
-              Start 7-Day Free Trial
+              {isPurchasing ? 'Processing...' : 'Start 7-Day Free Trial'}
             </Button>
             
             <Text style={styles.subscribeNote}>
-              Then {plans[selectedPlan].price}{plans[selectedPlan].period}
+              Then {plans[selectedPlan].price}{plans[selectedPlan].period}. Cancel anytime.
             </Text>
 
             <Button
@@ -283,6 +350,7 @@ const PremiumScreen = ({ navigation }) => {
               onPress={handleRestorePurchases}
               style={styles.restoreButton}
               labelStyle={styles.restoreButtonText}
+              disabled={isPurchasing}
             >
               Restore Purchases
             </Button>
@@ -292,6 +360,7 @@ const PremiumScreen = ({ navigation }) => {
           <View style={styles.termsContainer}>
             <Text style={styles.termsText}>
               By subscribing, you agree to our Terms of Service and Privacy Policy. 
+              Payment will be charged to your Google Play account after the 7-day free trial. 
               Subscription automatically renews unless auto-renewal is turned off at 
               least 24 hours before the end of the current period.
             </Text>
@@ -309,6 +378,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8fafc',
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6b7280',
+  },
   content: {
     flex: 1,
   },
@@ -325,9 +405,43 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   headerSubtitle: {
-    fontSize: 16,
+    fontSize: 18,
     color: '#e0e7ff',
     textAlign: 'center',
+    fontWeight: '600',
+  },
+  trialHighlight: {
+    marginHorizontal: 20,
+    marginTop: 20,
+    marginBottom: 8,
+    backgroundColor: '#fffbeb',
+    borderWidth: 2,
+    borderColor: '#f59e0b',
+    elevation: 4,
+  },
+  trialHighlightHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  trialHighlightTextContainer: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  trialHighlightTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#92400e',
+  },
+  trialHighlightSubtitle: {
+    fontSize: 14,
+    color: '#b45309',
+    marginTop: 2,
+  },
+  trialHighlightDescription: {
+    fontSize: 14,
+    color: '#78350f',
+    lineHeight: 22,
   },
   plansContainer: {
     padding: 20,
@@ -377,7 +491,22 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1f2937',
+    marginBottom: 4,
+  },
+  trialBadgeSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#dcfce7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
     marginBottom: 8,
+  },
+  trialBadgeText: {
+    fontSize: 11,
+    color: '#166534',
+    fontWeight: 'bold',
+    marginLeft: 4,
   },
   priceContainer: {
     flexDirection: 'row',
@@ -414,29 +543,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  trialCard: {
-    marginHorizontal: 20,
-    marginBottom: 20,
-    backgroundColor: '#f0fdf4',
-    borderWidth: 1,
-    borderColor: '#10b981',
-  },
-  trialHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  trialTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#166534',
-    marginLeft: 8,
-  },
-  trialDescription: {
-    fontSize: 14,
-    color: '#166534',
-    lineHeight: 20,
-  },
   subscribeContainer: {
     padding: 20,
     alignItems: 'center',
@@ -453,6 +559,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6b7280',
     marginBottom: 16,
+    textAlign: 'center',
   },
   restoreButton: {
     marginTop: 8,

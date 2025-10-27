@@ -25,6 +25,8 @@ const StatisticsScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState('week'); // week, month, year
+  const [isPremium, setIsPremium] = useState(false);
+
 
   useEffect(() => {
     loadStatistics();
@@ -41,14 +43,18 @@ const StatisticsScreen = ({ navigation }) => {
   const loadStatistics = async () => {
     try {
       setLoading(true);
-      
+    
       const [userHabits, stats] = await Promise.all([
         FirebaseService.getUserHabits(),
         FirebaseService.getUserStats()
       ]);
-      
+    
       console.log('📊 Loaded', userHabits ? userHabits.length : 0, 'habits for statistics');
-      
+    
+      // Check premium status
+      const premiumStatus = stats?.isPremium || false;
+      setIsPremium(premiumStatus);
+    
       setHabits(userHabits || []);
       setUserStats(stats);
     } catch (error) {
@@ -59,6 +65,7 @@ const StatisticsScreen = ({ navigation }) => {
       setLoading(false);
     }
   };
+
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -300,15 +307,40 @@ const StatisticsScreen = ({ navigation }) => {
   };
 
   const renderCategoryChart = () => {
+    // 🔒 Premium feature - Category breakdown
+    if (!isPremium) {
+      return (
+        <Card style={styles.chartCard}>
+          <Card.Content>
+            <Text style={styles.chartTitle}>Habits by Category</Text>
+            <View style={styles.premiumLock}>
+              <Icon name="lock" size={48} color="#9ca3af" />
+              <Text style={styles.premiumLockTitle}>Premium Feature</Text>
+              <Text style={styles.premiumLockText}>
+                Upgrade to Premium to view detailed category breakdowns
+              </Text>
+              <Button
+                mode="contained"
+                onPress={() => navigation.navigate('Premium')}
+                style={styles.premiumButton}
+              >
+                Upgrade to Premium
+              </Button>
+            </View>
+          </Card.Content>
+        </Card>
+      );
+    }
+  
     const categoryData = getCategoryData();
-    
+  
     if (categoryData.length === 0) return null;
 
     return (
       <Card style={styles.chartCard}>
         <Card.Content>
           <Text style={styles.chartTitle}>Habits by Category</Text>
-          
+        
           <PieChart
             data={categoryData}
             width={screenWidth - 64}
@@ -323,6 +355,7 @@ const StatisticsScreen = ({ navigation }) => {
       </Card>
     );
   };
+
 
   const renderStreakChart = () => {
     const streakData = getStreakData();
@@ -560,6 +593,26 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6b7280',
     marginLeft: 6,
+  },
+  premiumLock: {
+    alignItems: 'center',
+    padding: 40,
+  },
+  premiumLockTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  premiumLockText: {
+    fontSize: 14,
+    color: '#6b7280',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  premiumButton: {
+    backgroundColor: '#4f46e5',
   },
 
 });
