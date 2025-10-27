@@ -80,10 +80,18 @@ const AboutScreen = ({ navigation }) => {
       </Appbar.Header>
 
       <ScrollView 
-        style={styles.scrollView}
+        style={styles.content} 
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={true}
+        keyboardShouldPersistTaps="handled"
+        nestedScrollEnabled={true}
         bounces={true}
+        scrollEnabled={true}
+        removeClippedSubviews={false}
+        overScrollMode="always"
+        persistentScrollbar={Platform.OS === 'android'}
+        scrollEventThrottle={16}
+        automaticallyAdjustKeyboardInsets={true}
       >
         {/* App Header */}
         <LinearGradient colors={['#4f46e5', '#7c3aed']} style={styles.header}>
@@ -98,7 +106,7 @@ const AboutScreen = ({ navigation }) => {
         {/* Mission Statement */}
         <Card style={styles.card}>
           <Card.Content>
-            <Text style={styles.sectionTitle}>🎯 Our Mission</Text>
+            <Text style={styles.sectionTitle}>Our Mission</Text>
             <Text style={styles.missionText}>
               At HabitOwl, we believe that small, consistent actions lead to extraordinary transformations. 
               Our mission is to empower individuals to build sustainable habits through intelligent technology, 
@@ -114,7 +122,7 @@ const AboutScreen = ({ navigation }) => {
         {/* Key Features */}
         <Card style={styles.card}>
           <Card.Content>
-            <Text style={styles.sectionTitle}>✨ Key Features</Text>
+            <Text style={styles.sectionTitle}>Key Features</Text>
             {features.map((feature, index) => (
               <View key={index} style={styles.featureItem}>
                 <View style={styles.featureHeader}>
@@ -130,7 +138,7 @@ const AboutScreen = ({ navigation }) => {
         {/* Technology Stack */}
         <Card style={styles.card}>
           <Card.Content>
-            <Text style={styles.sectionTitle}>🛠️ Built With</Text>
+            <Text style={styles.sectionTitle}>Built With</Text>
             <View style={styles.techGrid}>
               <View style={styles.techItem}>
                 <Icon name="react" size={32} color="#61dafb" />
@@ -155,7 +163,7 @@ const AboutScreen = ({ navigation }) => {
         {/* Team */}
         <Card style={styles.card}>
           <Card.Content>
-            <Text style={styles.sectionTitle}>👥 Our Team</Text>
+            <Text style={styles.sectionTitle}>Our Team</Text>
             {team.map((member, index) => (
               <View key={index} style={styles.teamMember}>
                 <Text style={styles.memberName}>{member.name}</Text>
@@ -169,7 +177,7 @@ const AboutScreen = ({ navigation }) => {
         {/* Contact & Links */}
         <Card style={styles.card}>
           <Card.Content>
-            <Text style={styles.sectionTitle}>📧 Get In Touch</Text>
+            <Text style={styles.sectionTitle}>Get In Touch</Text>
             
             <Button
               mode="outlined"
@@ -206,7 +214,7 @@ const AboutScreen = ({ navigation }) => {
         {/* App Info */}
         <Card style={styles.card}>
           <Card.Content>
-            <Text style={styles.sectionTitle}>ℹ️ App Information</Text>
+            <Text style={styles.sectionTitle}>App Information</Text>
             
             <List.Item
               title="Version"
@@ -237,7 +245,7 @@ const AboutScreen = ({ navigation }) => {
         {/* Legal */}
         <Card style={styles.card}>
           <Card.Content>
-            <Text style={styles.sectionTitle}>⚖️ Legal</Text>
+            <Text style={styles.sectionTitle}>Legal</Text>
             
             <Button
               mode="text"
@@ -274,6 +282,8 @@ const AboutScreen = ({ navigation }) => {
             Made with ❤️ for habit builders everywhere
           </Text>
         </View>
+
+        <View style={styles.bottomPadding} />
       </ScrollView>
     </View>
   );
@@ -284,12 +294,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8fafc',
   },
-  scrollView: {
+  content: {
     flex: 1,
   },
   scrollContent: {
+    paddingBottom: 300,
     flexGrow: 1,
-    paddingBottom: 32,
   },
   header: {
     alignItems: 'center',
@@ -403,6 +413,9 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     textAlign: 'center',
     marginBottom: 4,
+  },
+  bottomPadding: {
+    height: 100,
   },
 });
 
