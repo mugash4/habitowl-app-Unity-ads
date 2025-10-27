@@ -6,7 +6,8 @@ import {
   ScrollView,
   Alert,
   Animated,
-  Platform
+  Platform,
+  Dimensions
 } from 'react-native';
 import {
   Card,
@@ -245,7 +246,7 @@ const PremiumScreen = ({ navigation }) => {
   if (isLoading) {
     return (
       <View style={styles.container}>
-        <Appbar.Header>
+        <Appbar.Header style={styles.appbarHeader}>
           <Appbar.BackAction onPress={() => navigation.goBack()} />
           <Appbar.Content title="Upgrade to Premium" />
         </Appbar.Header>
@@ -259,7 +260,7 @@ const PremiumScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <Appbar.Header>
+      <Appbar.Header style={styles.appbarHeader}>
         <Appbar.BackAction onPress={() => navigation.goBack()} />
         <Appbar.Content title="Upgrade to Premium" />
       </Appbar.Header>
@@ -269,6 +270,8 @@ const PremiumScreen = ({ navigation }) => {
         contentContainerStyle={styles.scrollViewContent}
         showsVerticalScrollIndicator={false}
         bounces={true}
+        scrollEventThrottle={16}
+        nestedScrollEnabled={true}
       >
         <Animated.View style={{ opacity: fadeAnim }}>
           {/* Header */}
@@ -389,6 +392,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8fafc',
   },
+  appbarHeader: {
+    backgroundColor: '#ffffff',
+    elevation: 0,
+    shadowOpacity: 0,
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -404,8 +412,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollViewContent: {
-    flexGrow: 1,
-    paddingBottom: 20,
+    paddingBottom: 40,
   },
   header: {
     alignItems: 'center',
@@ -594,7 +601,7 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   bottomPadding: {
-    height: 20,
+    height: 40,
   },
 });
 
