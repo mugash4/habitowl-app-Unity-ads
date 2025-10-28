@@ -2,12 +2,17 @@
  * Unity Ads Service - COMPLETE FIX FOR FREE PLAN
  * 
  * ✅ FIXED ISSUES:
- * - Corrected API usage for LevelPlayInterstitialAd and LevelPlayRewardedAd
- * - Fixed placement ID handling
- * - Proper initialization sequence
- * - Better error handling and logging
+ * - Correct LevelPlay API usage (no constructors with placement IDs)
+ * - Removed problematic withLegacyAdFormats()
+ * - Automatic ad loading after initialization
+ * - Proper error handling and logging
+ * - Test mode support
  * 
- * CRITICAL FIX: Changed from createInterstitialAd/createRewardedAd to proper constructor usage
+ * CRITICAL FIXES:
+ * 1. Use LevelPlayInterstitialAd.loadAd() directly (no placement ID in constructor)
+ * 2. Use LevelPlayRewardedAd.loadAd() directly (no placement ID in constructor)
+ * 3. Removed withLegacyAdFormats() call
+ * 4. Added automatic ad preloading
  */
 
 import { Platform } from 'react-native';
@@ -20,7 +25,7 @@ let LevelPlayInitRequest = null;
 let LevelPlayBannerAdView = null;
 let LevelPlayInterstitialAd = null;
 let LevelPlayRewardedAd = null;
-let AdFormat = null;
+let LevelPlayBannerAdViewMethods = null;
 let IronSource = null;
 let LevelPlayAdSize = null;
 
@@ -35,7 +40,7 @@ try {
   LevelPlayBannerAdView = ironSourceModule.LevelPlayBannerAdView;
   LevelPlayInterstitialAd = ironSourceModule.LevelPlayInterstitialAd;
   LevelPlayRewardedAd = ironSourceModule.LevelPlayRewardedAd;
-  AdFormat = ironSourceModule.AdFormat;
+  LevelPlayBannerAdViewMethods = ironSourceModule.LevelPlayBannerAdViewMethods;
   IronSource = ironSourceModule.IronSource;
   LevelPlayAdSize = ironSourceModule.LevelPlayAdSize;
   sdkAvailable = true;
@@ -53,15 +58,11 @@ class UnityAdsService {
     this.premiumStatusLoaded = false;
     this.isTestMode = __DEV__ || UNITY_ADS_CONFIG.FORCE_TEST_MODE;
     
-    // Ad instances
-    this.interstitialAd = null;
-    this.rewardedAd = null;
-    
     // Ad state tracking
     this.lastInterstitialTime = 0;
     this.sessionInterstitialCount = 0;
-    this.interstitialLoaded = false;
-    this.rewardedLoaded = false;
+    this.interstitialAvailable = false;
+    this.rewardedAvailable = false;
     this.rewardCallback = null;
     
     // Initialization state
@@ -69,19 +70,16 @@ class UnityAdsService {
     this.initializationError = null;
     this.initializationDetails = [];
     
-    // Placement tracking
-    this.activePlacements = {
-      banner: null,
-      interstitial: null,
-      rewarded: null
-    };
-    
     // Premium status listeners
     this.premiumStatusListeners = [];
+    
+    // Setup listeners BEFORE initialization
+    this.setupInterstitialListeners();
+    this.setupRewardedListeners();
   }
 
   /**
-   * 🆕 Pre-load premium status BEFORE initialization
+   * Pre-load premium status BEFORE initialization
    */
   async preloadPremiumStatus() {
     try {
@@ -131,6 +129,8 @@ class UnityAdsService {
 
   /**
    * Initialize Unity Ads SDK - FIXED VERSION
+   * ✅ NO withLegacyAdFormats()
+   * ✅ Correct initialization sequence
    */
   async initialize(userId = null) {
     try {
@@ -190,41 +190,8 @@ class UnityAdsService {
       this.initializationDetails.push(`Premium: ${this.isPremium}`);
       this.initializationDetails.push(`Test Mode: ${this.isTestMode}`);
 
-      // 🆕 Enable test mode if configured
-      if (this.isTestMode) {
-        try {
-          this.log('🧪 Enabling test mode...');
-          
-          // Enable test mode in SDK
-          if (IronSource && IronSource.validateIntegration) {
-            await IronSource.validateIntegration();
-            this.log('✅ Integration validated');
-          }
-          
-          // Enable adapters debug
-          if (IronSource && IronSource.setAdaptersDebug) {
-            await IronSource.setAdaptersDebug(true);
-            this.log('✅ Adapters debug enabled');
-          }
-          
-          // Enable console logs (if available)
-          if (IronSource && IronSource.setConsoleLogLevel) {
-            await IronSource.setConsoleLogLevel('DEBUG');
-            this.log('✅ Console log level set to DEBUG');
-          }
-        } catch (error) {
-          this.log('⚠️ Could not enable full test mode:', error.message);
-          // Continue anyway
-        }
-      }
-
-      // Create initialization request
-      const initRequestBuilder = LevelPlayInitRequest.builder(gameId)
-        .withLegacyAdFormats([
-          AdFormat.REWARDED,
-          AdFormat.INTERSTITIAL,
-          AdFormat.BANNER
-        ]);
+      // ✅ CRITICAL FIX: Simple initialization without withLegacyAdFormats
+      const initRequestBuilder = LevelPlayInitRequest.builder(gameId);
 
       // Add user ID if provided
       if (userId) {
@@ -251,11 +218,13 @@ class UnityAdsService {
           this.initializationError = null;
           this.initializationDetails.push('✅ Initialized successfully');
           
-          // Setup ad units if not premium
-          if (!this.isPremium) {
-            this.log('🎯 Non-premium user: Setting up ad units');
-            this.setupAdUnits();
-          } else {
+          // Start loading ads if not premium
+          if (!this.isPremium && UNITY_ADS_CONFIG.AUTO_LOAD_ADS) {
+            this.log('🎯 Non-premium user: Starting ad preload');
+            setTimeout(() => {
+              this.startAdPreloading();
+            }, 1000);
+          } else if (this.isPremium) {
             this.log('👑 Premium user: Ads disabled');
             this.initializationDetails.push('Premium user - ads disabled');
           }
@@ -289,76 +258,29 @@ class UnityAdsService {
   }
 
   /**
-   * 🆕 Get placement ID with fallback support
+   * ✅ CRITICAL FIX: Setup interstitial listeners WITHOUT placement ID
    */
-  getPlacementId(adType) {
-    const platform = Platform.OS;
-    const prefix = platform === 'ios' ? 'IOS' : 'ANDROID';
-    const type = adType.toUpperCase();
-    
-    // Try default placement first
-    const defaultKey = `${prefix}_${type}`;
-    const defaultPlacement = UNITY_ADS_CONFIG[defaultKey];
-    
-    // Try fallback placement
-    const fallbackKey = `${prefix}_${type}_FALLBACK`;
-    const fallbackPlacement = UNITY_ADS_CONFIG[fallbackKey];
-    
-    // Use default, or fallback if default doesn't exist
-    const placement = defaultPlacement || fallbackPlacement;
-    
-    this.log(`📍 Placement for ${adType}: ${placement} (${defaultKey})`);
-    
-    return placement;
-  }
-
-  /**
-   * Setup all ad units - CRITICAL FIX HERE
-   */
-  setupAdUnits() {
-    this.log('Setting up ad units...');
-    
-    try {
-      this.setupInterstitialAd();
-      this.setupRewardedAd();
-      this.log('✅ Ad units setup complete');
-      this.initializationDetails.push('✅ Ad units configured');
-    } catch (error) {
-      this.log('❌ Error setting up ad units:', error);
-      this.initializationDetails.push(`Ad setup error: ${error.message}`);
-    }
-  }
-
-  /**
-   * Setup Interstitial Ads - FIXED API USAGE
-   */
-  setupInterstitialAd() {
+  setupInterstitialListeners() {
     try {
       if (!LevelPlayInterstitialAd) {
         this.log('⚠️ LevelPlayInterstitialAd not available');
         return;
       }
 
-      const placementId = this.getPlacementId('INTERSTITIAL');
-      this.activePlacements.interstitial = placementId;
+      this.log('🎬 Setting up interstitial listeners');
 
-      this.log(`🎬 Setting up interstitial: ${placementId}`);
-
-      // ✅ CRITICAL FIX: Use "new" constructor instead of "createInterstitialAd"
-      this.interstitialAd = new LevelPlayInterstitialAd(placementId);
-
-      // Set up listeners
-      const listener = {
+      // ✅ CORRECT: Set listeners on the CLASS, not an instance
+      LevelPlayInterstitialAd.setListener({
         onAdLoaded: (adInfo) => {
           this.log('✅ Interstitial loaded:', JSON.stringify(adInfo));
-          this.interstitialLoaded = true;
+          this.interstitialAvailable = true;
         },
         onAdLoadFailed: (error) => {
           this.log('❌ Interstitial load failed:', JSON.stringify(error));
-          this.interstitialLoaded = false;
+          this.interstitialAvailable = false;
           // Retry after delay
           setTimeout(() => {
-            if (this.shouldShowAds()) {
+            if (this.shouldShowAds() && this.isInitialized) {
               this.log('🔄 Retrying interstitial load...');
               this.loadInterstitialAd();
             }
@@ -370,7 +292,7 @@ class UnityAdsService {
         },
         onAdDisplayFailed: (error, adInfo) => {
           this.log('❌ Interstitial display failed:', JSON.stringify(error));
-          this.interstitialLoaded = false;
+          this.interstitialAvailable = false;
           this.loadInterstitialAd();
         },
         onAdClicked: (adInfo) => {
@@ -378,54 +300,50 @@ class UnityAdsService {
         },
         onAdClosed: (adInfo) => {
           this.log('🚪 Interstitial closed');
-          this.interstitialLoaded = false;
-          setTimeout(() => this.loadInterstitialAd(), 1000);
+          this.interstitialAvailable = false;
+          // Reload next ad
+          setTimeout(() => {
+            if (this.shouldShowAds() && this.isInitialized) {
+              this.loadInterstitialAd();
+            }
+          }, 1000);
         },
         onAdInfoChanged: (adInfo) => {
           this.log('🔄 Interstitial info changed:', JSON.stringify(adInfo));
         }
-      };
-
-      this.interstitialAd.setListener(listener);
-
-      // Load first ad
-      this.loadInterstitialAd();
+      });
 
     } catch (error) {
-      this.log('❌ Error setting up interstitial:', error);
+      this.log('❌ Error setting up interstitial listeners:', error);
     }
   }
 
   /**
-   * Setup Rewarded Ads - FIXED API USAGE
+   * ✅ CRITICAL FIX: Setup rewarded listeners WITHOUT placement ID
    */
-  setupRewardedAd() {
+  setupRewardedListeners() {
     try {
       if (!LevelPlayRewardedAd) {
         this.log('⚠️ LevelPlayRewardedAd not available');
         return;
       }
 
-      const placementId = this.getPlacementId('REWARDED');
-      this.activePlacements.rewarded = placementId;
+      this.log('🎁 Setting up rewarded listeners');
 
-      this.log(`🎁 Setting up rewarded: ${placementId}`);
-
-      // ✅ CRITICAL FIX: Use "new" constructor instead of "createRewardedAd"
-      this.rewardedAd = new LevelPlayRewardedAd(placementId);
-
-      // Set up listeners
-      const listener = {
+      // ✅ CORRECT: Set listeners on the CLASS, not an instance
+      LevelPlayRewardedAd.setListener({
         onAdLoaded: (adInfo) => {
           this.log('✅ Rewarded loaded:', JSON.stringify(adInfo));
-          this.rewardedLoaded = true;
+          this.rewardedAvailable = true;
         },
         onAdLoadFailed: (error) => {
           this.log('❌ Rewarded load failed:', JSON.stringify(error));
-          this.rewardedLoaded = false;
+          this.rewardedAvailable = false;
           setTimeout(() => {
-            this.log('🔄 Retrying rewarded load...');
-            this.loadRewardedAd();
+            if (this.isInitialized) {
+              this.log('🔄 Retrying rewarded load...');
+              this.loadRewardedAd();
+            }
           }, 10000);
         },
         onAdDisplayed: (adInfo) => {
@@ -433,7 +351,7 @@ class UnityAdsService {
         },
         onAdDisplayFailed: (error, adInfo) => {
           this.log('❌ Rewarded display failed:', JSON.stringify(error));
-          this.rewardedLoaded = false;
+          this.rewardedAvailable = false;
           this.loadRewardedAd();
         },
         onAdClicked: (adInfo) => {
@@ -441,8 +359,13 @@ class UnityAdsService {
         },
         onAdClosed: (adInfo) => {
           this.log('🚪 Rewarded closed');
-          this.rewardedLoaded = false;
-          setTimeout(() => this.loadRewardedAd(), 1000);
+          this.rewardedAvailable = false;
+          // Reload next ad
+          setTimeout(() => {
+            if (this.isInitialized) {
+              this.loadRewardedAd();
+            }
+          }, 1000);
         },
         onAdRewarded: (reward, adInfo) => {
           this.log('🎁 User rewarded:', JSON.stringify(reward));
@@ -456,36 +379,42 @@ class UnityAdsService {
         onAdInfoChanged: (adInfo) => {
           this.log('🔄 Rewarded info changed:', JSON.stringify(adInfo));
         }
-      };
-
-      this.rewardedAd.setListener(listener);
-
-      // Load first ad
-      this.loadRewardedAd();
+      });
 
     } catch (error) {
-      this.log('❌ Error setting up rewarded:', error);
+      this.log('❌ Error setting up rewarded listeners:', error);
     }
   }
 
   /**
-   * Load Interstitial Ad
+   * ✅ NEW: Start preloading all ad types
+   */
+  startAdPreloading() {
+    this.log('🎯 Starting ad preloading...');
+    this.loadInterstitialAd();
+    this.loadRewardedAd();
+  }
+
+  /**
+   * ✅ CRITICAL FIX: Load interstitial WITHOUT placement ID
    */
   async loadInterstitialAd() {
-    if (!this.shouldShowAds() || !this.interstitialAd) {
+    if (!this.shouldShowAds() || !LevelPlayInterstitialAd) {
       return;
     }
 
     try {
       this.log('📥 Loading interstitial...');
-      await this.interstitialAd.loadAd();
+      // ✅ CORRECT: Call loadAd() directly on the class
+      await LevelPlayInterstitialAd.loadAd();
+      this.log('✅ Interstitial load requested');
     } catch (error) {
       this.log('❌ Error loading interstitial:', error);
     }
   }
 
   /**
-   * Show Interstitial Ad
+   * ✅ CRITICAL FIX: Show interstitial WITHOUT placement ID
    */
   async showInterstitialAd(placementName = 'DefaultInterstitial') {
     if (!this.shouldShowAds()) {
@@ -493,14 +422,14 @@ class UnityAdsService {
       return false;
     }
 
-    if (!this.interstitialAd) {
+    if (!LevelPlayInterstitialAd) {
       this.log('⚠️ Interstitial not available');
       return false;
     }
 
     // Check if ad is ready
     try {
-      const isReady = await this.interstitialAd.isAdReady();
+      const isReady = await LevelPlayInterstitialAd.isAdReady();
       if (!isReady) {
         this.log('⚠️ Interstitial not ready');
         this.loadInterstitialAd();
@@ -527,7 +456,8 @@ class UnityAdsService {
 
     try {
       this.log(`📺 Showing interstitial (${placementName})...`);
-      await this.interstitialAd.showAd(placementName);
+      // ✅ CORRECT: Call showAd() on the class
+      await LevelPlayInterstitialAd.showAd(placementName);
       this.lastInterstitialTime = now;
       this.sessionInterstitialCount++;
       this.log(`✅ Shown (${this.sessionInterstitialCount}/${UNITY_ADS_CONFIG.MAX_INTERSTITIALS_PER_SESSION})`);
@@ -539,33 +469,35 @@ class UnityAdsService {
   }
 
   /**
-   * Load Rewarded Ad
+   * ✅ CRITICAL FIX: Load rewarded WITHOUT placement ID
    */
   async loadRewardedAd() {
-    if (!this.isInitialized || !this.rewardedAd) {
+    if (!this.isInitialized || !LevelPlayRewardedAd) {
       return;
     }
 
     try {
       this.log('📥 Loading rewarded...');
-      await this.rewardedAd.loadAd();
+      // ✅ CORRECT: Call loadAd() directly on the class
+      await LevelPlayRewardedAd.loadAd();
+      this.log('✅ Rewarded load requested');
     } catch (error) {
       this.log('❌ Error loading rewarded:', error);
     }
   }
 
   /**
-   * Show Rewarded Ad
+   * ✅ CRITICAL FIX: Show rewarded WITHOUT placement ID
    */
   async showRewardedAd(onReward = null, placementName = 'DefaultRewarded') {
-    if (!this.isInitialized || !this.rewardedAd) {
+    if (!this.isInitialized || !LevelPlayRewardedAd) {
       this.log('⚠️ Rewarded not available');
       return false;
     }
 
     // Check if ad is ready
     try {
-      const isReady = await this.rewardedAd.isAdReady();
+      const isReady = await LevelPlayRewardedAd.isAdReady();
       if (!isReady) {
         this.log('⚠️ Rewarded not ready');
         this.loadRewardedAd();
@@ -579,7 +511,8 @@ class UnityAdsService {
     try {
       this.rewardCallback = onReward;
       this.log(`📺 Showing rewarded (${placementName})...`);
-      await this.rewardedAd.showAd(placementName);
+      // ✅ CORRECT: Call showAd() on the class
+      await LevelPlayRewardedAd.showAd(placementName);
       this.log('✅ Rewarded shown');
       return true;
     } catch (error) {
@@ -593,12 +526,12 @@ class UnityAdsService {
    * Check if rewarded ad is ready
    */
   async isRewardedAdReady() {
-    if (!this.isInitialized || !this.rewardedAd) {
+    if (!this.isInitialized || !LevelPlayRewardedAd) {
       return false;
     }
     
     try {
-      return await this.rewardedAd.isAdReady();
+      return await LevelPlayRewardedAd.isAdReady();
     } catch (error) {
       return false;
     }
@@ -612,11 +545,8 @@ class UnityAdsService {
       return null;
     }
 
-    const placementId = this.getPlacementId('BANNER');
-    this.activePlacements.banner = placementId;
-
     return {
-      placementId,
+      placementId: 'DefaultBanner',
       adSize: LevelPlayAdSize ? LevelPlayAdSize.BANNER : 'BANNER',
       Component: LevelPlayBannerAdView
     };
@@ -637,11 +567,10 @@ class UnityAdsService {
         this.notifyPremiumStatusChange(isPremium);
         
         if (isPremium) {
-          this.log('User upgraded - cleaning up ads');
-          this.cleanup();
+          this.log('User upgraded - ads disabled');
         } else if (this.isInitialized) {
-          this.log('User downgraded - setting up ads');
-          this.setupAdUnits();
+          this.log('User downgraded - starting ad preload');
+          this.startAdPreloading();
         }
       }
     } catch (error) {
@@ -727,11 +656,10 @@ class UnityAdsService {
       sdkAvailable: sdkAvailable,
       platform: Platform.OS,
       isTestMode: this.isTestMode,
-      interstitialLoaded: this.interstitialLoaded,
-      rewardedLoaded: this.rewardedLoaded,
+      interstitialAvailable: this.interstitialAvailable,
+      rewardedAvailable: this.rewardedAvailable,
       shouldShowAds: this.shouldShowAds(),
       sessionInterstitialCount: this.sessionInterstitialCount,
-      activePlacements: this.activePlacements,
       config: {
         gameId: Platform.OS === 'ios' ? UNITY_ADS_CONFIG.IOS_GAME_ID : UNITY_ADS_CONFIG.ANDROID_GAME_ID,
         testMode: UNITY_ADS_CONFIG.FORCE_TEST_MODE,
@@ -754,10 +682,8 @@ class UnityAdsService {
    */
   cleanup() {
     this.log('Cleaning up');
-    this.interstitialAd = null;
-    this.rewardedAd = null;
-    this.interstitialLoaded = false;
-    this.rewardedLoaded = false;
+    this.interstitialAvailable = false;
+    this.rewardedAvailable = false;
   }
 }
 
