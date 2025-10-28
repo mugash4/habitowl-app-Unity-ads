@@ -1,6 +1,6 @@
 /**
  * HabitOwl App - Main Entry Point
- * FIXED - No initialization screen, direct app load
+ * FIXED: Non-blocking service initialization
  */
 
 import React, { useEffect } from 'react';
@@ -9,43 +9,39 @@ import AppNavigator from './src/navigation/AppNavigator';
 
 export default function App() {
   useEffect(() => {
-    // Initialize services in background (non-blocking)
-    initializeBackgroundServices();
+    // Initialize services in background WITHOUT blocking UI
+    initializeServicesInBackground();
   }, []);
 
-  const initializeBackgroundServices = async () => {
-    try {
-      console.log('🚀 Starting background initialization...');
-      
-      // Run initialization in background without blocking UI
-      setTimeout(async () => {
-        try {
-          const unityAdsService = require('./src/services/UnityAdsService').default;
-          
-          // Load premium status first
-          await unityAdsService.preloadPremiumStatus();
-          console.log(`✅ Premium status: ${unityAdsService.isPremium ? 'PREMIUM' : 'FREE'}`);
-          
-          // Try to initialize Unity Ads (non-blocking, can fail silently)
-          try {
-            await unityAdsService.initialize();
-            console.log('✅ Unity Ads initialized');
-          } catch (error) {
-            console.log('ℹ️ Unity Ads not available:', error.message);
-            // This is fine - ads just won't show
-          }
-          
-        } catch (error) {
-          console.log('ℹ️ Background services init skipped:', error.message);
-        }
-      }, 100); // Small delay to let app render first
-      
-    } catch (error) {
-      console.log('ℹ️ Background init error (non-critical):', error.message);
-    }
+  const initializeServicesInBackground = () => {
+    // ✅ FIXED: All service initialization happens in background
+    // App renders immediately, services initialize later
+    
+    setTimeout(() => {
+      // Unity Ads - non-critical, load in background
+      try {
+        const unityAdsService = require('./src/services/UnityAdsService').default;
+        unityAdsService.initialize().catch(error => {
+          console.log('Unity Ads init failed (non-critical):', error.message);
+        });
+      } catch (error) {
+        console.log('Unity Ads service not available:', error.message);
+      }
+    }, 500); // Wait 500ms after app renders
+
+    setTimeout(() => {
+      // Promo System - non-critical, load in background
+      try {
+        const PromoService = require('./src/services/PromoService').default;
+        PromoService.initializePromoSystemBackground().catch(error => {
+          console.log('Promo System init failed (non-critical):', error.message);
+        });
+      } catch (error) {
+        console.log('Promo Service not available:', error.message);
+      }
+    }, 2000); // Wait 2s after app renders
   };
 
-  // Load app immediately - no loading screen!
   return (
     <>
       <StatusBar style="auto" />
