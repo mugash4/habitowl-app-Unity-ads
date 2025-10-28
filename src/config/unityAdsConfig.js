@@ -1,10 +1,10 @@
 /**
- * Unity Ads Configuration - COMPLETE FIX FOR FREE PLAN
+ * Unity Ads Configuration - FIXED FOR FREE PLAN
  * 
- * ✅ FIXED ISSUES:
- * - Proper test mode configuration for development
- * - Simplified placement configuration
- * - Better documentation for free plan users
+ * ✅ STEP 1: Get your Ad Unit IDs from Unity LevelPlay Dashboard:
+ *    - Go to: https://dashboard.unity3d.com/
+ *    - Navigate to: Monetization → Ad Units
+ *    - Copy the Ad Unit ID for each ad type (Interstitial, Rewarded, Banner)
  * 
  * 🎮 YOUR GAME IDs: 5966553 (Android), 5966552 (iOS)
  */
@@ -15,6 +15,22 @@ export const UNITY_ADS_CONFIG = {
   // ==========================================
   ANDROID_GAME_ID: '5966553',
   IOS_GAME_ID: '5966552',
+  
+  // ==========================================
+  // AD UNIT IDs (🔧 YOU MUST UPDATE THESE!)
+  // ==========================================
+  // Go to Unity Dashboard → Monetization → Ad Units
+  // Replace these with your actual Ad Unit IDs from the dashboard
+  AD_UNIT_IDS: {
+    // Example formats:
+    // INTERSTITIAL: 'Interstitial_Android' or 'DefaultInterstitial'
+    // REWARDED: 'Rewarded_Android' or 'DefaultRewarded' 
+    // BANNER: 'Banner_Android' or 'DefaultBanner'
+    
+    INTERSTITIAL: 'Interstitial_Android',  // 🔧 REPLACE with your Ad Unit ID
+    REWARDED: 'Rewarded_Android',          // 🔧 REPLACE with your Ad Unit ID
+    BANNER: 'Banner_Android',              // 🔧 REPLACE with your Ad Unit ID
+  },
   
   // ==========================================
   // AD BEHAVIOR SETTINGS
