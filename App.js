@@ -1,6 +1,6 @@
 /**
  * HabitOwl App - Main Entry Point
- * FIXED: Non-blocking service initialization
+ * FIXED: Non-blocking service initialization with AdMob
  */
 
 import React, { useEffect } from 'react';
@@ -14,18 +14,18 @@ export default function App() {
   }, []);
 
   const initializeServicesInBackground = () => {
-    // ✅ FIXED: All service initialization happens in background
+    // ✅ All service initialization happens in background
     // App renders immediately, services initialize later
     
     setTimeout(() => {
-      // Unity Ads - non-critical, load in background
+      // AdMob - non-critical, load in background
       try {
-        const unityAdsService = require('./src/services/UnityAdsService').default;
-        unityAdsService.initialize().catch(error => {
-          console.log('Unity Ads init failed (non-critical):', error.message);
+        const adMobService = require('./src/services/AdMobService').default;
+        adMobService.initialize().catch(error => {
+          console.log('AdMob init failed (non-critical):', error.message);
         });
       } catch (error) {
-        console.log('Unity Ads service not available:', error.message);
+        console.log('AdMob service not available:', error.message);
       }
     }, 500); // Wait 500ms after app renders
 

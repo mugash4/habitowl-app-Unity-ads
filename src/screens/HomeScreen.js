@@ -16,10 +16,10 @@ import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 import HabitCard from '../components/HabitCard';
-import UnityBannerAd from '../components/UnityBannerAd';
+import AdMobBanner from '../components/AdMobBanner';
 import FirebaseService from '../services/FirebaseService';
 import NotificationService from '../services/NotificationService';
-import unityAdsService from '../services/UnityAdsService';
+import adMobService from '../services/AdMobService';
 import AIService from '../services/AIService';
 
 const HomeScreen = ({ navigation, route }) => {
@@ -205,7 +205,7 @@ const HomeScreen = ({ navigation, route }) => {
         
         setTimeout(async () => {
           try {
-            await unityAdsService.showInterstitialAd('habit_completion');
+            await adMobService.showInterstitialAd('habit_completion');
           } catch (error) {
             console.log('Ad not shown:', error);
           }
@@ -447,8 +447,8 @@ const HomeScreen = ({ navigation, route }) => {
           </>
         )}
 
-        {/* Unity Banner Ad */}
-        <UnityBannerAd style={styles.adBanner} />
+        {/* AdMob Banner Ad */}
+        <AdMobBanner style={styles.adBanner} />
         
         {/* Bottom padding */}
         <View style={styles.bottomPadding} />
