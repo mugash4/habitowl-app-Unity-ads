@@ -14,8 +14,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 import FirebaseService from '../services/FirebaseService';
-import AdBanner from '../components/AdBanner';
-import AdService from '../services/AdService';
+import AdMobBanner from '../components/AdMobBanner';
+import adMobService from '../services/AdMobService';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -73,12 +73,13 @@ const StatisticsScreen = ({ navigation }) => {
     setRefreshing(false);
     
     // Show interstitial ad occasionally after viewing stats
-    const shouldShowAd = await AdService.shouldShowInterstitialAfterAction('stats_view');
-    if (shouldShowAd) {
-      setTimeout(() => {
-        AdService.showInterstitial('statistics_view');
-      }, 500);
-    }
+    setTimeout(async () => {
+      try {
+        await adMobService.showInterstitialAd('statistics_view');
+      } catch (error) {
+        console.log('Ad not shown:', error);
+      }
+    }, 500);
   };
 
   const getCompletionData = () => {
@@ -447,7 +448,7 @@ const StatisticsScreen = ({ navigation }) => {
             {renderCategoryChart()}
             {renderStreakChart()}
             
-            <AdBanner placement="statistics_bottom" style={styles.adBanner} />
+            <AdMobBanner style={styles.adBanner} />
           </>
         )}
 
