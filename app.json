@@ -202,6 +202,7 @@
             "targetSdkVersion": 34,
             "buildToolsVersion": "34.0.0",
             "minSdkVersion": 23,
+            "kotlinVersion": "2.0.0",
             "enableProguardInReleaseBuilds": false,
             "usesCleartextTraffic": true
           },

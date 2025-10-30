@@ -18,7 +18,7 @@ import AboutScreen from '../screens/AboutScreen';
 
 // Services
 import FirebaseService from '../services/FirebaseService';
-import AdService from '../services/AdService';
+import AdMobService from '../services/AdMobService';  // ✅ FIXED: Changed from AdService to AdMobService
 import NotificationService from '../services/NotificationService';
 
 const Stack = createStackNavigator();
@@ -110,7 +110,7 @@ const AppNavigator = () => {
     try {
       // Initialize services
       await Promise.allSettled([
-        AdService.initialize(),
+        AdMobService.initialize(),  // ✅ FIXED: Changed from AdService to AdMobService
         NotificationService.initialize()
       ]);
 
