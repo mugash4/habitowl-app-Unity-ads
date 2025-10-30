@@ -204,7 +204,11 @@
             "minSdkVersion": 23,
             "kotlinVersion": "1.9.24",
             "enableProguardInReleaseBuilds": false,
-            "usesCleartextTraffic": true
+            "usesCleartextTraffic": true,
+            "extraProguardRules": "-dontwarn org.bouncycastle.jsse.BCSSLSocket\n-dontwarn org.bouncycastle.jsse.BCSSLParameters\n-dontwarn org.bouncycastle.jsse.provider.BouncyCastleJsseProvider\n-dontwarn org.conscrypt.*\n-dontwarn org.openjsse.javax.net.ssl.SSLParameters\n-dontwarn org.openjsse.javax.net.ssl.SSLSocket\n-dontwarn org.openjsse.net.ssl.OpenJSSE",
+            "kotlinOptions": {
+              "freeCompilerArgs": ["-Xskip-metadata-version-check"]
+            }
           },
           "ios": {
             "deploymentTarget": "13.4"
