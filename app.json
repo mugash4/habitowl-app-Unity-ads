@@ -202,7 +202,7 @@
             "targetSdkVersion": 35,
             "buildToolsVersion": "35.0.0",
             "minSdkVersion": 24,
-            "kotlinVersion": "1.9.25"
+            "kotlinVersion": "2.1.0"
           },
           "ios": {
             "deploymentTarget": "15.1"
