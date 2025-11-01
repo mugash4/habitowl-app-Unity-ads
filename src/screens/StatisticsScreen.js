@@ -43,18 +43,31 @@ const StatisticsScreen = ({ navigation }) => {
   const loadStatistics = async () => {
     try {
       setLoading(true);
-    
+  
       const [userHabits, stats] = await Promise.all([
         FirebaseService.getUserHabits(),
         FirebaseService.getUserStats()
       ]);
-    
+  
       console.log('📊 Loaded', userHabits ? userHabits.length : 0, 'habits for statistics');
+  
+      // ✅ FIX: Check both premium status AND admin status
+      let premiumStatus = stats?.isPremium || false;
     
-      // Check premium status
-      const premiumStatus = stats?.isPremium || false;
+      // Double-check admin status if not premium
+      if (!premiumStatus) {
+        const user = FirebaseService.currentUser;
+        if (user && user.email) {
+          const AdminService = require('../services/AdminService').default;
+          const isAdmin = await AdminService.checkAdminStatus(user.email);
+          if (isAdmin) {
+            console.log('✅ Admin user - enabling all premium features');
+            premiumStatus = true;
+          }
+        }
+      }
+    
       setIsPremium(premiumStatus);
-    
       setHabits(userHabits || []);
       setUserStats(stats);
     } catch (error) {
@@ -65,6 +78,7 @@ const StatisticsScreen = ({ navigation }) => {
       setLoading(false);
     }
   };
+
 
 
   const onRefresh = async () => {

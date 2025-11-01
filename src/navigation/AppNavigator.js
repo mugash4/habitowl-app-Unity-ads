@@ -3,6 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Provider as PaperProvider, Portal, MD3LightTheme } from 'react-native-paper';
+import { View, Platform, Dimensions } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 // Screens
@@ -18,7 +19,7 @@ import AboutScreen from '../screens/AboutScreen';
 
 // Services
 import FirebaseService from '../services/FirebaseService';
-import AdMobService from '../services/AdMobService';  // ✅ FIXED: Changed from AdService to AdMobService
+import AdMobService from '../services/AdMobService';
 import NotificationService from '../services/NotificationService';
 
 const Stack = createStackNavigator();
@@ -39,7 +40,20 @@ const theme = {
   },
 };
 
+// ✅ FIX: Calculate proper tab bar height based on banner ad presence
+const getTabBarHeight = () => {
+  const baseHeight = 60;
+  const bannerHeight = Platform.OS === 'android' ? 50 : 50; // Standard banner ad height
+  const hasNotch = Dimensions.get('window').height > 800; // Simple notch detection
+  const notchPadding = hasNotch ? 20 : 0;
+  
+  // Add extra padding if ads might show
+  return baseHeight + notchPadding;
+};
+
 const MainTabNavigator = () => {
+  const [tabBarHeight, setTabBarHeight] = useState(getTabBarHeight());
+  
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -59,12 +73,21 @@ const MainTabNavigator = () => {
         tabBarActiveTintColor: '#4f46e5',
         tabBarInactiveTintColor: '#6b7280',
         tabBarStyle: {
+          position: 'absolute', // ✅ FIX: Make tab bar float above content
+          bottom: 0,
+          left: 0,
+          right: 0,
           backgroundColor: '#ffffff',
           borderTopWidth: 1,
           borderTopColor: '#e5e7eb',
-          height: 60,
-          paddingBottom: 8,
+          height: tabBarHeight,
+          paddingBottom: Platform.OS === 'ios' ? 20 : 8, // ✅ FIX: Better iOS safe area handling
           paddingTop: 8,
+          elevation: 8, // ✅ FIX: Add shadow to ensure visibility
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
         },
         tabBarLabelStyle: {
           fontSize: 12,
@@ -110,7 +133,7 @@ const AppNavigator = () => {
     try {
       // Initialize services
       await Promise.allSettled([
-        AdMobService.initialize(),  // ✅ FIXED: Changed from AdService to AdMobService
+        AdMobService.initialize(),
         NotificationService.initialize()
       ]);
 
@@ -133,7 +156,6 @@ const AppNavigator = () => {
 
   return (
     <PaperProvider theme={theme}>
-      {/* ✅ CRITICAL FIX: Add Portal.Host for proper Portal rendering */}
       <Portal.Host>
         <NavigationContainer>
           <Stack.Navigator

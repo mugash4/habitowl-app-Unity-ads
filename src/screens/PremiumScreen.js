@@ -268,11 +268,15 @@ const PremiumScreen = ({ navigation }) => {
       <ScrollView 
         style={styles.scrollView}
         contentContainerStyle={styles.scrollViewContent}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={true}
         bounces={true}
         scrollEventThrottle={16}
         nestedScrollEnabled={true}
+        alwaysBounceVertical={true}
+        overScrollMode="always"
+        scrollEnabled={true}
       >
+
         <Animated.View style={{ opacity: fadeAnim }}>
           {/* Header */}
           <LinearGradient colors={['#4f46e5', '#7c3aed']} style={styles.header}>
@@ -410,9 +414,12 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+    backgroundColor: '#f8fafc',
   },
   scrollViewContent: {
-    paddingBottom: 40,
+    flexGrow: 1,
+    paddingBottom: 100, // ✅ FIX: More padding for scroll
+    minHeight: '100%',
   },
   header: {
     alignItems: 'center',

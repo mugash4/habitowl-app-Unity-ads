@@ -405,8 +405,36 @@ class FirebaseService {
     const querySnapshot = await getDocs(q);
     if (querySnapshot.empty) return null;
 
-    return querySnapshot.docs[0].data();
+    const userData = querySnapshot.docs[0].data();
+  
+    // ✅ FIX: Check if user is admin and grant premium access
+    if (userData && this.currentUser.email) {
+      try {
+        const AdminService = require('./AdminService').default;
+        const isAdmin = await AdminService.checkAdminStatus(this.currentUser.email);
+      
+        if (isAdmin) {
+          console.log('✅ Admin user detected - granting premium access');
+          // Override premium status for admins
+          userData.isPremium = true;
+        
+          // Update in database if not already premium
+          if (!querySnapshot.docs[0].data().isPremium) {
+            await updateDoc(querySnapshot.docs[0].ref, {
+              isPremium: true,
+              premiumUpdatedAt: new Date().toISOString(),
+              premiumReason: 'admin_access'
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error checking admin status:', error);
+      }
+    }
+
+    return userData;
   }
+
 
   async updateUserStats(updates) {
     if (!this.currentUser) return;
