@@ -9,17 +9,26 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "KOTLIN_VERSION": "1.9.25"
       }
     },
     "preview": {
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "KOTLIN_VERSION": "1.9.25"
       }
     },
     "production": {
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "KOTLIN_VERSION": "1.9.25"
       }
     }
   },
