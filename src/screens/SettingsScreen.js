@@ -7,6 +7,7 @@ import {
   Alert,
   Share,
   Linking,
+  Platform,
 } from 'react-native';
 import {
   List,
@@ -26,7 +27,6 @@ import NotificationService from '../services/NotificationService';
 import ContactSupport from '../components/ContactSupport';
 import AdminService from '../services/AdminService';
 
-// ✅ FIXED: Completely safe PromoOfferBanner import
 let PromoOfferBanner = null;
 try {
   const PromoModule = require('../components/PromoOfferBanner');
@@ -37,7 +37,6 @@ try {
 }
 
 const SettingsScreen = ({ navigation }) => {
-  // ✅ FIXED: Initialize with safe default values
   const user = FirebaseService.currentUser;
   const [userStats, setUserStats] = useState({
     displayName: user?.displayName || 'User',
@@ -59,17 +58,13 @@ const SettingsScreen = ({ navigation }) => {
 
   useEffect(() => {
     console.log('SettingsScreen: Mounted ✅');
-    
-    // ✅ FIXED: Load data in background with proper error handling
     loadAllDataInBackground();
   }, []);
 
-  // ✅ FIXED: Non-blocking background data loading
   const loadAllDataInBackground = async () => {
     setIsLoading(true);
     
     try {
-      // Load all data with individual error handling
       await Promise.allSettled([
         loadUserDataSafely(),
         loadSettingsSafely(),
@@ -103,7 +98,6 @@ const SettingsScreen = ({ navigation }) => {
       }
     } catch (error) {
       console.log('User data load failed:', error.message);
-      // Keep default values
     }
   };
 
@@ -243,16 +237,13 @@ const SettingsScreen = ({ navigation }) => {
   };
 
   const handleContactSupport = () => {
-    // ✅ IMPROVED: Provide immediate feedback
     console.log('Opening support chat...');
     setShowContactSupport(true);
   
-    // Track analytics
     FirebaseService.trackEvent('support_chat_opened', {
       from_screen: 'settings'
     }).catch(err => console.log('Analytics tracking failed:', err));
   };
-
 
   const handlePrivacyPolicy = () => {
     Linking.openURL('https://habitowl-3405d.web.app/privacy').catch(() => 
@@ -338,17 +329,20 @@ const SettingsScreen = ({ navigation }) => {
     );
   };
 
-  // ✅ FIXED: Screen renders immediately, even while loading
   return (
     <View style={styles.container}>
       <ScrollView 
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        // ✅ FIX: Ensure scroll is enabled and works smoothly
+        scrollEnabled={true}
+        bounces={true}
+        alwaysBounceVertical={true}
+        nestedScrollEnabled={true}
       >
         {renderUserInfo()}
 
-        {/* ✅ FIXED: Safe PromoOfferBanner rendering */}
         {!isPremium && !isAdmin && PromoOfferBanner && (
           <View style={styles.promoContainer}>
             <PromoOfferBanner onUpgradePress={handlePremiumUpgrade} />
@@ -392,27 +386,22 @@ const SettingsScreen = ({ navigation }) => {
                 Alert.alert(
                   'Premium Feature',
                   'Smart Coaching is available for Premium subscribers only. Upgrade now to get personalized AI-powered habit coaching!',
-                [
-                  { text: 'Maybe Later', style: 'cancel' },
-                  { text: 'Upgrade to Premium', onPress: handlePremiumUpgrade }
-                ]
-              );
-             } else {
-                // Show instructions for premium users
+                  [
+                    { text: 'Maybe Later', style: 'cancel' },
+                    { text: 'Upgrade to Premium', onPress: handlePremiumUpgrade }
+                  ]
+                );
+              } else {
                 Alert.alert(
                   '💡 How to Use AI Coaching',
                   'AI-powered coaching is available!\n\n1. Go to Home screen\n2. Find any habit card\n3. Tap the lightbulb (💡) icon on the habit\n4. Ask questions and get personalized coaching!\n\nThe lightbulb icon is located next to each habit name.',
-                [
-                  { text: 'Got it!', style: 'default' }
-                ]
-              );
-            }
-          }}
-          titleStyle={styles.listItemTitle}
-          descriptionStyle={styles.listItemDescription}
-        />
-
-
+                  [{ text: 'Got it!', style: 'default' }]
+                );
+              }
+            }}
+            titleStyle={styles.listItemTitle}
+            descriptionStyle={styles.listItemDescription}
+          />
           
           {isAdmin && (
             <List.Item
@@ -426,7 +415,6 @@ const SettingsScreen = ({ navigation }) => {
             />
           )}
         </Card>
-
 
         <Card style={styles.card}>
           <List.Subheader style={styles.subheader}>Social & Sharing</List.Subheader>
@@ -545,6 +533,7 @@ const SettingsScreen = ({ navigation }) => {
           />
         </Card>
 
+        {/* ✅ FIX: Sign Out button now with guaranteed visibility */}
         <Card style={styles.card}>
           <List.Item
             title="Sign Out"
@@ -554,6 +543,7 @@ const SettingsScreen = ({ navigation }) => {
           />
         </Card>
 
+        {/* ✅ FIX: Increased bottom padding to ensure Sign Out is fully visible */}
         <View style={styles.bottomPadding} />
       </ScrollView>
 
@@ -598,7 +588,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 20,
+    // ✅ FIX: Increased bottom padding to ensure all content visible above tab bar
+    paddingBottom: 120, // Increased from 20 to provide space for tab bar
+    flexGrow: 1, // ✅ FIX: Ensures content can grow and trigger scroll
   },
   card: {
     margin: 16,
@@ -712,8 +704,9 @@ const styles = StyleSheet.create({
   dialogInput: {
     marginBottom: 16,
   },
+  // ✅ FIX: Increased bottom padding
   bottomPadding: {
-    height: 20,
+    height: 40, // Increased from 20 to ensure Sign Out button is fully visible
   },
   promoContainer: {
     marginBottom: 8,

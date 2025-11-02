@@ -40,14 +40,11 @@ const theme = {
   },
 };
 
-// ✅ FIX: Calculate proper tab bar height based on banner ad presence
+// ✅ FIX: Calculate proper tab bar height
 const getTabBarHeight = () => {
   const baseHeight = 60;
-  const bannerHeight = Platform.OS === 'android' ? 50 : 50; // Standard banner ad height
-  const hasNotch = Dimensions.get('window').height > 800; // Simple notch detection
+  const hasNotch = Dimensions.get('window').height > 800;
   const notchPadding = hasNotch ? 20 : 0;
-  
-  // Add extra padding if ads might show
   return baseHeight + notchPadding;
 };
 
@@ -73,17 +70,15 @@ const MainTabNavigator = () => {
         tabBarActiveTintColor: '#4f46e5',
         tabBarInactiveTintColor: '#6b7280',
         tabBarStyle: {
-          position: 'absolute', // ✅ FIX: Make tab bar float above content
-          bottom: 0,
-          left: 0,
-          right: 0,
+          // ✅ FIX: Removed 'position: absolute' to prevent overlapping
+          // This ensures banner ads and content are fully visible above the tab bar
           backgroundColor: '#ffffff',
           borderTopWidth: 1,
           borderTopColor: '#e5e7eb',
           height: tabBarHeight,
-          paddingBottom: Platform.OS === 'ios' ? 20 : 8, // ✅ FIX: Better iOS safe area handling
+          paddingBottom: Platform.OS === 'ios' ? 20 : 8,
           paddingTop: 8,
-          elevation: 8, // ✅ FIX: Add shadow to ensure visibility
+          elevation: 8,
           shadowColor: '#000',
           shadowOffset: { width: 0, height: -2 },
           shadowOpacity: 0.1,

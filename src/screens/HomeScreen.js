@@ -30,7 +30,7 @@ const HomeScreen = ({ navigation, route }) => {
   const [motivationalMessage, setMotivationalMessage] = useState('');
   const [fadeAnim] = useState(new Animated.Value(0));
   const [screenKey, setScreenKey] = useState(0);
-  const [isPremium, setIsPremium] = useState(false); // 🔧 NEW: Track premium status
+  const [isPremium, setIsPremium] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -75,11 +75,9 @@ const HomeScreen = ({ navigation, route }) => {
       await new Promise(resolve => setTimeout(resolve, 300));
       const userHabits = await FirebaseService.getUserHabits(true);
     
-      // 🔧 IMPROVED: Load premium status with admin check fallback
       const userStats = await FirebaseService.getUserStats();
       let premiumStatus = userStats?.isPremium || false;
     
-      // 🔧 NEW: Double-check admin status if not premium
       if (!premiumStatus) {
         const user = FirebaseService.currentUser;
         if (user && user.email) {
@@ -88,7 +86,6 @@ const HomeScreen = ({ navigation, route }) => {
           if (isAdmin) {
             console.log('✅ Admin detected, granting premium access');
             premiumStatus = true;
-            // Update in database
             await FirebaseService.updateUserPremiumStatus(true);
           }
         }
@@ -147,18 +144,17 @@ const HomeScreen = ({ navigation, route }) => {
             [
               { text: 'Retry', onPress: () => loadHabits(true) },
               { text: 'Cancel', style: 'cancel' }
-          ]
-        );
+            ]
+          );
+        }
+      }
+    } finally {
+      if (isActive) {
+        setLoading(false);
+        setRefreshing(false);
       }
     }
-  } finally {
-    if (isActive) {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }
-};
-
+  };
 
   const loadMotivationalMessage = async (userHabits, completedToday) => {
     try {
@@ -226,7 +222,6 @@ const HomeScreen = ({ navigation, route }) => {
     }
   };
 
-  // 🔧 UPDATED: Check limit before navigating to create habit
   const handleCreateHabit = async () => {
     const FREE_HABIT_LIMIT = 5;
     
@@ -316,7 +311,6 @@ const HomeScreen = ({ navigation, route }) => {
             </View>
           ) : null}
           
-          {/* 🔧 NEW: Habit limit indicator for free users */}
           {!isPremium && (
             <TouchableOpacity 
               style={styles.limitBanner}
@@ -447,10 +441,12 @@ const HomeScreen = ({ navigation, route }) => {
           </>
         )}
 
-        {/* AdMob Banner Ad */}
-        <AdMobBanner style={styles.adBanner} />
+        {/* ✅ FIX: Banner ad with proper spacing */}
+        <View style={styles.bannerContainer}>
+          <AdMobBanner />
+        </View>
         
-        {/* Bottom padding */}
+        {/* ✅ FIX: Increased bottom padding to ensure banner is fully visible above tab bar */}
         <View style={styles.bottomPadding} />
       </ScrollView>
 
@@ -496,7 +492,6 @@ const styles = StyleSheet.create({
     color: '#e0e7ff',
     fontStyle: 'italic',
   },
-  // 🔧 NEW: Limit banner styles
   limitBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -536,7 +531,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    paddingBottom: 80,
+    // ✅ FIX: Increased padding to ensure content is fully visible above tab bar
+    paddingBottom: 120, // Increased from 80 to account for tab bar + banner ad
   },
   progressCard: {
     margin: 16,
@@ -602,7 +598,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 8,
   },
-  // 🔧 NEW: Empty state limit text
   emptyLimit: {
     fontSize: 14,
     color: '#9ca3af',
@@ -619,18 +614,23 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 16,
   },
-  adBanner: {
+  // ✅ FIX: New banner container with proper spacing
+  bannerContainer: {
     marginTop: 20,
     marginBottom: 10,
+    alignItems: 'center',
+    width: '100%',
   },
+  // ✅ FIX: Increased bottom padding
   bottomPadding: {
-    height: 20,
+    height: 40, // Increased from 20 to provide more space
   },
   fab: {
     position: 'absolute',
     margin: 16,
     right: 0,
-    bottom: 0,
+    // ✅ FIX: Positioned above tab bar
+    bottom: 80, // Raised from 0 to sit above tab bar
     backgroundColor: '#4f46e5',
   },
   loadingContainer: {

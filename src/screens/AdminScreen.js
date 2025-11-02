@@ -284,15 +284,6 @@ const AdminScreen = ({ navigation }) => {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={true}
-        keyboardShouldPersistTaps="handled"
-        nestedScrollEnabled={true}
-        bounces={true}
-        scrollEnabled={true}
-        removeClippedSubviews={false}
-        overScrollMode="always"
-        persistentScrollbar={Platform.OS === 'android'}
-        scrollEventThrottle={16}
-        automaticallyAdjustKeyboardInsets={true}
       >
         <Card style={[styles.card, styles.securityNotice]}>
           <Card.Content>
@@ -310,7 +301,7 @@ const AdminScreen = ({ navigation }) => {
         {renderStats()}
 
         <Card style={styles.card}>
-          <List.Subheader>🤖 AI Configuration (Admin Only)</List.Subheader>
+          <List.Subheader>🔐 AI Configuration (Admin Only)</List.Subheader>
           
           <List.Item
             title="Configure API Keys"
@@ -377,8 +368,6 @@ const AdminScreen = ({ navigation }) => {
             onPress={() => Alert.alert('Coming Soon', 'Data export coming soon')}
           />
         </Card>
-
-        <View style={styles.bottomPadding} />
       </ScrollView>
 
       <Portal>
@@ -506,8 +495,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 300,
     flexGrow: 1,
+    paddingBottom: 40,
   },
   sectionTitle: {
     fontSize: 20,
@@ -621,9 +610,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#991b1b',
     marginLeft: 8,
-  },
-  bottomPadding: {
-    height: 100,
   },
 });
 

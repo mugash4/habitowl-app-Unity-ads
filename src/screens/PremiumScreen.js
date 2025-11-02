@@ -159,7 +159,7 @@ const PremiumScreen = ({ navigation }) => {
       if (success) {
         // Purchase was successful (or is being processed)
         Alert.alert(
-          ' Welcome to Premium!',
+          '🎉 Welcome to Premium!',
           'Your 7-day free trial has started! You can cancel anytime before the trial ends.',
           [
             {
@@ -269,14 +269,7 @@ const PremiumScreen = ({ navigation }) => {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollViewContent}
         showsVerticalScrollIndicator={true}
-        bounces={true}
-        scrollEventThrottle={16}
-        nestedScrollEnabled={true}
-        alwaysBounceVertical={true}
-        overScrollMode="always"
-        scrollEnabled={true}
       >
-
         <Animated.View style={{ opacity: fadeAnim }}>
           {/* Header */}
           <LinearGradient colors={['#4f46e5', '#7c3aed']} style={styles.header}>
@@ -300,10 +293,10 @@ const PremiumScreen = ({ navigation }) => {
                 </View>
               </View>
               <Text style={styles.trialHighlightDescription}>
-                 Cancel anytime during trial{'\n'}
-                 No charges until trial ends{'\n'}
-                 Full access to all premium features{'\n'}
-                 Manage subscription in Google Play Store
+                ✓ Cancel anytime during trial{'\n'}
+                ✓ No charges until trial ends{'\n'}
+                ✓ Full access to all premium features{'\n'}
+                ✓ Manage subscription in Google Play Store
               </Text>
             </Card.Content>
           </Card>
@@ -383,8 +376,6 @@ const PremiumScreen = ({ navigation }) => {
               least 24 hours before the end of the current period.
             </Text>
           </View>
-
-          <View style={styles.bottomPadding} />
         </Animated.View>
       </ScrollView>
     </View>
@@ -414,12 +405,10 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-    backgroundColor: '#f8fafc',
   },
   scrollViewContent: {
     flexGrow: 1,
-    paddingBottom: 100, // ✅ FIX: More padding for scroll
-    minHeight: '100%',
+    paddingBottom: 40,
   },
   header: {
     alignItems: 'center',
@@ -599,16 +588,13 @@ const styles = StyleSheet.create({
   },
   termsContainer: {
     paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingBottom: 40,
   },
   termsText: {
     fontSize: 12,
     color: '#9ca3af',
     textAlign: 'center',
     lineHeight: 16,
-  },
-  bottomPadding: {
-    height: 40,
   },
 });
 

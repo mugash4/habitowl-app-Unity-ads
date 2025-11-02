@@ -80,18 +80,9 @@ const AboutScreen = ({ navigation }) => {
       </Appbar.Header>
 
       <ScrollView 
-        style={styles.content} 
+        style={styles.content}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={true}
-        keyboardShouldPersistTaps="handled"
-        nestedScrollEnabled={true}
-        bounces={true}
-        scrollEnabled={true}
-        removeClippedSubviews={false}
-        overScrollMode="always"
-        persistentScrollbar={Platform.OS === 'android'}
-        scrollEventThrottle={16}
-        automaticallyAdjustKeyboardInsets={true}
       >
         {/* App Header */}
         <LinearGradient colors={['#4f46e5', '#7c3aed']} style={styles.header}>
@@ -282,8 +273,6 @@ const AboutScreen = ({ navigation }) => {
             Made with ❤️ for habit builders everywhere
           </Text>
         </View>
-
-        <View style={styles.bottomPadding} />
       </ScrollView>
     </View>
   );
@@ -298,8 +287,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 300,
     flexGrow: 1,
+    paddingBottom: 40,
   },
   header: {
     alignItems: 'center',
@@ -407,15 +396,13 @@ const styles = StyleSheet.create({
   copyright: {
     alignItems: 'center',
     padding: 20,
+    marginBottom: 20,
   },
   copyrightText: {
     fontSize: 12,
     color: '#9ca3af',
     textAlign: 'center',
     marginBottom: 4,
-  },
-  bottomPadding: {
-    height: 100,
   },
 });
 
