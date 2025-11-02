@@ -18,7 +18,7 @@ import AdminScreen from '../screens/AdminScreen';
 import AboutScreen from '../screens/AboutScreen';
 
 // Components
-import AdMobBanner from '../components/AdMobBanner';
+import ScreenWithAd from '../components/ScreenWithAd';
 
 // Services
 import FirebaseService from '../services/FirebaseService';
@@ -43,7 +43,7 @@ const theme = {
   },
 };
 
-// ✅ FIX: Calculate proper tab bar height
+// ✅ FIXED: Calculate proper tab bar height
 const getTabBarHeight = () => {
   const { height } = Dimensions.get('window');
   const baseHeight = 60;
@@ -52,86 +52,89 @@ const getTabBarHeight = () => {
   return baseHeight + notchPadding;
 };
 
-// ✅ FIX: Wrapper component for tab navigator with banner ad below
-const MainTabNavigatorWithAd = () => {
+// ✅ FIXED: Wrap each tab screen with ad banner
+const HomeScreenWithAd = (props) => (
+  <ScreenWithAd>
+    <HomeScreen {...props} />
+  </ScreenWithAd>
+);
+
+const StatisticsScreenWithAd = (props) => (
+  <ScreenWithAd>
+    <StatisticsScreen {...props} />
+  </ScreenWithAd>
+);
+
+const SettingsScreenWithAd = (props) => (
+  <ScreenWithAd>
+    <SettingsScreen {...props} />
+  </ScreenWithAd>
+);
+
+// ✅ FIXED: Main Tab Navigator with proper spacing
+const MainTabNavigator = () => {
   const [tabBarHeight] = useState(getTabBarHeight());
   
   return (
-    <View style={{ flex: 1 }}>
-      {/* Tab Navigator */}
-      <Tab.Navigator
-        screenOptions={({ route }) => ({
-          tabBarIcon: ({ focused, color, size }) => {
-            let iconName;
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        tabBarIcon: ({ focused, color, size }) => {
+          let iconName;
 
-            if (route.name === 'Home') {
-              iconName = focused ? 'home' : 'home-outline';
-            } else if (route.name === 'Statistics') {
-              iconName = focused ? 'chart-line' : 'chart-line';
-            } else if (route.name === 'Settings') {
-              iconName = focused ? 'cog' : 'cog-outline';
-            }
+          if (route.name === 'Home') {
+            iconName = focused ? 'home' : 'home-outline';
+          } else if (route.name === 'Statistics') {
+            iconName = focused ? 'chart-line' : 'chart-line';
+          } else if (route.name === 'Settings') {
+            iconName = focused ? 'cog' : 'cog-outline';
+          }
 
-            return <Icon name={iconName} size={size} color={color} />;
-          },
-          tabBarActiveTintColor: '#4f46e5',
-          tabBarInactiveTintColor: '#6b7280',
-          tabBarStyle: {
-            backgroundColor: '#ffffff',
-            borderTopWidth: 1,
-            borderTopColor: '#e5e7eb',
-            height: tabBarHeight,
-            paddingBottom: Platform.OS === 'ios' ? 20 : 8,
-            paddingTop: 8,
-            elevation: 8,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: -2 },
-            shadowOpacity: 0.1,
-            shadowRadius: 4,
-          },
-          tabBarLabelStyle: {
-            fontSize: 12,
-            fontWeight: '500',
-          },
-          headerShown: false,
-        })}
-      >
-        <Tab.Screen 
-          name="Home" 
-          component={HomeScreen}
-          options={{
-            tabBarLabel: 'Habits',
-          }}
-        />
-        <Tab.Screen 
-          name="Statistics" 
-          component={StatisticsScreen}
-          options={{
-            tabBarLabel: 'Stats',
-          }}
-        />
-        <Tab.Screen 
-          name="Settings" 
-          component={SettingsScreen}
-          options={{
-            tabBarLabel: 'Settings',
-          }}
-        />
-      </Tab.Navigator>
-      
-      {/* ✅ FIX: Banner ad positioned BELOW tab bar */}
-      <View style={{
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        backgroundColor: '#ffffff',
-        borderTopWidth: 1,
-        borderTopColor: '#e5e7eb',
-      }}>
-        <AdMobBanner />
-      </View>
-    </View>
+          return <Icon name={iconName} size={size} color={color} />;
+        },
+        tabBarActiveTintColor: '#4f46e5',
+        tabBarInactiveTintColor: '#6b7280',
+        tabBarStyle: {
+          backgroundColor: '#ffffff',
+          borderTopWidth: 1,
+          borderTopColor: '#e5e7eb',
+          height: tabBarHeight,
+          paddingBottom: Platform.OS === 'ios' ? 20 : 8,
+          paddingTop: 8,
+          elevation: 8,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '500',
+        },
+        headerShown: false,
+      })}
+    >
+      <Tab.Screen 
+        name="Home" 
+        component={HomeScreenWithAd}
+        options={{
+          tabBarLabel: 'Habits',
+        }}
+      />
+      <Tab.Screen 
+        name="Statistics" 
+        component={StatisticsScreenWithAd}
+        options={{
+          tabBarLabel: 'Stats',
+        }}
+      />
+      <Tab.Screen 
+        name="Settings" 
+        component={SettingsScreenWithAd}
+        options={{
+          tabBarLabel: 'Settings',
+        }}
+      />
+    </Tab.Navigator>
   );
 };
 
@@ -182,7 +185,7 @@ const AppNavigator = () => {
               <>
                 <Stack.Screen 
                   name="Main" 
-                  component={MainTabNavigatorWithAd}
+                  component={MainTabNavigator}
                   options={{ headerShown: false }}
                 />
                 <Stack.Screen 

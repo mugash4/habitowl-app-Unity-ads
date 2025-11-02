@@ -704,9 +704,8 @@ const styles = StyleSheet.create({
   dialogInput: {
     marginBottom: 16,
   },
-  // ✅ FIX: Increased bottom padding
   bottomPadding: {
-    height: 40, // Increased from 20 to ensure Sign Out button is fully visible
+    height: 120, // ✅ FIXED: Space for tab bar + banner ad
   },
   promoContainer: {
     marginBottom: 8,

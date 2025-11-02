@@ -14,7 +14,6 @@ import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 import FirebaseService from '../services/FirebaseService';
-import AdMobBanner from '../components/AdMobBanner';
 import adMobService from '../services/AdMobService';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -462,7 +461,6 @@ const StatisticsScreen = ({ navigation }) => {
             {renderCategoryChart()}
             {renderStreakChart()}
             
-            <AdMobBanner style={styles.adBanner} />
           </>
         )}
 
@@ -571,11 +569,8 @@ const styles = StyleSheet.create({
   emptyButton: {
     paddingHorizontal: 20,
   },
-  adBanner: {
-    marginTop: 20,
-  },
   bottomPadding: {
-    height: 20,
+    height: 120, // ✅ FIXED: Space for tab bar + banner ad
   },
   loadingContainer: {
     flex: 1,

@@ -611,14 +611,14 @@ const styles = StyleSheet.create({
   },
   // ✅ FIX: Increased bottom padding
   bottomPadding: {
-    height: 40, // Increased from 20 to provide more space
+    height: 120, // Increased from 20 to provide more space
   },
   fab: {
     position: 'absolute',
     margin: 16,
     right: 0,
     // ✅ FIX: Positioned above tab bar
-    bottom: 90, // Raised from 0 to sit above tab bar
+    bottom: 150, // Raised from 0 to sit above tab bar
     backgroundColor: '#4f46e5',
   },
   loadingContainer: {
