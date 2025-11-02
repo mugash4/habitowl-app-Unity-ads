@@ -17,6 +17,9 @@ import PremiumScreen from '../screens/PremiumScreen';
 import AdminScreen from '../screens/AdminScreen';
 import AboutScreen from '../screens/AboutScreen';
 
+// Components
+import AdMobBanner from '../components/AdMobBanner';
+
 // Services
 import FirebaseService from '../services/FirebaseService';
 import AdMobService from '../services/AdMobService';
@@ -49,70 +52,86 @@ const getTabBarHeight = () => {
   return baseHeight + notchPadding;
 };
 
-const MainTabNavigator = () => {
+// ✅ FIX: Wrapper component for tab navigator with banner ad below
+const MainTabNavigatorWithAd = () => {
   const [tabBarHeight] = useState(getTabBarHeight());
   
   return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        tabBarIcon: ({ focused, color, size }) => {
-          let iconName;
+    <View style={{ flex: 1 }}>
+      {/* Tab Navigator */}
+      <Tab.Navigator
+        screenOptions={({ route }) => ({
+          tabBarIcon: ({ focused, color, size }) => {
+            let iconName;
 
-          if (route.name === 'Home') {
-            iconName = focused ? 'home' : 'home-outline';
-          } else if (route.name === 'Statistics') {
-            iconName = focused ? 'chart-line' : 'chart-line';
-          } else if (route.name === 'Settings') {
-            iconName = focused ? 'cog' : 'cog-outline';
-          }
+            if (route.name === 'Home') {
+              iconName = focused ? 'home' : 'home-outline';
+            } else if (route.name === 'Statistics') {
+              iconName = focused ? 'chart-line' : 'chart-line';
+            } else if (route.name === 'Settings') {
+              iconName = focused ? 'cog' : 'cog-outline';
+            }
 
-          return <Icon name={iconName} size={size} color={color} />;
-        },
-        tabBarActiveTintColor: '#4f46e5',
-        tabBarInactiveTintColor: '#6b7280',
-        tabBarStyle: {
-          // ✅ FIX: Removed 'position: absolute' to prevent overlapping with content
-          backgroundColor: '#ffffff',
-          borderTopWidth: 1,
-          borderTopColor: '#e5e7eb',
-          height: tabBarHeight,
-          paddingBottom: Platform.OS === 'ios' ? 20 : 8,
-          paddingTop: 8,
-          elevation: 8,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.1,
-          shadowRadius: 4,
-        },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '500',
-        },
-        headerShown: false,
-      })}
-    >
-      <Tab.Screen 
-        name="Home" 
-        component={HomeScreen}
-        options={{
-          tabBarLabel: 'Habits',
-        }}
-      />
-      <Tab.Screen 
-        name="Statistics" 
-        component={StatisticsScreen}
-        options={{
-          tabBarLabel: 'Stats',
-        }}
-      />
-      <Tab.Screen 
-        name="Settings" 
-        component={SettingsScreen}
-        options={{
-          tabBarLabel: 'Settings',
-        }}
-      />
-    </Tab.Navigator>
+            return <Icon name={iconName} size={size} color={color} />;
+          },
+          tabBarActiveTintColor: '#4f46e5',
+          tabBarInactiveTintColor: '#6b7280',
+          tabBarStyle: {
+            backgroundColor: '#ffffff',
+            borderTopWidth: 1,
+            borderTopColor: '#e5e7eb',
+            height: tabBarHeight,
+            paddingBottom: Platform.OS === 'ios' ? 20 : 8,
+            paddingTop: 8,
+            elevation: 8,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: -2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 4,
+          },
+          tabBarLabelStyle: {
+            fontSize: 12,
+            fontWeight: '500',
+          },
+          headerShown: false,
+        })}
+      >
+        <Tab.Screen 
+          name="Home" 
+          component={HomeScreen}
+          options={{
+            tabBarLabel: 'Habits',
+          }}
+        />
+        <Tab.Screen 
+          name="Statistics" 
+          component={StatisticsScreen}
+          options={{
+            tabBarLabel: 'Stats',
+          }}
+        />
+        <Tab.Screen 
+          name="Settings" 
+          component={SettingsScreen}
+          options={{
+            tabBarLabel: 'Settings',
+          }}
+        />
+      </Tab.Navigator>
+      
+      {/* ✅ FIX: Banner ad positioned BELOW tab bar */}
+      <View style={{
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: '#ffffff',
+        borderTopWidth: 1,
+        borderTopColor: '#e5e7eb',
+      }}>
+        <AdMobBanner />
+      </View>
+    </View>
   );
 };
 
@@ -163,7 +182,7 @@ const AppNavigator = () => {
               <>
                 <Stack.Screen 
                   name="Main" 
-                  component={MainTabNavigator}
+                  component={MainTabNavigatorWithAd}
                   options={{ headerShown: false }}
                 />
                 <Stack.Screen 

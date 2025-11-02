@@ -5,7 +5,8 @@ import {
   StyleSheet,
   ScrollView,
   Linking,
-  Platform
+  Platform,
+  Image
 } from 'react-native';
 import {
   Card,
@@ -83,11 +84,17 @@ const AboutScreen = ({ navigation }) => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={true}
       >
-        {/* App Header */}
+        {/* App Header - FIXED: Using actual app logo instead of icon */}
         <LinearGradient colors={['#4f46e5', '#7c3aed']} style={styles.header}>
-          <Icon name="owl" size={80} color="#ffffff" />
+          <View style={styles.logoImageContainer}>
+            <Image 
+              source={require('../../assets/icon.png')} 
+              style={styles.logoImageLarge}
+              resizeMode="contain"
+            />
+          </View>
           <Text style={styles.appName}>HabitOwl</Text>
-          <Text style={styles.version}>Version 1.0.0</Text>
+          <Text style={styles.version}>Version 2.9.0</Text>
           <Text style={styles.tagline}>
             Your intelligent companion for building better habits
           </Text>
@@ -208,7 +215,7 @@ const AboutScreen = ({ navigation }) => {
             
             <List.Item
               title="Version"
-              description="1.0.0"
+              description="2.9.0"
               left={(props) => <List.Icon {...props} icon="information" />}
             />
             
@@ -220,7 +227,7 @@ const AboutScreen = ({ navigation }) => {
             
             <List.Item
               title="Last Updated"
-              description="October 2024"
+              description="November 2024"
               left={(props) => <List.Icon {...props} icon="calendar" />}
             />
             
@@ -289,6 +296,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 40,
     paddingTop: 30,
+  },
+  logoImageContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 3,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    overflow: 'hidden',
+  },
+  logoImageLarge: {
+    width: 90,
+    height: 90,
   },
   appName: {
     fontSize: 32,

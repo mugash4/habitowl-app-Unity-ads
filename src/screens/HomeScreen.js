@@ -440,11 +440,6 @@ const HomeScreen = ({ navigation, route }) => {
             ))}
           </>
         )}
-
-        {/* ✅ FIX: Banner ad with proper spacing */}
-        <View style={styles.bannerContainer}>
-          <AdMobBanner />
-        </View>
         
         {/* ✅ FIX: Increased bottom padding to ensure banner is fully visible above tab bar */}
         <View style={styles.bottomPadding} />
@@ -532,7 +527,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     // ✅ FIX: Increased padding to ensure content is fully visible above tab bar
-    paddingBottom: 120, // Increased from 80 to account for tab bar + banner ad
+    paddingBottom: 100, // Increased from 80 to account for tab bar + banner ad
   },
   progressCard: {
     margin: 16,
@@ -614,13 +609,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 16,
   },
-  // ✅ FIX: New banner container with proper spacing
-  bannerContainer: {
-    marginTop: 20,
-    marginBottom: 10,
-    alignItems: 'center',
-    width: '100%',
-  },
   // ✅ FIX: Increased bottom padding
   bottomPadding: {
     height: 40, // Increased from 20 to provide more space
@@ -630,7 +618,7 @@ const styles = StyleSheet.create({
     margin: 16,
     right: 0,
     // ✅ FIX: Positioned above tab bar
-    bottom: 80, // Raised from 0 to sit above tab bar
+    bottom: 90, // Raised from 0 to sit above tab bar
     backgroundColor: '#4f46e5',
   },
   loadingContainer: {

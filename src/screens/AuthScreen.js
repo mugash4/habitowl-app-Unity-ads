@@ -9,7 +9,8 @@ import {
   Animated,
   ScrollView,
   Dimensions,
-  ActivityIndicator
+  ActivityIndicator,
+  Image
 } from 'react-native';
 import {
   TextInput,
@@ -292,10 +293,14 @@ const AuthScreen = ({ navigation }) => {
               },
             ]}
           >
-            {/* App Branding */}
+            {/* App Branding - FIXED: Using actual app logo instead of icon */}
             <View style={styles.branding}>
               <View style={styles.logoContainer}>
-                <Icon name="owl" size={70} color="#ffffff" />
+                <Image 
+                  source={require('../../assets/icon.png')} 
+                  style={styles.logoImage}
+                  resizeMode="contain"
+                />
               </View>
               <Headline style={styles.appName}>HabitOwl</Headline>
               <Paragraph style={styles.tagline}>
@@ -494,6 +499,11 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderWidth: 3,
     borderColor: 'rgba(255, 255, 255, 0.3)',
+    overflow: 'hidden',
+  },
+  logoImage: {
+    width: 90,
+    height: 90,
   },
   appName: {
     fontSize: 36,
