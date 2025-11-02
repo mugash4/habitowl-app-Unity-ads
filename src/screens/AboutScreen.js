@@ -80,7 +80,6 @@ const AboutScreen = ({ navigation }) => {
       </Appbar.Header>
 
       <ScrollView 
-        style={styles.content}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={true}
       >
@@ -283,11 +282,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8fafc',
   },
-  content: {
-    flex: 1,
-  },
   scrollContent: {
-    flexGrow: 1,
     paddingBottom: 40,
   },
   header: {

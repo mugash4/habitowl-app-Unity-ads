@@ -281,7 +281,6 @@ const AdminScreen = ({ navigation }) => {
       </Appbar.Header>
 
       <ScrollView 
-        style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={true}
       >
@@ -301,7 +300,7 @@ const AdminScreen = ({ navigation }) => {
         {renderStats()}
 
         <Card style={styles.card}>
-          <List.Subheader>🔐 AI Configuration (Admin Only)</List.Subheader>
+          <List.Subheader> AI Configuration (Admin Only)</List.Subheader>
           
           <List.Item
             title="Configure API Keys"
@@ -333,7 +332,7 @@ const AdminScreen = ({ navigation }) => {
         </Card>
 
         <Card style={styles.card}>
-          <List.Subheader>📢 Marketing Tools</List.Subheader>
+          <List.Subheader> Marketing Tools</List.Subheader>
           
           <List.Item
             title="Create Promotional Offer"
@@ -352,7 +351,7 @@ const AdminScreen = ({ navigation }) => {
         </Card>
 
         <Card style={styles.card}>
-          <List.Subheader>⚡ Quick Actions</List.Subheader>
+          <List.Subheader> Quick Actions</List.Subheader>
           
           <List.Item
             title="Broadcast Notification"
@@ -372,7 +371,7 @@ const AdminScreen = ({ navigation }) => {
 
       <Portal>
         <Dialog visible={showApiDialog} onDismiss={() => setShowApiDialog(false)}>
-          <Dialog.Title>🔐 Configure API Key (Admin Only)</Dialog.Title>
+          <Dialog.Title> Configure API Key (Admin Only)</Dialog.Title>
           <Dialog.Content>
             <Text style={styles.dialogDescription}>
               Select provider and enter API key:
@@ -491,11 +490,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     elevation: 2,
   },
-  scrollView: {
-    flex: 1,
-  },
   scrollContent: {
-    flexGrow: 1,
     paddingBottom: 40,
   },
   sectionTitle: {

@@ -42,14 +42,15 @@ const theme = {
 
 // ✅ FIX: Calculate proper tab bar height
 const getTabBarHeight = () => {
+  const { height } = Dimensions.get('window');
   const baseHeight = 60;
-  const hasNotch = Dimensions.get('window').height > 800;
+  const hasNotch = height > 800;
   const notchPadding = hasNotch ? 20 : 0;
   return baseHeight + notchPadding;
 };
 
 const MainTabNavigator = () => {
-  const [tabBarHeight, setTabBarHeight] = useState(getTabBarHeight());
+  const [tabBarHeight] = useState(getTabBarHeight());
   
   return (
     <Tab.Navigator
@@ -70,8 +71,7 @@ const MainTabNavigator = () => {
         tabBarActiveTintColor: '#4f46e5',
         tabBarInactiveTintColor: '#6b7280',
         tabBarStyle: {
-          // ✅ FIX: Removed 'position: absolute' to prevent overlapping
-          // This ensures banner ads and content are fully visible above the tab bar
+          // ✅ FIX: Removed 'position: absolute' to prevent overlapping with content
           backgroundColor: '#ffffff',
           borderTopWidth: 1,
           borderTopColor: '#e5e7eb',

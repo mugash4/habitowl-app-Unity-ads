@@ -159,7 +159,7 @@ const PremiumScreen = ({ navigation }) => {
       if (success) {
         // Purchase was successful (or is being processed)
         Alert.alert(
-          '🎉 Welcome to Premium!',
+          ' Welcome to Premium!',
           'Your 7-day free trial has started! You can cancel anytime before the trial ends.',
           [
             {
@@ -266,7 +266,6 @@ const PremiumScreen = ({ navigation }) => {
       </Appbar.Header>
 
       <ScrollView 
-        style={styles.scrollView}
         contentContainerStyle={styles.scrollViewContent}
         showsVerticalScrollIndicator={true}
       >
@@ -293,10 +292,10 @@ const PremiumScreen = ({ navigation }) => {
                 </View>
               </View>
               <Text style={styles.trialHighlightDescription}>
-                ✓ Cancel anytime during trial{'\n'}
-                ✓ No charges until trial ends{'\n'}
-                ✓ Full access to all premium features{'\n'}
-                ✓ Manage subscription in Google Play Store
+                 Cancel anytime during trial{'\n'}
+                 No charges until trial ends{'\n'}
+                 Full access to all premium features{'\n'}
+                 Manage subscription in Google Play Store
               </Text>
             </Card.Content>
           </Card>
@@ -403,11 +402,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6b7280',
   },
-  scrollView: {
-    flex: 1,
-  },
   scrollViewContent: {
-    flexGrow: 1,
     paddingBottom: 40,
   },
   header: {
