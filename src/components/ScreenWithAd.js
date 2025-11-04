@@ -4,22 +4,24 @@
  */
 
 import React from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet, Platform, SafeAreaView } from 'react-native';
 import AdMobBanner from './AdMobBanner';
 
 const ScreenWithAd = ({ children, style }) => {
   return (
-    <View style={[styles.container, style]}>
+    <SafeAreaView style={[styles.container, style]}>
       {/* Screen Content */}
       <View style={styles.content}>
         {children}
       </View>
       
-      {/* Banner Ad - automatically shows only for free users */}
-      <View style={styles.adContainer}>
-        <AdMobBanner />
-      </View>
-    </View>
+      {/* Banner Ad - Fixed at bottom */}
+      {Platform.OS !== 'web' && (
+        <View style={styles.adContainer}>
+          <AdMobBanner />
+        </View>
+      )}
+    </SafeAreaView>
   );
 };
 
@@ -32,14 +34,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   adContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+    width: '100%',
     backgroundColor: '#ffffff',
     borderTopWidth: 1,
     borderTopColor: '#e5e7eb',
-    paddingBottom: Platform.OS === 'ios' ? 20 : 0, // Safe area for iOS
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 60,
   },
 });
 

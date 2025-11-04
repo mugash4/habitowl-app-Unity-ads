@@ -9,8 +9,8 @@
     "scheme": "habitowl",
     "splash": {
       "image": "./assets/splash.png",
-      "resizeMode": "cover",
-      "backgroundColor": "#4f46e5"
+      "resizeMode": "contain"
+      
     },
     "updates": {
       "fallbackToCacheTimeout": 0

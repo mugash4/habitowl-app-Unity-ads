@@ -7,6 +7,7 @@ import {
   Alert,
   Animated,
   Platform,
+  KeyboardAvoidingView,
   Dimensions
 } from 'react-native';
 import {
@@ -22,6 +23,8 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 import FirebaseService from '../services/FirebaseService';
 import SubscriptionService from '../services/SubscriptionService';
+
+const { height } = Dimensions.get('window');
 
 const PremiumScreen = ({ navigation }) => {
   const [selectedPlan, setSelectedPlan] = useState('monthly');
@@ -259,15 +262,23 @@ const PremiumScreen = ({ navigation }) => {
   }
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView 
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={0}
+    >
       <Appbar.Header style={styles.appbarHeader}>
         <Appbar.BackAction onPress={() => navigation.goBack()} />
         <Appbar.Content title="Upgrade to Premium" />
       </Appbar.Header>
 
       <ScrollView 
+        style={styles.scrollView}
         contentContainerStyle={styles.scrollViewContent}
         showsVerticalScrollIndicator={true}
+        bounces={true}
+        overScrollMode="always"
+        nestedScrollEnabled={true}
       >
         <Animated.View style={{ opacity: fadeAnim }}>
           {/* Header */}
@@ -377,7 +388,7 @@ const PremiumScreen = ({ navigation }) => {
           </View>
         </Animated.View>
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -401,6 +412,9 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
     color: '#6b7280',
+  },
+  scrollView: {
+    flex: 1,
   },
   scrollViewContent: {
     paddingBottom: 40,

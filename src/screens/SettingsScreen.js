@@ -4,711 +4,593 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  TouchableOpacity,
   Alert,
-  Share,
-  Linking,
+  Switch,
+  ActivityIndicator,
   Platform,
 } from 'react-native';
-import {
-  List,
-  Card,
-  Button,
-  Switch,
-  Dialog,
-  Portal,
-  TextInput,
-} from 'react-native-paper';
-import { LinearGradient } from 'expo-linear-gradient';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import FirebaseService from '../services/FirebaseService';
-import SecureAIService from '../services/SecureAIService';
-import NotificationService from '../services/NotificationService';
-import ContactSupport from '../components/ContactSupport';
-import AdminService from '../services/AdminService';
-
-let PromoOfferBanner = null;
-try {
-  const PromoModule = require('../components/PromoOfferBanner');
-  PromoOfferBanner = PromoModule.default || PromoModule;
-  console.log('✅ PromoOfferBanner loaded');
-} catch (error) {
-  console.log('ℹ️ PromoOfferBanner not available (non-critical)');
-}
+import DataExportService from '../services/DataExportService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const SettingsScreen = ({ navigation }) => {
-  const user = FirebaseService.currentUser;
-  const [userStats, setUserStats] = useState({
-    displayName: user?.displayName || 'User',
-    email: user?.email || '',
-    totalHabits: 0,
-    longestStreak: 0,
-    referralCount: 0,
-    referralCode: ''
+  const [user, setUser] = useState(null);
+  const [settings, setSettings] = useState({
+    notifications: true,
+    darkMode: false,
+    soundEffects: true,
   });
-  
-  const [isPremium, setIsPremium] = useState(false);
-  const [showReferralDialog, setShowReferralDialog] = useState(false);
-  const [showContactSupport, setShowContactSupport] = useState(false);
-  const [apiProvider, setApiProvider] = useState('deepseek');
-  const [referralCode, setReferralCode] = useState('');
-  const [notifications, setNotifications] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isDeletionRequested, setIsDeletionRequested] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    console.log('SettingsScreen: Mounted ✅');
-    loadAllDataInBackground();
+    loadUserData();
+    loadSettings();
   }, []);
 
-  const loadAllDataInBackground = async () => {
-    setIsLoading(true);
-    
+  const loadUserData = async () => {
     try {
-      await Promise.allSettled([
-        loadUserDataSafely(),
-        loadSettingsSafely(),
-        checkAdminStatusSafely()
-      ]);
+      const currentUser = await FirebaseService.getCurrentUser();
+      setUser(currentUser);
+
+      // Check if user has pending deletion request
+      if (currentUser) {
+        const userDoc = await FirebaseService.getUserData(currentUser.uid);
+        if (userDoc?.deletionRequestedAt) {
+          setIsDeletionRequested(true);
+        }
+      }
     } catch (error) {
-      console.log('SettingsScreen: Background load error:', error.message);
+      console.error('Error loading user data:', error);
     } finally {
       setIsLoading(false);
-      console.log('SettingsScreen: Data loaded ✅');
     }
   };
 
-  const loadUserDataSafely = async () => {
+  const loadSettings = async () => {
     try {
-      const timeout = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout')), 3000)
-      );
-      
-      const stats = await Promise.race([
-        FirebaseService.getUserStats(),
-        timeout
-      ]);
-      
-      if (stats && typeof stats === 'object') {
-        setUserStats(prevStats => ({
-          ...prevStats,
-          ...stats
-        }));
-        setIsPremium(!!stats.isPremium);
+      const savedSettings = await AsyncStorage.getItem('app_settings');
+      if (savedSettings) {
+        setSettings(JSON.parse(savedSettings));
       }
     } catch (error) {
-      console.log('User data load failed:', error.message);
+      console.error('Error loading settings:', error);
     }
   };
 
-  const loadSettingsSafely = async () => {
+  const saveSettings = async (newSettings) => {
     try {
-      const timeout = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout')), 2000)
-      );
+      await AsyncStorage.setItem('app_settings', JSON.stringify(newSettings));
+      setSettings(newSettings);
+    } catch (error) {
+      console.error('Error saving settings:', error);
+    }
+  };
+
+  const toggleSetting = (key) => {
+    const newSettings = {
+      ...settings,
+      [key]: !settings[key],
+    };
+    saveSettings(newSettings);
+  };
+
+  // Export data as JSON
+  const handleExportJSON = async () => {
+    if (!user) {
+      Alert.alert('Error', 'Please sign in to export your data');
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      const result = await DataExportService.exportUserDataAsJSON(user.uid);
       
-      const settingsPromise = (async () => {
-        const stats = await FirebaseService.getUserStats();
-        return await SecureAIService.getActiveProvider(stats?.isPremium || false);
-      })();
-      
-      const provider = await Promise.race([settingsPromise, timeout]);
-      if (provider) {
-        setApiProvider(provider);
+      if (result.success) {
+        Alert.alert(
+          'Export Successful',
+          `Your data has been exported to:\n${result.fileName}\n\nThe file is ready to share.`,
+          [
+            {
+              text: 'OK',
+              onPress: () => console.log('Export completed'),
+            },
+          ]
+        );
+      } else {
+        Alert.alert('Export Failed', result.error || 'Could not export data');
       }
     } catch (error) {
-      console.log('Settings load failed:', error.message);
-      setApiProvider('deepseek');
+      console.error('Export error:', error);
+      Alert.alert('Export Failed', 'An error occurred while exporting your data');
+    } finally {
+      setIsExporting(false);
     }
   };
 
-  const checkAdminStatusSafely = async () => {
+  // Export data as CSV
+  const handleExportCSV = async () => {
+    if (!user) {
+      Alert.alert('Error', 'Please sign in to export your data');
+      return;
+    }
+
+    setIsExporting(true);
     try {
-      const user = FirebaseService.currentUser;
-      if (!user?.email) {
-        return;
-      }
+      const result = await DataExportService.exportHabitsAsCSV(user.uid);
       
-      const timeout = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout')), 1000)
-      );
-      
-      const adminStatus = await Promise.race([
-        AdminService.checkAdminStatus(user.email),
-        timeout
-      ]);
-      
-      setIsAdmin(!!adminStatus);
-      
-      if (adminStatus && !isPremium) {
-        FirebaseService.updateUserPremiumStatus(true).catch(() => {});
-        setIsPremium(true);
+      if (result.success) {
+        Alert.alert(
+          'Export Successful',
+          `Your habits have been exported to:\n${result.fileName}\n\nYou can open this file in Excel or Google Sheets.`,
+          [
+            {
+              text: 'OK',
+              onPress: () => console.log('CSV export completed'),
+            },
+          ]
+        );
+      } else {
+        Alert.alert('Export Failed', result.error || 'Could not export habits');
       }
     } catch (error) {
-      console.log('Admin check failed:', error.message);
-      setIsAdmin(false);
+      console.error('CSV export error:', error);
+      Alert.alert('Export Failed', 'An error occurred while exporting habits');
+    } finally {
+      setIsExporting(false);
     }
   };
 
-  const handlePremiumUpgrade = () => {
-    try {
-      navigation.getParent()?.navigate('Premium');
-    } catch (error) {
-      Alert.alert('Info', 'Premium upgrade screen is being loaded...');
-    }
+  // Download data before deletion
+  const handleDownloadBeforeDeletion = async () => {
+    if (!user) return;
+
+    Alert.alert(
+      'Download Your Data',
+      'Your complete data will be exported as a JSON file before proceeding with account deletion.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Download',
+          onPress: async () => {
+            setIsExporting(true);
+            try {
+              const result = await FirebaseService.downloadDataBeforeDeletion(user.uid);
+              
+              if (result.success) {
+                Alert.alert(
+                  'Download Complete',
+                  'Your data has been downloaded. Would you like to proceed with account deletion?',
+                  [
+                    {
+                      text: 'Cancel',
+                      style: 'cancel',
+                    },
+                    {
+                      text: 'Delete Account',
+                      style: 'destructive',
+                      onPress: handleRequestAccountDeletion,
+                    },
+                  ]
+                );
+              } else {
+                Alert.alert('Download Failed', result.error || 'Could not download data');
+              }
+            } catch (error) {
+              console.error('Download error:', error);
+              Alert.alert('Error', 'Failed to download your data');
+            } finally {
+              setIsExporting(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
-  const handleSignOut = () => {
+  // Request account deletion
+  const handleRequestAccountDeletion = async () => {
+    if (!user) return;
+
+    Alert.alert(
+      'Delete Account',
+      'Are you sure you want to delete your account? This action:\n\n• Will be processed within 30 days\n• Cannot be undone after processing\n• Will permanently delete all your data\n\nWe recommend downloading your data first.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Download Data First',
+          onPress: handleDownloadBeforeDeletion,
+        },
+        {
+          text: 'Delete Without Download',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const result = await FirebaseService.requestAccountDeletion(
+                user.uid,
+                'User requested deletion from settings'
+              );
+
+              if (result.success) {
+                setIsDeletionRequested(true);
+                Alert.alert(
+                  'Deletion Request Submitted',
+                  'Your account deletion request has been submitted. You will receive an email confirmation. Your account will be deleted within 30 days.',
+                  [
+                    {
+                      text: 'OK',
+                      onPress: () => navigation.goBack(),
+                    },
+                  ]
+                );
+              } else {
+                Alert.alert('Error', result.error || 'Could not submit deletion request');
+              }
+            } catch (error) {
+              console.error('Deletion request error:', error);
+              Alert.alert('Error', 'Failed to submit deletion request');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Sign out
+  const handleSignOut = async () => {
     Alert.alert(
       'Sign Out',
       'Are you sure you want to sign out?',
       [
-        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
         {
           text: 'Sign Out',
           style: 'destructive',
           onPress: async () => {
             try {
               await FirebaseService.signOut();
-              navigation.getParent()?.replace('Auth');
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'Auth' }],
+              });
             } catch (error) {
-              Alert.alert('Error', 'Failed to sign out. Please try again.');
+              console.error('Sign out error:', error);
+              Alert.alert('Error', 'Failed to sign out');
             }
-          }
-        }
+          },
+        },
       ]
     );
   };
 
-  const handleShareApp = async () => {
-    try {
-      const code = userStats?.referralCode || 'HABITOWL';
-      const message = `Check out HabitOwl - the smart habit tracker!\n\nUse code: ${code}\n\nDownload: https://habitowl-app.web.app`;
-      
-      await Share.share({ 
-        message, 
-        title: 'Join me on HabitOwl!' 
-      });
-      
-      await FirebaseService.trackEvent('app_shared', {
-        method: 'native_share',
-        referral_code: code
-      }).catch(() => {});
-    } catch (error) {
-      if (error.message !== 'User did not share') {
-        console.error('Share error:', error);
-      }
-    }
-  };
-
-  const handleReferralSubmit = async () => {
-    if (!referralCode.trim()) {
-      Alert.alert('Error', 'Please enter a referral code');
-      return;
-    }
-
-    try {
-      await FirebaseService.processReferral(referralCode.trim().toUpperCase());
-      setShowReferralDialog(false);
-      setReferralCode('');
-      Alert.alert('Success!', 'Referral code applied successfully!');
-      await loadUserDataSafely();
-    } catch (error) {
-      Alert.alert('Error', error.message || 'Failed to process referral code');
-    }
-  };
-
-  const handleAboutPress = () => {
-    try {
-      navigation.getParent()?.navigate('About');
-    } catch (error) {
-      Alert.alert('Info', 'About section coming soon!');
-    }
-  };
-
-  const handleAdminPress = () => {
-    if (isAdmin) {
-      try {
-        navigation.getParent()?.navigate('Admin');
-      } catch (error) {
-        Alert.alert('Error', 'Unable to open Admin panel');
-      }
-    }
-  };
-
-  const handleContactSupport = () => {
-    console.log('Opening support chat...');
-    setShowContactSupport(true);
-  
-    FirebaseService.trackEvent('support_chat_opened', {
-      from_screen: 'settings'
-    }).catch(err => console.log('Analytics tracking failed:', err));
-  };
-
-  const handlePrivacyPolicy = () => {
-    Linking.openURL('https://habitowl-3405d.web.app/privacy').catch(() => 
-      Alert.alert('Error', 'Unable to open privacy policy')
-    );
-  };
-
-  const handleTermsOfService = () => {
-    Linking.openURL('https://habitowl-3405d.web.app/terms').catch(() => 
-      Alert.alert('Error', 'Unable to open terms of service')
-    );
-  };
-
-  const handleStatisticsPress = () => {
-    try {
-      navigation.navigate('Statistics');
-    } catch (error) {
-      Alert.alert('Info', 'Please use the Statistics tab');
-    }
-  };
-
-  const toggleNotifications = async (enabled) => {
-    try {
-      setNotifications(enabled);
-      if (!enabled) {
-        await NotificationService.cancelAllNotifications();
-      }
-    } catch (error) {
-      console.error('Error toggling notifications:', error);
-      setNotifications(!enabled);
-    }
-  };
-
-  const renderUserInfo = () => {
-    const user = FirebaseService.currentUser;
-    if (!user) return null;
-
+  if (isLoading) {
     return (
-      <Card style={styles.card}>
-        <LinearGradient colors={['#4f46e5', '#7c3aed']} style={styles.userInfoGradient}>
-          <View style={styles.userInfo}>
-            <View style={styles.avatar}>
-              <Icon name="account" size={40} color="#ffffff" />
-            </View>
-            <View style={styles.userDetails}>
-              <Text style={styles.userName}>
-                {userStats.displayName}
-              </Text>
-              <Text style={styles.userEmail}>{userStats.email}</Text>
-              <View style={styles.badgeContainer}>
-                {isPremium && (
-                  <View style={styles.premiumBadge}>
-                    <Icon name="crown" size={16} color="#f59e0b" />
-                    <Text style={styles.premiumText}>Premium</Text>
-                  </View>
-                )}
-                {isAdmin && (
-                  <View style={styles.adminBadge}>
-                    <Icon name="shield-check" size={16} color="#ef4444" />
-                    <Text style={styles.adminText}>Admin</Text>
-                  </View>
-                )}
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{userStats.totalHabits || 0}</Text>
-              <Text style={styles.statLabel}>Habits</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{userStats.longestStreak || 0}</Text>
-              <Text style={styles.statLabel}>Best Streak</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{userStats.referralCount || 0}</Text>
-              <Text style={styles.statLabel}>Referrals</Text>
-            </View>
-          </View>
-        </LinearGradient>
-      </Card>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#4CAF50" />
+      </View>
     );
-  };
+  }
 
   return (
-    <View style={styles.container}>
-      <ScrollView 
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        // ✅ FIX: Ensure scroll is enabled and works smoothly
-        scrollEnabled={true}
-        bounces={true}
-        alwaysBounceVertical={true}
-        nestedScrollEnabled={true}
-      >
-        {renderUserInfo()}
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="arrow-back" size={24} color="#333" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Settings</Text>
+          <View style={styles.backButton} />
+        </View>
 
-        {!isPremium && !isAdmin && PromoOfferBanner && (
-          <View style={styles.promoContainer}>
-            <PromoOfferBanner onUpgradePress={handlePremiumUpgrade} />
+        {/* User Profile Section */}
+        {user && (
+          <View style={styles.profileSection}>
+            <View style={styles.profileIcon}>
+              <Ionicons name="person" size={32} color="#4CAF50" />
+            </View>
+            <Text style={styles.profileName}>{user.displayName || 'User'}</Text>
+            <Text style={styles.profileEmail}>{user.email}</Text>
+            
+            {isDeletionRequested && (
+              <View style={styles.deletionBanner}>
+                <Ionicons name="warning" size={20} color="#ff9800" />
+                <Text style={styles.deletionBannerText}>
+                  Account deletion pending
+                </Text>
+              </View>
+            )}
           </View>
         )}
 
-        {!isPremium && !isAdmin && (
-          <Card style={styles.card}>
-            <List.Item
-              title="Upgrade to Premium"
-              description="Remove ads, unlimited habits, AI coaching"
-              left={(props) => <List.Icon {...props} icon="crown" color="#f59e0b" />}
-              right={(props) => <List.Icon {...props} icon="chevron-right" />}
-              onPress={handlePremiumUpgrade}
-              titleStyle={styles.listItemTitle}
-              descriptionStyle={styles.listItemDescription}
+        {/* App Settings Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>App Settings</Text>
+          
+          <View style={styles.settingItem}>
+            <View style={styles.settingLeft}>
+              <Ionicons name="notifications-outline" size={24} color="#666" />
+              <Text style={styles.settingText}>Notifications</Text>
+            </View>
+            <Switch
+              value={settings.notifications}
+              onValueChange={() => toggleSetting('notifications')}
+              trackColor={{ false: '#ccc', true: '#4CAF50' }}
+              thumbColor="#fff"
             />
-          </Card>
-        )}
+          </View>
 
-        <Card style={styles.card}>
-          <List.Subheader style={styles.subheader}>AI & Personalization</List.Subheader>
-          
-          {isAdmin && (
-            <List.Item
-              title="AI Powered"
-              description={`Currently using: ${apiProvider.toUpperCase()}`}
-              left={(props) => <List.Icon {...props} icon="robot" />}
-              titleStyle={styles.listItemTitle}
-              descriptionStyle={styles.listItemDescription}
+          <View style={styles.settingItem}>
+            <View style={styles.settingLeft}>
+              <Ionicons name="moon-outline" size={24} color="#666" />
+              <Text style={styles.settingText}>Dark Mode</Text>
+            </View>
+            <Switch
+              value={settings.darkMode}
+              onValueChange={() => toggleSetting('darkMode')}
+              trackColor={{ false: '#ccc', true: '#4CAF50' }}
+              thumbColor="#fff"
             />
-          )}
+          </View>
 
-          <List.Item
-            title="Smart Coaching"
-            description={isPremium || isAdmin ? "AI-powered coaching is available! Go to any habit and tap the lightbulb icon to get personalized insights and suggestions." : "Upgrade to Premium to unlock AI coaching"}
-            left={(props) => <List.Icon {...props} icon="brain" />}
-            right={(props) => <List.Icon {...props} icon="chevron-right" />}
-            onPress={() => {
-              if (!isPremium && !isAdmin) {
-                Alert.alert(
-                  'Premium Feature',
-                  'Smart Coaching is available for Premium subscribers only. Upgrade now to get personalized AI-powered habit coaching!',
-                  [
-                    { text: 'Maybe Later', style: 'cancel' },
-                    { text: 'Upgrade to Premium', onPress: handlePremiumUpgrade }
-                  ]
-                );
-              } else {
-                Alert.alert(
-                  '💡 How to Use AI Coaching',
-                  'AI-powered coaching is available!\n\n1. Go to Home screen\n2. Find any habit card\n3. Tap the lightbulb (💡) icon on the habit\n4. Ask questions and get personalized coaching!\n\nThe lightbulb icon is located next to each habit name.',
-                  [{ text: 'Got it!', style: 'default' }]
-                );
-              }
-            }}
-            titleStyle={styles.listItemTitle}
-            descriptionStyle={styles.listItemDescription}
-          />
-          
-          {isAdmin && (
-            <List.Item
-              title="Admin Panel"
-              description="Manage app settings and API keys"
-              left={(props) => <List.Icon {...props} icon="shield-account" color="#ef4444" />}
-              right={(props) => <List.Icon {...props} icon="chevron-right" />}
-              onPress={handleAdminPress}
-              titleStyle={styles.listItemTitle}
-              descriptionStyle={styles.listItemDescription}
+          <View style={styles.settingItem}>
+            <View style={styles.settingLeft}>
+              <Ionicons name="volume-medium-outline" size={24} color="#666" />
+              <Text style={styles.settingText}>Sound Effects</Text>
+            </View>
+            <Switch
+              value={settings.soundEffects}
+              onValueChange={() => toggleSetting('soundEffects')}
+              trackColor={{ false: '#ccc', true: '#4CAF50' }}
+              thumbColor="#fff"
             />
-          )}
-        </Card>
+          </View>
+        </View>
 
-        <Card style={styles.card}>
-          <List.Subheader style={styles.subheader}>Social & Sharing</List.Subheader>
+        {/* Data Management & Privacy Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Data Management & Privacy</Text>
           
-          <List.Item
-            title="Share HabitOwl"
-            description="Invite friends and earn rewards"
-            left={(props) => <List.Icon {...props} icon="share" />}
-            onPress={handleShareApp}
-            titleStyle={styles.listItemTitle}
-            descriptionStyle={styles.listItemDescription}
-          />
+          <TouchableOpacity
+            style={styles.actionItem}
+            onPress={handleExportJSON}
+            disabled={isExporting}
+          >
+            <View style={styles.settingLeft}>
+              <Ionicons name="download-outline" size={24} color="#2196F3" />
+              <Text style={styles.actionText}>
+                {isExporting ? 'Exporting...' : 'Download My Data (JSON)'}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={24} color="#ccc" />
+          </TouchableOpacity>
 
-          <List.Item
-            title="Enter Referral Code"
-            description="Got a code from a friend?"
-            left={(props) => <List.Icon {...props} icon="ticket" />}
-            onPress={() => setShowReferralDialog(true)}
-            titleStyle={styles.listItemTitle}
-            descriptionStyle={styles.listItemDescription}
-          />
+          <TouchableOpacity
+            style={styles.actionItem}
+            onPress={handleExportCSV}
+            disabled={isExporting}
+          >
+            <View style={styles.settingLeft}>
+              <Ionicons name="document-text-outline" size={24} color="#2196F3" />
+              <Text style={styles.actionText}>
+                {isExporting ? 'Exporting...' : 'Export Habits (CSV)'}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={24} color="#ccc" />
+          </TouchableOpacity>
 
-          {userStats?.referralCode && (
-            <List.Item
-              title="Your Referral Code"
-              description={userStats.referralCode}
-              left={(props) => <List.Icon {...props} icon="card-text" />}
-              right={(props) => (
-                <Button
-                  compact
-                  mode="outlined"
-                  onPress={() => Share.share({ message: userStats.referralCode })}
-                  labelStyle={styles.buttonLabel}
-                >
-                  Share
-                </Button>
-              )}
-              titleStyle={styles.listItemTitle}
-              descriptionStyle={styles.listItemDescription}
-            />
-          )}
-        </Card>
+          <TouchableOpacity
+            style={styles.actionItem}
+            onPress={() => navigation.navigate('PrivacyPolicy')}
+          >
+            <View style={styles.settingLeft}>
+              <Ionicons name="shield-checkmark-outline" size={24} color="#4CAF50" />
+              <Text style={styles.actionText}>Privacy Policy</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={24} color="#ccc" />
+          </TouchableOpacity>
 
-        <Card style={styles.card}>
-          <List.Subheader style={styles.subheader}>App Settings</List.Subheader>
+          <TouchableOpacity
+            style={styles.actionItem}
+            onPress={() => navigation.navigate('TermsOfService')}
+          >
+            <View style={styles.settingLeft}>
+              <Ionicons name="document-outline" size={24} color="#4CAF50" />
+              <Text style={styles.actionText}>Terms of Service</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={24} color="#ccc" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Account Actions Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Account</Text>
           
-          <List.Item
-            title="Notifications"
-            description="Habit reminders and motivational messages"
-            left={(props) => <List.Icon {...props} icon="bell" />}
-            right={() => (
-              <Switch
-                value={notifications}
-                onValueChange={toggleNotifications}
-                color="#4f46e5"
-              />
-            )}
-            titleStyle={styles.listItemTitle}
-            descriptionStyle={styles.listItemDescription}
-          />
-
-          <List.Item
-            title="Statistics"
-            description="View your habit analytics"
-            left={(props) => <List.Icon {...props} icon="chart-line" />}
-            right={(props) => <List.Icon {...props} icon="chevron-right" />}
-            onPress={handleStatisticsPress}
-            titleStyle={styles.listItemTitle}
-            descriptionStyle={styles.listItemDescription}
-          />
-        </Card>
-
-        <Card style={styles.card}>
-          <List.Subheader style={styles.subheader}>Support & Legal</List.Subheader>
-          
-          <List.Item
-            title="Contact Support"
-            description="Get help or report issues"
-            left={(props) => <List.Icon {...props} icon="help-circle" />}
-            right={(props) => <List.Icon {...props} icon="chevron-right" />}
-            onPress={handleContactSupport}
-            titleStyle={styles.listItemTitle}
-            descriptionStyle={styles.listItemDescription}
-          />
-
-          <List.Item
-            title="About HabitOwl"
-            description="Learn more about the app"
-            left={(props) => <List.Icon {...props} icon="information" />}
-            right={(props) => <List.Icon {...props} icon="chevron-right" />}
-            onPress={handleAboutPress}
-            titleStyle={styles.listItemTitle}
-            descriptionStyle={styles.listItemDescription}
-          />
-
-          <List.Item
-            title="Privacy Policy"
-            left={(props) => <List.Icon {...props} icon="shield-account" />}
-            onPress={handlePrivacyPolicy}
-            titleStyle={styles.listItemTitle}
-          />
-
-          <List.Item
-            title="Terms of Service"
-            left={(props) => <List.Icon {...props} icon="file-document" />}
-            onPress={handleTermsOfService}
-            titleStyle={styles.listItemTitle}
-          />
-
-          <List.Item
-            title="App Version"
-            description="2.9.0"
-            left={(props) => <List.Icon {...props} icon="information" />}
-            titleStyle={styles.listItemTitle}
-            descriptionStyle={styles.listItemDescription}
-          />
-        </Card>
-
-        {/* ✅ FIX: Sign Out button now with guaranteed visibility */}
-        <Card style={styles.card}>
-          <List.Item
-            title="Sign Out"
-            titleStyle={styles.signOutText}
-            left={(props) => <List.Icon {...props} icon="logout" color="#ef4444" />}
+          <TouchableOpacity
+            style={styles.actionItem}
             onPress={handleSignOut}
-          />
-        </Card>
+          >
+            <View style={styles.settingLeft}>
+              <Ionicons name="log-out-outline" size={24} color="#FF9800" />
+              <Text style={[styles.actionText, { color: '#FF9800' }]}>
+                Sign Out
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={24} color="#ccc" />
+          </TouchableOpacity>
 
-        {/* ✅ FIX: Increased bottom padding to ensure Sign Out is fully visible */}
-        <View style={styles.bottomPadding} />
+          {!isDeletionRequested && (
+            <TouchableOpacity
+              style={styles.actionItem}
+              onPress={handleDownloadBeforeDeletion}
+            >
+              <View style={styles.settingLeft}>
+                <Ionicons name="trash-outline" size={24} color="#f44336" />
+                <Text style={[styles.actionText, { color: '#f44336' }]}>
+                  Delete Account
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={24} color="#ccc" />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* App Info */}
+        <View style={styles.appInfo}>
+          <Text style={styles.appInfoText}>HabitOwl v2.9.0</Text>
+          <Text style={styles.appInfoText}>© 2024 HabitOwl. All rights reserved.</Text>
+        </View>
       </ScrollView>
-
-      <ContactSupport 
-        visible={showContactSupport} 
-        onDismiss={() => setShowContactSupport(false)} 
-      />
-
-      <Portal>
-        <Dialog visible={showReferralDialog} onDismiss={() => setShowReferralDialog(false)}>
-          <Dialog.Title>Enter Referral Code</Dialog.Title>
-          <Dialog.Content>
-            <Text style={styles.dialogDescription}>
-              Enter a referral code from a friend to get started:
-            </Text>
-            
-            <TextInput
-              label="Referral Code"
-              value={referralCode}
-              onChangeText={setReferralCode}
-              mode="outlined"
-              autoCapitalize="characters"
-              style={styles.dialogInput}
-            />
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setShowReferralDialog(false)}>Cancel</Button>
-            <Button onPress={handleReferralSubmit}>Apply</Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f5f5f5',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
   },
   scrollView: {
     flex: 1,
   },
-  scrollContent: {
-    // ✅ FIX: Increased bottom padding to ensure all content visible above tab bar
-    paddingBottom: 120, // Increased from 20 to provide space for tab bar
-    flexGrow: 1, // ✅ FIX: Ensures content can grow and trigger scroll
-  },
-  card: {
-    margin: 16,
-    marginBottom: 8,
-  },
-  userInfoGradient: {
-    padding: 20,
-    borderRadius: 12,
-  },
-  userInfo: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
   },
-  avatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  backButton: {
+    width: 40,
+    height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
   },
-  userDetails: {
-    flex: 1,
-  },
-  userName: {
+  headerTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#ffffff',
+    fontWeight: '600',
+    color: '#333',
+  },
+  profileSection: {
+    backgroundColor: '#fff',
+    padding: 20,
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  profileIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#E8F5E9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  profileName: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#333',
     marginBottom: 4,
   },
-  userEmail: {
+  profileEmail: {
     fontSize: 14,
-    color: '#e0e7ff',
-    marginBottom: 8,
+    color: '#666',
   },
-  badgeContainer: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  premiumBadge: {
+  deletionBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(245, 158, 11, 0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    backgroundColor: '#FFF3E0',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginTop: 12,
   },
-  premiumText: {
-    color: '#f59e0b',
-    fontSize: 12,
-    fontWeight: 'bold',
-    marginLeft: 4,
+  deletionBannerText: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: '#ff9800',
+    fontWeight: '500',
   },
-  adminBadge: {
+  section: {
+    backgroundColor: '#fff',
+    marginTop: 20,
+    paddingVertical: 10,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#999',
+    textTransform: 'uppercase',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+  },
+  settingItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
-  adminText: {
-    color: '#ef4444',
-    fontSize: 12,
-    fontWeight: 'bold',
-    marginLeft: 4,
-  },
-  statsRow: {
+  settingLeft: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  statItem: {
     alignItems: 'center',
+    flex: 1,
   },
-  statValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#ffffff',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#c7d2fe',
-    marginTop: 4,
-  },
-  subheader: {
-    color: '#1f2937',
-    fontWeight: 'bold',
-  },
-  listItemTitle: {
-    color: '#1f2937',
-    fontWeight: '600',
-  },
-  listItemDescription: {
-    color: '#6b7280',
-  },
-  buttonLabel: {
-    color: '#4f46e5',
-    fontWeight: '600',
-  },
-  signOutText: {
-    color: '#ef4444',
-    fontWeight: '600',
-  },
-  dialogDescription: {
+  settingText: {
     fontSize: 16,
-    color: '#6b7280',
-    marginBottom: 16,
+    color: '#333',
+    marginLeft: 12,
   },
-  dialogInput: {
-    marginBottom: 16,
+  actionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
-  bottomPadding: {
-    height: 120, // ✅ FIXED: Space for tab bar + banner ad
+  actionText: {
+    fontSize: 16,
+    color: '#333',
+    marginLeft: 12,
   },
-  promoContainer: {
-    marginBottom: 8,
+  appInfo: {
+    alignItems: 'center',
+    paddingVertical: 30,
+  },
+  appInfoText: {
+    fontSize: 12,
+    color: '#999',
+    marginBottom: 4,
   },
 });
 
