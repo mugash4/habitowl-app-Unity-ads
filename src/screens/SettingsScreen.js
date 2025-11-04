@@ -34,13 +34,13 @@ const SettingsScreen = ({ navigation }) => {
 
   const loadUserData = async () => {
     try {
-      const currentUser = await FirebaseService.getCurrentUser();
+      const currentUser = FirebaseService.currentUser;
       setUser(currentUser);
 
       // Check if user has pending deletion request
       if (currentUser) {
-        const userDoc = await FirebaseService.getUserData(currentUser.uid);
-        if (userDoc?.deletionRequestedAt) {
+        const userData = await FirebaseService.getUserStats();
+        if (userData?.accountStatus === 'pending_deletion' || userData?.deletionRequestedAt) {
           setIsDeletionRequested(true);
         }
       }
@@ -88,7 +88,7 @@ const SettingsScreen = ({ navigation }) => {
 
     setIsExporting(true);
     try {
-      const result = await DataExportService.exportUserDataAsJSON(user.uid);
+      const result = await DataExportService.exportUserData(user.uid);
       
       if (result.success) {
         Alert.alert(
@@ -121,9 +121,9 @@ const SettingsScreen = ({ navigation }) => {
 
     setIsExporting(true);
     try {
-      const result = await DataExportService.exportHabitsAsCSV(user.uid);
+      const result = await DataExportService.exportHabitsCSV(user.uid);
       
-      if (result.success) {
+      if (result && result.success) {
         Alert.alert(
           'Export Successful',
           `Your habits have been exported to:\n${result.fileName}\n\nYou can open this file in Excel or Google Sheets.`,
@@ -135,7 +135,7 @@ const SettingsScreen = ({ navigation }) => {
           ]
         );
       } else {
-        Alert.alert('Export Failed', result.error || 'Could not export habits');
+        Alert.alert('Export Failed', result?.error || 'Could not export habits');
       }
     } catch (error) {
       console.error('CSV export error:', error);
@@ -145,39 +145,41 @@ const SettingsScreen = ({ navigation }) => {
     }
   };
 
-  // Download data before deletion
-  const handleDownloadBeforeDeletion = async () => {
+  // Request account deletion with download option
+  const handleRequestAccountDeletion = async () => {
     if (!user) return;
 
     Alert.alert(
-      'Download Your Data',
-      'Your complete data will be exported as a JSON file before proceeding with account deletion.',
+      'Delete Account?',
+      'Are you sure you want to delete your account? Your data will be archived for 90 days before permanent deletion. You can download your data first.',
       [
-        {
-          text: 'Cancel',
-          style: 'cancel',
+        { 
+          text: 'Cancel', 
+          style: 'cancel' 
         },
         {
-          text: 'Download',
+          text: 'Download Data First',
           onPress: async () => {
             setIsExporting(true);
             try {
-              const result = await FirebaseService.downloadDataBeforeDeletion(user.uid);
+              const result = await DataExportService.exportUserData(user.uid);
               
               if (result.success) {
                 Alert.alert(
-                  'Download Complete',
-                  'Your data has been downloaded. Would you like to proceed with account deletion?',
+                  'Data Downloaded',
+                  'Your data has been downloaded. Proceed with account deletion?',
                   [
-                    {
-                      text: 'Cancel',
-                      style: 'cancel',
+                    { 
+                      text: 'Cancel', 
+                      style: 'cancel' 
                     },
                     {
                       text: 'Delete Account',
                       style: 'destructive',
-                      onPress: handleRequestAccountDeletion,
-                    },
+                      onPress: async () => {
+                        await submitDeletionRequest();
+                      }
+                    }
                   ]
                 );
               } else {
@@ -189,61 +191,44 @@ const SettingsScreen = ({ navigation }) => {
             } finally {
               setIsExporting(false);
             }
-          },
+          }
         },
+        {
+          text: 'Delete Account',
+          style: 'destructive',
+          onPress: async () => {
+            await submitDeletionRequest();
+          }
+        }
       ]
     );
   };
 
-  // Request account deletion
-  const handleRequestAccountDeletion = async () => {
-    if (!user) return;
-
-    Alert.alert(
-      'Delete Account',
-      'Are you sure you want to delete your account? This action:\n\n• Will be processed within 30 days\n• Cannot be undone after processing\n• Will permanently delete all your data\n\nWe recommend downloading your data first.',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Download Data First',
-          onPress: handleDownloadBeforeDeletion,
-        },
-        {
-          text: 'Delete Without Download',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const result = await FirebaseService.requestAccountDeletion(
-                user.uid,
-                'User requested deletion from settings'
-              );
-
-              if (result.success) {
-                setIsDeletionRequested(true);
-                Alert.alert(
-                  'Deletion Request Submitted',
-                  'Your account deletion request has been submitted. You will receive an email confirmation. Your account will be deleted within 30 days.',
-                  [
-                    {
-                      text: 'OK',
-                      onPress: () => navigation.goBack(),
-                    },
-                  ]
-                );
-              } else {
-                Alert.alert('Error', result.error || 'Could not submit deletion request');
-              }
-            } catch (error) {
-              console.error('Deletion request error:', error);
-              Alert.alert('Error', 'Failed to submit deletion request');
+  const submitDeletionRequest = async () => {
+    try {
+      await FirebaseService.requestAccountDeletion('User requested deletion from settings');
+      
+      setIsDeletionRequested(true);
+      Alert.alert(
+        'Request Submitted',
+        'Your account deletion request has been submitted. Your data will be archived for 90 days before permanent deletion.',
+        [
+          {
+            text: 'OK',
+            onPress: async () => {
+              await FirebaseService.signOut();
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'Auth' }],
+              });
             }
-          },
-        },
-      ]
-    );
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Deletion request error:', error);
+      Alert.alert('Error', 'Failed to submit deletion request');
+    }
   };
 
   // Sign out
@@ -312,7 +297,7 @@ const SettingsScreen = ({ navigation }) => {
               <View style={styles.deletionBanner}>
                 <Ionicons name="warning" size={20} color="#ff9800" />
                 <Text style={styles.deletionBannerText}>
-                  Account deletion pending
+                  Account deletion pending (90 days)
                 </Text>
               </View>
             )}
@@ -397,7 +382,7 @@ const SettingsScreen = ({ navigation }) => {
 
           <TouchableOpacity
             style={styles.actionItem}
-            onPress={() => navigation.navigate('PrivacyPolicy')}
+            onPress={() => navigation.navigate('About')}
           >
             <View style={styles.settingLeft}>
               <Ionicons name="shield-checkmark-outline" size={24} color="#4CAF50" />
@@ -408,7 +393,7 @@ const SettingsScreen = ({ navigation }) => {
 
           <TouchableOpacity
             style={styles.actionItem}
-            onPress={() => navigation.navigate('TermsOfService')}
+            onPress={() => navigation.navigate('About')}
           >
             <View style={styles.settingLeft}>
               <Ionicons name="document-outline" size={24} color="#4CAF50" />
@@ -435,19 +420,34 @@ const SettingsScreen = ({ navigation }) => {
             <Ionicons name="chevron-forward" size={24} color="#ccc" />
           </TouchableOpacity>
 
+          {/* NEW: Account Deletion Option */}
           {!isDeletionRequested && (
             <TouchableOpacity
               style={styles.actionItem}
-              onPress={handleDownloadBeforeDeletion}
+              onPress={handleRequestAccountDeletion}
             >
               <View style={styles.settingLeft}>
                 <Ionicons name="trash-outline" size={24} color="#f44336" />
                 <Text style={[styles.actionText, { color: '#f44336' }]}>
-                  Delete Account
+                  Request Account Deletion
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={24} color="#ccc" />
             </TouchableOpacity>
+          )}
+
+          {isDeletionRequested && (
+            <View style={styles.deletionInfoCard}>
+              <Ionicons name="information-circle" size={24} color="#ff9800" />
+              <View style={styles.deletionInfoText}>
+                <Text style={styles.deletionInfoTitle}>
+                  Deletion Request Pending
+                </Text>
+                <Text style={styles.deletionInfoDescription}>
+                  Your account will be permanently deleted after 90 days. You can still download your data during this period.
+                </Text>
+              </View>
+            </View>
           )}
         </View>
 
@@ -582,6 +582,32 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     marginLeft: 12,
+  },
+  deletionInfoCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFF3E0',
+    padding: 16,
+    marginHorizontal: 20,
+    marginVertical: 12,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#ff9800',
+  },
+  deletionInfoText: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  deletionInfoTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#e65100',
+    marginBottom: 4,
+  },
+  deletionInfoDescription: {
+    fontSize: 14,
+    color: '#ef6c00',
+    lineHeight: 20,
   },
   appInfo: {
     alignItems: 'center',
