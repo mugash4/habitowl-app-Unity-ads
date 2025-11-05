@@ -75,10 +75,9 @@ const HomeScreen = ({ navigation, route }) => {
       await new Promise(resolve => setTimeout(resolve, 300));
       const userHabits = await FirebaseService.getUserHabits(true);
     
-       const userStats = await FirebaseService.getUserStats();
+      const userStats = await FirebaseService.getUserStats();
       let premiumStatus = userStats?.isPremium || false;
-      let adminStatus = false;
-  
+    
       if (!premiumStatus) {
         const user = FirebaseService.currentUser;
         if (user && user.email) {
@@ -86,21 +85,11 @@ const HomeScreen = ({ navigation, route }) => {
           const isAdmin = await AdminService.checkAdminStatus(user.email);
           if (isAdmin) {
             console.log('✅ Admin detected, granting premium access');
-            adminStatus = true;
             premiumStatus = true;
             await FirebaseService.updateUserPremiumStatus(true);
-            // ✅ FIX: Update AdMob service with admin status
-            await adMobService.setPremiumStatus(true, true);
-          } else {
-            // ✅ FIX: Update AdMob service for regular users
-            await adMobService.setPremiumStatus(premiumStatus, false);
           }
         }
-      } else {
-        // ✅ FIX: Update AdMob service for premium users
-        await adMobService.setPremiumStatus(premiumStatus, false);
       }
-
     
       if (!isActive) {
         console.log('⚠️ Component unmounted, skipping state update');

@@ -615,51 +615,6 @@ class FirebaseService {
     }
   }
 
-    // ===== NEW: DATA EXPORT & ACCOUNT DELETION METHODS =====
-
-  async requestAccountDeletion(reason = '') {
-    if (!this.currentUser) throw new Error('User not authenticated');
-
-    try {
-      const userId = this.currentUser.uid;
-      const userEmail = this.currentUser.email;
-
-      // Create deletion request
-      await addDoc(collection(db, 'deletion_requests'), {
-        userId: userId,
-        userEmail: userEmail,
-        requestedAt: new Date().toISOString(),
-        reason: reason,
-        status: 'pending',
-        scheduledDeletionDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString()
-      });
-
-      // Mark user account as pending deletion
-      await this.updateUserStats({
-        accountStatus: 'pending_deletion',
-        deletionRequestedAt: new Date().toISOString()
-      });
-
-      console.log('✅ Account deletion requested');
-      return true;
-    } catch (error) {
-      console.error('❌ Error requesting account deletion:', error);
-      throw error;
-    }
-  }
-
-  async downloadDataBeforeDeletion() {
-    if (!this.currentUser) throw new Error('User not authenticated');
-
-    try {
-      const DataExportService = require('./DataExportService').default;
-      return await DataExportService.exportUserData(this.currentUser.uid);
-    } catch (error) {
-      console.error('❌ Error downloading data:', error);
-      throw error;
-    }
-  }
-
 }
 
 export default new FirebaseService();

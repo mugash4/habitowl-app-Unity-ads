@@ -12,29 +12,28 @@ service cloud.firestore {
       return request.auth.uid == userId;
     }
     
-    // Helper function to check if user is admin
+    // ✅ FIXED: Helper function to check if user is admin
     function isAdmin() {
       return isSignedIn() && 
         get(/databases/$(database)/documents/admin_config/settings)
         .data.admin_emails.hasAny([request.auth.token.email]);
     }
 
-    // Users collection - Allow admins to read all users
+    // ✅ FIXED: Users collection - Allow admins to read all users
     match /users/{userId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update: if isSignedIn() && (isOwner(resource.data.uid) || request.resource.data.uid == request.auth.uid || isAdmin());
-      allow delete: if isAdmin();
     }
 
-    // Habits collection - Allow admins to read all habits
+    // ✅ FIXED: Habits collection - Allow admins to read all habits
     match /habits/{habitId} {
       allow read: if isSignedIn() && (isOwner(resource.data.userId) || isAdmin());
       allow create: if isSignedIn();
       allow update, delete: if isSignedIn() && (isOwner(resource.data.userId) || isAdmin());
     }
 
-    // Admin config - Allow admin writes
+    // ✅ FIXED: Admin config - Allow admin writes
     match /admin_config/settings {
       allow read: if isSignedIn();
       allow write: if isAdmin();
@@ -51,7 +50,7 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Analytics - Allow admins to read
+    // ✅ FIXED: Analytics - Allow admins to read
     match /analytics/{analyticsId} {
       allow read: if isAdmin();
       allow create: if isSignedIn();
@@ -61,7 +60,6 @@ service cloud.firestore {
     match /referrals/{referralId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
-      allow delete: if isAdmin();
     }
 
     // Support Tickets - Users can create, read their own, admins can read all
@@ -70,30 +68,6 @@ service cloud.firestore {
       allow read: if isSignedIn() && 
         (resource.data.userId == request.auth.uid || isAdmin());
       allow update: if isAdmin();
-    }
-
-    // Crash Reports - Auto-created by app, admins can read
-    match /crash_reports/{reportId} {
-      allow create: if isSignedIn();
-      allow read: if isAdmin();
-    }
-
-    // Deletion Requests - Users can create their own, admins can read/update all
-    match /deletion_requests/{requestId} {
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
-    // Deleted Users Archive - Admin only (90-day retention)
-    match /deleted_users_archive/{archiveId} {
-      allow read, write: if isAdmin();
-    }
-
-    // Admin Actions Log - Admin only
-    match /admin_actions/{actionId} {
-      allow read, write: if isAdmin();
     }
   }
 }

@@ -8,7 +8,6 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 // Screens
 import AuthScreen from '../screens/AuthScreen';
-import ConsentScreen from '../screens/ConsentScreen';
 import HomeScreen from '../screens/HomeScreen';
 import CreateHabitScreen from '../screens/CreateHabitScreen';
 import EditHabitScreen from '../screens/EditHabitScreen';
@@ -17,8 +16,6 @@ import SettingsScreen from '../screens/SettingsScreen';
 import PremiumScreen from '../screens/PremiumScreen';
 import AdminScreen from '../screens/AdminScreen';
 import AboutScreen from '../screens/AboutScreen';
-import DeletionRequestsScreen from '../screens/DeletionRequestsScreen';
-import UserManagementScreen from '../screens/UserManagementScreen';
 
 // Components
 import ScreenWithAd from '../components/ScreenWithAd';
@@ -46,7 +43,7 @@ const theme = {
   },
 };
 
-// Calculate proper tab bar height
+// ✅ FIXED: Calculate proper tab bar height
 const getTabBarHeight = () => {
   const { height } = Dimensions.get('window');
   const baseHeight = 60;
@@ -55,7 +52,7 @@ const getTabBarHeight = () => {
   return baseHeight + notchPadding;
 };
 
-// Wrap each tab screen with ad banner
+// ✅ FIXED: Wrap each tab screen with ad banner
 const HomeScreenWithAd = (props) => (
   <ScreenWithAd>
     <HomeScreen {...props} />
@@ -74,7 +71,7 @@ const SettingsScreenWithAd = (props) => (
   </ScreenWithAd>
 );
 
-// Main Tab Navigator with proper spacing
+// ✅ FIXED: Main Tab Navigator with proper spacing
 const MainTabNavigator = () => {
   const [tabBarHeight] = useState(getTabBarHeight());
   
@@ -232,26 +229,6 @@ const AppNavigator = () => {
                   }}
                 />
                 <Stack.Screen 
-                  name="DeletionRequests" 
-                  component={DeletionRequestsScreen}
-                  options={{
-                    headerShown: false,
-                    presentation: 'modal',
-                    gestureEnabled: true,
-                    cardOverlayEnabled: true,
-                  }}
-                />
-                <Stack.Screen 
-                  name="UserManagement" 
-                  component={UserManagementScreen}
-                  options={{
-                    headerShown: false,
-                    presentation: 'modal',
-                    gestureEnabled: true,
-                    cardOverlayEnabled: true,
-                  }}
-                />
-                <Stack.Screen 
                   name="About" 
                   component={AboutScreen}
                   options={{
@@ -263,10 +240,7 @@ const AppNavigator = () => {
                 />
               </>
             ) : (
-              <>
-                <Stack.Screen name="Auth" component={AuthScreen} />
-                <Stack.Screen name="Consent" component={ConsentScreen} />
-              </>
+              <Stack.Screen name="Auth" component={AuthScreen} />
             )}
           </Stack.Navigator>
         </NavigationContainer>

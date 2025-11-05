@@ -309,7 +309,7 @@ const AdminScreen = ({ navigation }) => {
         {renderStats()}
 
         <Card style={styles.card}>
-          <List.Subheader>🔧 AI Configuration (Admin Only)</List.Subheader>
+          <List.Subheader> AI Configuration (Admin Only)</List.Subheader>
           
           <List.Item
             title="Configure API Keys"
@@ -341,7 +341,7 @@ const AdminScreen = ({ navigation }) => {
         </Card>
 
         <Card style={styles.card}>
-          <List.Subheader>📢 Marketing Tools</List.Subheader>
+          <List.Subheader> Marketing Tools</List.Subheader>
           
           <List.Item
             title="Create Promotional Offer"
@@ -359,29 +359,8 @@ const AdminScreen = ({ navigation }) => {
           />
         </Card>
 
-        {/* NEW: User & Data Management Section */}
         <Card style={styles.card}>
-          <List.Subheader>👥 User & Data Management</List.Subheader>
-          
-          <List.Item
-            title="User Management"
-            description="Manage users, suspend or terminate accounts"
-            left={(props) => <List.Icon {...props} icon="account-group" />}
-            right={(props) => <List.Icon {...props} icon="chevron-right" />}
-            onPress={() => navigation.navigate('UserManagement')}
-          />
-
-          <List.Item
-            title="Deletion Requests"
-            description="Handle GDPR/CCPA account deletion requests"
-            left={(props) => <List.Icon {...props} icon="delete-alert" />}
-            right={(props) => <List.Icon {...props} icon="chevron-right" />}
-            onPress={() => navigation.navigate('DeletionRequests')}
-          />
-        </Card>
-
-        <Card style={styles.card}>
-          <List.Subheader>⚡ Quick Actions</List.Subheader>
+          <List.Subheader> Quick Actions</List.Subheader>
           
           <List.Item
             title="Broadcast Notification"
@@ -401,7 +380,7 @@ const AdminScreen = ({ navigation }) => {
 
       <Portal>
         <Dialog visible={showApiDialog} onDismiss={() => setShowApiDialog(false)}>
-          <Dialog.Title>🔐 Configure API Key (Admin Only)</Dialog.Title>
+          <Dialog.Title> Configure API Key (Admin Only)</Dialog.Title>
           <Dialog.ScrollArea>
             <ScrollView contentContainerStyle={{ paddingHorizontal: 0 }}>
               <Dialog.Content>
