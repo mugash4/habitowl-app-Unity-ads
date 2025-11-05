@@ -589,7 +589,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     // ✅ FIX: Increased bottom padding to ensure all content visible above tab bar
-    paddingBottom: 120, // Increased from 20 to provide space for tab bar
+    paddingBottom: 160, // Increased from 20 to provide space for tab bar
     flexGrow: 1, // ✅ FIX: Ensures content can grow and trigger scroll
   },
   card: {
@@ -705,7 +705,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   bottomPadding: {
-    height: 120, // ✅ FIXED: Space for tab bar + banner ad
+    height: 160, // ✅ FIXED: Space for tab bar + banner ad
   },
   promoContainer: {
     marginBottom: 8,

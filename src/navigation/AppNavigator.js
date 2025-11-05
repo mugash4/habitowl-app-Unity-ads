@@ -43,12 +43,12 @@ const theme = {
   },
 };
 
-// ✅ FIXED: Calculate proper tab bar height
+// ✅ FIXED: Calculate proper tab bar height with system navigation consideration
 const getTabBarHeight = () => {
   const { height } = Dimensions.get('window');
   const baseHeight = 60;
-  const hasNotch = height > 800;
-  const notchPadding = hasNotch ? 20 : 0;
+  const hasNotch = height > 800; // iPhone X and newer, modern Android
+  const notchPadding = hasNotch ? 20 : 10;
   return baseHeight + notchPadding;
 };
 
@@ -71,7 +71,7 @@ const SettingsScreenWithAd = (props) => (
   </ScreenWithAd>
 );
 
-// ✅ FIXED: Main Tab Navigator with proper spacing
+// ✅ FIXED: Main Tab Navigator with proper spacing and no overlap
 const MainTabNavigator = () => {
   const [tabBarHeight] = useState(getTabBarHeight());
   
@@ -94,16 +94,21 @@ const MainTabNavigator = () => {
         tabBarActiveTintColor: '#4f46e5',
         tabBarInactiveTintColor: '#6b7280',
         tabBarStyle: {
+          // ✅ FIXED: Ensure tab bar stays at bottom with proper positioning
+          position: 'absolute', // Make it float above content
+          bottom: 0,
+          left: 0,
+          right: 0,
           backgroundColor: '#ffffff',
           borderTopWidth: 1,
           borderTopColor: '#e5e7eb',
           height: tabBarHeight,
           paddingBottom: Platform.OS === 'ios' ? 20 : 8,
           paddingTop: 8,
-          elevation: 8,
+          elevation: 10, // Higher elevation to stay on top
           shadowColor: '#000',
           shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.1,
+          shadowOpacity: 0.15,
           shadowRadius: 4,
         },
         tabBarLabelStyle: {

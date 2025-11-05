@@ -526,8 +526,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    // ✅ FIX: Increased padding to ensure content is fully visible above tab bar
-    paddingBottom: 100, // Increased from 80 to account for tab bar + banner ad
+    // ✅ FIXED: Add enough padding for banner ad + tab bar
+    paddingBottom: 160, // 60 (banner) + 80 (tab bar) + 20 (buffer) = 160
   },
   progressCard: {
     margin: 16,
@@ -609,16 +609,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 16,
   },
-  // ✅ FIX: Increased bottom padding
+  // ✅ FIXED: Increased bottom padding
   bottomPadding: {
-    height: 120, // Increased from 20 to provide more space
+    height: 160, // Match contentContainer padding
   },
   fab: {
     position: 'absolute',
     margin: 16,
     right: 0,
-    // ✅ FIX: Positioned above tab bar
-    bottom: 150, // Raised from 0 to sit above tab bar
+    // ✅ FIXED: Position FAB above banner ad and tab bar
+    bottom: 160, // 60 (banner) + 80 (tab bar) + 20 (buffer) = 160
     backgroundColor: '#4f46e5',
   },
   loadingContainer: {

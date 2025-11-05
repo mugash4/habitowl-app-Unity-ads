@@ -570,7 +570,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   bottomPadding: {
-    height: 120, // ✅ FIXED: Space for tab bar + banner ad
+    height: 160, // ✅ FIXED: Space for tab bar + banner ad
   },
   loadingContainer: {
     flex: 1,
