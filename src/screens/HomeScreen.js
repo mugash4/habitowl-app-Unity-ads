@@ -526,8 +526,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    // ✅ FIXED: Add enough padding for banner ad + tab bar
-    paddingBottom: 160, // 60 (banner) + 80 (tab bar) + 20 (buffer) = 160
+    // ✅ FIXED: Proper padding for banner ad + tab bar
+    paddingBottom: 140, // 60 (banner + padding) + 80 (tab bar with safe area)
   },
   progressCard: {
     margin: 16,
@@ -609,16 +609,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 16,
   },
-  // ✅ FIXED: Increased bottom padding
+  // ✅ FIXED: Proper bottom padding
   bottomPadding: {
-    height: 160, // Match contentContainer padding
+    height: 20, // Small buffer at the end
   },
   fab: {
     position: 'absolute',
     margin: 16,
     right: 0,
     // ✅ FIXED: Position FAB above banner ad and tab bar
-    bottom: 160, // 60 (banner) + 80 (tab bar) + 20 (buffer) = 160
+    bottom: 140, // 60 (banner) + 80 (tab bar)
     backgroundColor: '#4f46e5',
   },
   loadingContainer: {
@@ -633,5 +633,6 @@ const styles = StyleSheet.create({
     color: '#6b7280',
   },
 });
+
 
 export default HomeScreen;

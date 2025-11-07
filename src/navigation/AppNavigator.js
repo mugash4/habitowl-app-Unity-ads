@@ -19,6 +19,7 @@ import AboutScreen from '../screens/AboutScreen';
 
 // Components
 import ScreenWithAd from '../components/ScreenWithAd';
+import AdMobBanner from '../components/AdMobBanner';
 
 // Services
 import FirebaseService from '../services/FirebaseService';
@@ -43,7 +44,7 @@ const theme = {
   },
 };
 
-// ✅ FIXED: Calculate proper tab bar height with system navigation consideration
+// Calculate proper tab bar height with system navigation consideration
 const getTabBarHeight = () => {
   const { height } = Dimensions.get('window');
   const baseHeight = 60;
@@ -52,7 +53,7 @@ const getTabBarHeight = () => {
   return baseHeight + notchPadding;
 };
 
-// ✅ FIXED: Wrap each tab screen with ad banner
+// Wrap each tab screen with ad banner container
 const HomeScreenWithAd = (props) => (
   <ScreenWithAd>
     <HomeScreen {...props} />
@@ -71,75 +72,103 @@ const SettingsScreenWithAd = (props) => (
   </ScreenWithAd>
 );
 
-// ✅ FIXED: Main Tab Navigator with proper spacing and no overlap
-const MainTabNavigator = () => {
+// ✅ NEW: Tab Navigator Wrapper with Banner Below Tabs
+const TabNavigatorWithBanner = () => {
   const [tabBarHeight] = useState(getTabBarHeight());
+  const bannerHeight = 60; // Standard banner ad height
   
   return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        tabBarIcon: ({ focused, color, size }) => {
-          let iconName;
+    <View style={{ flex: 1 }}>
+      {/* Tab Navigator */}
+      <Tab.Navigator
+        screenOptions={({ route }) => ({
+          tabBarIcon: ({ focused, color, size }) => {
+            let iconName;
 
-          if (route.name === 'Home') {
-            iconName = focused ? 'home' : 'home-outline';
-          } else if (route.name === 'Statistics') {
-            iconName = focused ? 'chart-line' : 'chart-line';
-          } else if (route.name === 'Settings') {
-            iconName = focused ? 'cog' : 'cog-outline';
-          }
+            if (route.name === 'Home') {
+              iconName = focused ? 'home' : 'home-outline';
+            } else if (route.name === 'Statistics') {
+              iconName = focused ? 'chart-line' : 'chart-line';
+            } else if (route.name === 'Settings') {
+              iconName = focused ? 'cog' : 'cog-outline';
+            }
 
-          return <Icon name={iconName} size={size} color={color} />;
-        },
-        tabBarActiveTintColor: '#4f46e5',
-        tabBarInactiveTintColor: '#6b7280',
-        tabBarStyle: {
-          // ✅ FIXED: Ensure tab bar stays at bottom with proper positioning
-          position: 'absolute', // Make it float above content
+            return <Icon name={iconName} size={size} color={color} />;
+          },
+          tabBarActiveTintColor: '#4f46e5',
+          tabBarInactiveTintColor: '#6b7280',
+          tabBarStyle: {
+            position: 'absolute',
+            // ✅ FIXED: Position tab bar ABOVE banner ad
+            bottom: Platform.OS === 'web' ? 0 : bannerHeight, // Leave space for banner below
+            left: 0,
+            right: 0,
+            backgroundColor: '#ffffff',
+            borderTopWidth: 1,
+            borderTopColor: '#e5e7eb',
+            height: tabBarHeight,
+            paddingBottom: Platform.OS === 'ios' ? 20 : 8,
+            paddingTop: 8,
+            elevation: 10,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: -2 },
+            shadowOpacity: 0.15,
+            shadowRadius: 4,
+          },
+          tabBarLabelStyle: {
+            fontSize: 12,
+            fontWeight: '500',
+          },
+          headerShown: false,
+        })}
+      >
+        <Tab.Screen 
+          name="Home" 
+          component={HomeScreenWithAd}
+          options={{
+            tabBarLabel: 'Habits',
+          }}
+        />
+        <Tab.Screen 
+          name="Statistics" 
+          component={StatisticsScreenWithAd}
+          options={{
+            tabBarLabel: 'Stats',
+          }}
+        />
+        <Tab.Screen 
+          name="Settings" 
+          component={SettingsScreenWithAd}
+          options={{
+            tabBarLabel: 'Settings',
+          }}
+        />
+      </Tab.Navigator>
+      
+      {/* ✅ BANNER AD BELOW TAB BAR */}
+      {Platform.OS !== 'web' && (
+        <View style={{
+          position: 'absolute',
           bottom: 0,
           left: 0,
           right: 0,
+          height: bannerHeight,
           backgroundColor: '#ffffff',
           borderTopWidth: 1,
           borderTopColor: '#e5e7eb',
-          height: tabBarHeight,
-          paddingBottom: Platform.OS === 'ios' ? 20 : 8,
-          paddingTop: 8,
-          elevation: 10, // Higher elevation to stay on top
+          alignItems: 'center',
+          justifyContent: 'center',
+          // Lower elevation so it stays below tab bar
+          elevation: 5,
           shadowColor: '#000',
           shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.15,
-          shadowRadius: 4,
-        },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '500',
-        },
-        headerShown: false,
-      })}
-    >
-      <Tab.Screen 
-        name="Home" 
-        component={HomeScreenWithAd}
-        options={{
-          tabBarLabel: 'Habits',
-        }}
-      />
-      <Tab.Screen 
-        name="Statistics" 
-        component={StatisticsScreenWithAd}
-        options={{
-          tabBarLabel: 'Stats',
-        }}
-      />
-      <Tab.Screen 
-        name="Settings" 
-        component={SettingsScreenWithAd}
-        options={{
-          tabBarLabel: 'Settings',
-        }}
-      />
-    </Tab.Navigator>
+          shadowOpacity: 0.1,
+          shadowRadius: 3,
+        }}>
+          <AdMobBanner />
+        </View>
+      )}
+    </View>
   );
 };
 
@@ -190,7 +219,7 @@ const AppNavigator = () => {
               <>
                 <Stack.Screen 
                   name="Main" 
-                  component={MainTabNavigator}
+                  component={TabNavigatorWithBanner}
                   options={{ headerShown: false }}
                 />
                 <Stack.Screen 

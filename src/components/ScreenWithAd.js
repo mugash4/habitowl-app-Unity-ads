@@ -1,7 +1,6 @@
 /**
  * Screen Wrapper with Banner Ad
- * Automatically adds banner ad above tab bar for free users
- * ✅ FIXED: Banner ad positioned above tab bar
+ * Banner ad positioned BELOW tab bar as requested
  */
 
 import React from 'react';
@@ -16,12 +15,8 @@ const ScreenWithAd = ({ children, style }) => {
         {children}
       </View>
       
-      {/* Banner Ad - Positioned above tab bar */}
-      {Platform.OS !== 'web' && (
-        <View style={styles.adContainer}>
-          <AdMobBanner />
-        </View>
-      )}
+      {/* Banner Ad - NO LONGER RENDERED HERE */}
+      {/* Banner will be rendered in AppNavigator below tabs */}
     </SafeAreaView>
   );
 };
@@ -33,27 +28,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingBottom: 0, // Content manages its own padding
-  },
-  adContainer: {
-    // ✅ FIXED: Position banner ad above tab bar
-    position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 80 : 60, // Above tab bar (iOS has notch padding)
-    left: 0,
-    right: 0,
-    width: '100%',
-    backgroundColor: '#ffffff',
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 60,
-    // Add shadow for better separation
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 5,
+    paddingBottom: 0,
   },
 });
 
