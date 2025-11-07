@@ -527,7 +527,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     // ✅ FIXED: Proper padding for banner ad + tab bar
-    paddingBottom: 140, // 60 (banner + padding) + 80 (tab bar with safe area)
+    paddingBottom: 148, // 60 (banner + padding) + 80 (tab bar with safe area)
   },
   progressCard: {
     margin: 16,
@@ -618,7 +618,7 @@ const styles = StyleSheet.create({
     margin: 16,
     right: 0,
     // ✅ FIXED: Position FAB above banner ad and tab bar
-    bottom: 140, // 60 (banner) + 80 (tab bar)
+    bottom: 148, // 60 (banner) + 80 (tab bar)
     backgroundColor: '#4f46e5',
   },
   loadingContainer: {

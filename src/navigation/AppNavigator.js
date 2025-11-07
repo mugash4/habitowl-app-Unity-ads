@@ -18,7 +18,6 @@ import AdminScreen from '../screens/AdminScreen';
 import AboutScreen from '../screens/AboutScreen';
 
 // Components
-import ScreenWithAd from '../components/ScreenWithAd';
 import AdMobBanner from '../components/AdMobBanner';
 
 // Services
@@ -53,33 +52,39 @@ const getTabBarHeight = () => {
   return baseHeight + notchPadding;
 };
 
-// Wrap each tab screen with ad banner container
-const HomeScreenWithAd = (props) => (
-  <ScreenWithAd>
-    <HomeScreen {...props} />
-  </ScreenWithAd>
-);
-
-const StatisticsScreenWithAd = (props) => (
-  <ScreenWithAd>
-    <StatisticsScreen {...props} />
-  </ScreenWithAd>
-);
-
-const SettingsScreenWithAd = (props) => (
-  <ScreenWithAd>
-    <SettingsScreen {...props} />
-  </ScreenWithAd>
-);
-
-// ✅ NEW: Tab Navigator Wrapper with Banner Below Tabs
-const TabNavigatorWithBanner = () => {
+// ✅ FIXED: Main Tab Navigator with banner ad integrated below tab bar
+const MainTabNavigator = () => {
   const [tabBarHeight] = useState(getTabBarHeight());
-  const bannerHeight = 60; // Standard banner ad height
+  const [showBanner, setShowBanner] = useState(false);
+
+  // Check if banner should show
+  useEffect(() => {
+    const checkBannerStatus = () => {
+      // Wait for AdMob to initialize
+      setTimeout(() => {
+        const shouldShow = AdMobService.shouldShowAds();
+        console.log('[TabNavigator] Should show banner:', shouldShow);
+        setShowBanner(shouldShow);
+      }, 1000);
+    };
+    
+    checkBannerStatus();
+    
+    // Subscribe to premium status changes
+    const unsubscribe = AdMobService.onPremiumStatusChange((isPremiumOrAdmin) => {
+      console.log('[TabNavigator] Premium status changed:', isPremiumOrAdmin);
+      setShowBanner(!isPremiumOrAdmin);
+    });
+    
+    return unsubscribe;
+  }, []);
+
+  // Calculate heights
+  const bannerHeight = showBanner ? 60 : 0; // Banner height when visible
   
   return (
     <View style={{ flex: 1 }}>
-      {/* Tab Navigator */}
+      {/* Main Tab Navigator */}
       <Tab.Navigator
         screenOptions={({ route }) => ({
           tabBarIcon: ({ focused, color, size }) => {
@@ -99,8 +104,7 @@ const TabNavigatorWithBanner = () => {
           tabBarInactiveTintColor: '#6b7280',
           tabBarStyle: {
             position: 'absolute',
-            // ✅ FIXED: Position tab bar ABOVE banner ad
-            bottom: Platform.OS === 'web' ? 0 : bannerHeight, // Leave space for banner below
+            bottom: bannerHeight, // Position above banner
             left: 0,
             right: 0,
             backgroundColor: '#ffffff',
@@ -124,29 +128,29 @@ const TabNavigatorWithBanner = () => {
       >
         <Tab.Screen 
           name="Home" 
-          component={HomeScreenWithAd}
+          component={HomeScreen}
           options={{
             tabBarLabel: 'Habits',
           }}
         />
         <Tab.Screen 
           name="Statistics" 
-          component={StatisticsScreenWithAd}
+          component={StatisticsScreen}
           options={{
             tabBarLabel: 'Stats',
           }}
         />
         <Tab.Screen 
           name="Settings" 
-          component={SettingsScreenWithAd}
+          component={SettingsScreen}
           options={{
             tabBarLabel: 'Settings',
           }}
         />
       </Tab.Navigator>
-      
-      {/* ✅ BANNER AD BELOW TAB BAR */}
-      {Platform.OS !== 'web' && (
+
+      {/* ✅ Banner Ad - Positioned below tab bar, above system nav */}
+      {showBanner && Platform.OS !== 'web' && (
         <View style={{
           position: 'absolute',
           bottom: 0,
@@ -158,12 +162,8 @@ const TabNavigatorWithBanner = () => {
           borderTopColor: '#e5e7eb',
           alignItems: 'center',
           justifyContent: 'center',
-          // Lower elevation so it stays below tab bar
-          elevation: 5,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.1,
-          shadowRadius: 3,
+          zIndex: 999,
+          elevation: 20,
         }}>
           <AdMobBanner />
         </View>
@@ -219,7 +219,7 @@ const AppNavigator = () => {
               <>
                 <Stack.Screen 
                   name="Main" 
-                  component={TabNavigatorWithBanner}
+                  component={MainTabNavigator}
                   options={{ headerShown: false }}
                 />
                 <Stack.Screen 
