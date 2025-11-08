@@ -7,7 +7,6 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
-  KeyboardAvoidingView
 } from 'react-native';
 import {
   Card,
@@ -270,11 +269,7 @@ const AdminScreen = ({ navigation }) => {
   }
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={0}
-    >
+    <View style={styles.container}>
       <Appbar.Header style={styles.header}>
         <Appbar.BackAction onPress={() => navigation.goBack()} />
         <Appbar.Content title="Admin Dashboard" />
@@ -289,9 +284,9 @@ const AdminScreen = ({ navigation }) => {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={true}
+        scrollEnabled={true}
         bounces={true}
-        overScrollMode="always"
-        nestedScrollEnabled={true}
+        alwaysBounceVertical={true}
       >
         <Card style={[styles.card, styles.securityNotice]}>
           <Card.Content>
@@ -309,7 +304,7 @@ const AdminScreen = ({ navigation }) => {
         {renderStats()}
 
         <Card style={styles.card}>
-          <List.Subheader> AI Configuration (Admin Only)</List.Subheader>
+          <List.Subheader>🤖 AI Configuration (Admin Only)</List.Subheader>
           
           <List.Item
             title="Configure API Keys"
@@ -341,7 +336,7 @@ const AdminScreen = ({ navigation }) => {
         </Card>
 
         <Card style={styles.card}>
-          <List.Subheader> Marketing Tools</List.Subheader>
+          <List.Subheader>📢 Marketing Tools</List.Subheader>
           
           <List.Item
             title="Create Promotional Offer"
@@ -360,7 +355,7 @@ const AdminScreen = ({ navigation }) => {
         </Card>
 
         <Card style={styles.card}>
-          <List.Subheader> Quick Actions</List.Subheader>
+          <List.Subheader>⚡ Quick Actions</List.Subheader>
           
           <List.Item
             title="Broadcast Notification"
@@ -380,7 +375,7 @@ const AdminScreen = ({ navigation }) => {
 
       <Portal>
         <Dialog visible={showApiDialog} onDismiss={() => setShowApiDialog(false)}>
-          <Dialog.Title> Configure API Key (Admin Only)</Dialog.Title>
+          <Dialog.Title>🔐 Configure API Key (Admin Only)</Dialog.Title>
           <Dialog.ScrollArea>
             <ScrollView contentContainerStyle={{ paddingHorizontal: 0 }}>
               <Dialog.Content>
@@ -484,7 +479,7 @@ const AdminScreen = ({ navigation }) => {
           </Dialog.Actions>
         </Dialog>
       </Portal>
-    </KeyboardAvoidingView>
+    </View>
   );
 };
 
@@ -511,6 +506,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
+    flexGrow: 1,
     paddingBottom: 40,
   },
   sectionTitle: {

@@ -5,9 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   Linking,
-  Platform,
   Image,
-  KeyboardAvoidingView
 } from 'react-native';
 import {
   Card,
@@ -75,11 +73,7 @@ const AboutScreen = ({ navigation }) => {
   ];
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={0}
-    >
+    <View style={styles.container}>
       <Appbar.Header>
         <Appbar.BackAction onPress={() => navigation.goBack()} />
         <Appbar.Content title="About HabitOwl" />
@@ -89,11 +83,10 @@ const AboutScreen = ({ navigation }) => {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={true}
-        bounces={true}
-        overScrollMode="always"
+        scrollEnabled={true}
         nestedScrollEnabled={true}
       >
-        {/* App Header - FIXED: Using actual app logo instead of icon */}
+        {/* App Header */}
         <LinearGradient colors={['#4f46e5', '#7c3aed']} style={styles.header}>
           <View style={styles.logoImageContainer}>
             <Image 
@@ -289,7 +282,7 @@ const AboutScreen = ({ navigation }) => {
           </Text>
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   );
 };
 

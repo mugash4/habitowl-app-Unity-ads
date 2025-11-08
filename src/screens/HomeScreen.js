@@ -294,8 +294,6 @@ const HomeScreen = ({ navigation, route }) => {
     
     return (
       <LinearGradient colors={['#4f46e5', '#7c3aed']} style={styles.header}>
-        <StatusBar barStyle="light-content" backgroundColor="#4f46e5" />
-        
         <View style={styles.headerContent}>
           <View style={styles.greetingContainer}>
             <Text style={styles.greeting}>
@@ -378,6 +376,7 @@ const HomeScreen = ({ navigation, route }) => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
+        <StatusBar barStyle="light-content" backgroundColor="#4f46e5" />
         <Icon name="loading" size={40} color="#4f46e5" />
         <Text style={styles.loadingText}>Loading your habits...</Text>
       </View>
@@ -386,16 +385,20 @@ const HomeScreen = ({ navigation, route }) => {
 
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim }]} key={screenKey}>
-      {renderHeader()}
+      <StatusBar barStyle="light-content" backgroundColor="#4f46e5" />
       
+      {/* ✅ FIXED: Header now scrolls WITH the content */}
       <ScrollView
-        style={styles.content}
+        style={styles.scrollView}
         contentContainerStyle={styles.contentContainer}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
         showsVerticalScrollIndicator={false}
       >
+        {/* Header is now INSIDE ScrollView */}
+        {renderHeader()}
+        
         {/* Today's Progress */}
         {habits.length > 0 && (
           <Card style={styles.progressCard}>
@@ -441,7 +444,7 @@ const HomeScreen = ({ navigation, route }) => {
           </>
         )}
         
-        {/* ✅ FIX: Increased bottom padding to ensure banner is fully visible above tab bar */}
+        {/* Bottom padding for banner ad + tab bar */}
         <View style={styles.bottomPadding} />
       </ScrollView>
 
@@ -462,8 +465,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8fafc',
   },
+  scrollView: {
+    flex: 1,
+  },
+  contentContainer: {
+    paddingBottom: 148, // Banner + tab bar space
+  },
+  // ✅ FIXED: Header is now scrollable
   header: {
-    paddingTop: 40,
+    paddingTop: 50, // StatusBar height
     paddingBottom: 24,
   },
   headerContent: {
@@ -521,13 +531,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#c7d2fe',
     marginTop: 4,
-  },
-  content: {
-    flex: 1,
-  },
-  contentContainer: {
-    // ✅ FIXED: Proper padding for banner ad + tab bar
-    paddingBottom: 148, // 60 (banner + padding) + 80 (tab bar with safe area)
   },
   progressCard: {
     margin: 16,
@@ -609,16 +612,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 16,
   },
-  // ✅ FIXED: Proper bottom padding
   bottomPadding: {
-    height: 20, // Small buffer at the end
+    height: 20,
   },
   fab: {
     position: 'absolute',
     margin: 16,
     right: 0,
-    // ✅ FIXED: Position FAB above banner ad and tab bar
-    bottom: 148, // 60 (banner) + 80 (tab bar)
+    bottom: 148, // Above banner + tab bar
     backgroundColor: '#4f46e5',
   },
   loadingContainer: {
@@ -633,6 +634,5 @@ const styles = StyleSheet.create({
     color: '#6b7280',
   },
 });
-
 
 export default HomeScreen;

@@ -7,7 +7,6 @@ import {
   Alert,
   Animated,
   Platform,
-  KeyboardAvoidingView,
   Dimensions
 } from 'react-native';
 import {
@@ -162,7 +161,7 @@ const PremiumScreen = ({ navigation }) => {
       if (success) {
         // Purchase was successful (or is being processed)
         Alert.alert(
-          ' Welcome to Premium!',
+          '🎉 Welcome to Premium!',
           'Your 7-day free trial has started! You can cancel anytime before the trial ends.',
           [
             {
@@ -262,11 +261,7 @@ const PremiumScreen = ({ navigation }) => {
   }
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={0}
-    >
+    <View style={styles.container}>
       <Appbar.Header style={styles.appbarHeader}>
         <Appbar.BackAction onPress={() => navigation.goBack()} />
         <Appbar.Content title="Upgrade to Premium" />
@@ -276,9 +271,9 @@ const PremiumScreen = ({ navigation }) => {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollViewContent}
         showsVerticalScrollIndicator={true}
+        scrollEnabled={true}
         bounces={true}
-        overScrollMode="always"
-        nestedScrollEnabled={true}
+        alwaysBounceVertical={true}
       >
         <Animated.View style={{ opacity: fadeAnim }}>
           {/* Header */}
@@ -303,10 +298,10 @@ const PremiumScreen = ({ navigation }) => {
                 </View>
               </View>
               <Text style={styles.trialHighlightDescription}>
-                 Cancel anytime during trial{'\n'}
-                 No charges until trial ends{'\n'}
-                 Full access to all premium features{'\n'}
-                 Manage subscription in Google Play Store
+                ✓ Cancel anytime during trial{'\n'}
+                ✓ No charges until trial ends{'\n'}
+                ✓ Full access to all premium features{'\n'}
+                ✓ Manage subscription in Google Play Store
               </Text>
             </Card.Content>
           </Card>
@@ -388,7 +383,7 @@ const PremiumScreen = ({ navigation }) => {
           </View>
         </Animated.View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   );
 };
 
@@ -417,6 +412,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollViewContent: {
+    flexGrow: 1,
     paddingBottom: 40,
   },
   header: {
