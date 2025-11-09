@@ -64,7 +64,7 @@ class AdMobService {
     // Premium status listeners
     this.premiumStatusListeners = [];
     
-    // ✅ FIX: Start loading premium status immediately
+    // ✅ FIX: Start loading premium status immediately in constructor
     this.preloadPremiumStatus();
   }
 
@@ -88,9 +88,9 @@ class AdMobService {
       this.log(`✅ Admin status loaded: ${this.isAdmin ? 'ADMIN' : 'USER'}`);
       
       // Notify listeners immediately
-      this.notifyPremiumStatusChange(this.isPremium);
+      this.notifyPremiumStatusChange(this.isPremium || this.isAdmin);
       
-      return this.isPremium;
+      return this.isPremium || this.isAdmin;
     } catch (error) {
       this.log('⚠️ Error loading premium status:', error);
       this.isPremium = false;
@@ -103,13 +103,26 @@ class AdMobService {
 
   /**
    * Subscribe to premium status changes
+   * ✅ FIX: Immediately notify with current status when subscribing
    */
   onPremiumStatusChange(callback) {
-    this.premiumStatusListeners.push(callback);
-    // ✅ FIX: Immediately call with current status
-    if (this.premiumStatusLoaded) {
-      callback(this.isPremium || this.isAdmin);
+    if (typeof callback !== 'function') {
+      this.log('⚠️ Invalid callback provided to onPremiumStatusChange');
+      return () => {};
     }
+    
+    this.premiumStatusListeners.push(callback);
+    
+    // ✅ FIX: Immediately call with current status if loaded
+    if (this.premiumStatusLoaded) {
+      try {
+        callback(this.isPremium || this.isAdmin);
+      } catch (error) {
+        this.log('Error in immediate callback:', error);
+      }
+    }
+    
+    // Return unsubscribe function
     return () => {
       this.premiumStatusListeners = this.premiumStatusListeners.filter(cb => cb !== callback);
     };
@@ -119,6 +132,7 @@ class AdMobService {
    * Notify listeners of premium status change
    */
   notifyPremiumStatusChange(isPremiumOrAdmin) {
+    this.log(`📢 Notifying ${this.premiumStatusListeners.length} listeners: ${isPremiumOrAdmin}`);
     this.premiumStatusListeners.forEach(listener => {
       try {
         listener(isPremiumOrAdmin);
@@ -441,7 +455,7 @@ class AdMobService {
 
   /**
    * Set premium status
-   * ✅ FIX: Also save admin status
+   * ✅ FIX: Also save admin status and notify listeners
    */
   async setPremiumStatus(isPremium, isAdmin = false) {
     try {
@@ -485,7 +499,7 @@ class AdMobService {
            sdkAvailable &&
            this.premiumStatusLoaded;
     
-    if (!should) {
+    if (!should && ADMOB_CONFIG.DEBUG_MODE) {
       this.log('shouldShowAds = false because:', {
         isInitialized: this.isInitialized,
         isPremium: this.isPremium,

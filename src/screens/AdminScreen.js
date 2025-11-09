@@ -284,9 +284,10 @@ const AdminScreen = ({ navigation }) => {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={true}
-        scrollEnabled={true}
-        bounces={true}
-        alwaysBounceVertical={true}
+        bounces={Platform.OS === 'ios'}
+        overScrollMode="always"
+        nestedScrollEnabled={false}
+        removeClippedSubviews={false}
       >
         <Card style={[styles.card, styles.securityNotice]}>
           <Card.Content>
@@ -336,7 +337,7 @@ const AdminScreen = ({ navigation }) => {
         </Card>
 
         <Card style={styles.card}>
-          <List.Subheader>📢 Marketing Tools</List.Subheader>
+          <List.Subheader>📊 Marketing Tools</List.Subheader>
           
           <List.Item
             title="Create Promotional Offer"
@@ -377,7 +378,11 @@ const AdminScreen = ({ navigation }) => {
         <Dialog visible={showApiDialog} onDismiss={() => setShowApiDialog(false)}>
           <Dialog.Title>🔐 Configure API Key (Admin Only)</Dialog.Title>
           <Dialog.ScrollArea>
-            <ScrollView contentContainerStyle={{ paddingHorizontal: 0 }}>
+            <ScrollView 
+              contentContainerStyle={{ paddingHorizontal: 0 }}
+              bounces={Platform.OS === 'ios'}
+              overScrollMode="always"
+            >
               <Dialog.Content>
                 <Text style={styles.dialogDescription}>
                   Select provider and enter API key:
@@ -431,7 +436,11 @@ const AdminScreen = ({ navigation }) => {
         <Dialog visible={showPromoDialog} onDismiss={() => setShowPromoDialog(false)}>
           <Dialog.Title>Create Promotional Offer</Dialog.Title>
           <Dialog.ScrollArea>
-            <ScrollView contentContainerStyle={{ paddingHorizontal: 0 }}>
+            <ScrollView 
+              contentContainerStyle={{ paddingHorizontal: 0 }}
+              bounces={Platform.OS === 'ios'}
+              overScrollMode="always"
+            >
               <Dialog.Content>
                 <TextInput
                   label="Offer Title"

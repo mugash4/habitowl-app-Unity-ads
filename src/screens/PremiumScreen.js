@@ -271,9 +271,10 @@ const PremiumScreen = ({ navigation }) => {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollViewContent}
         showsVerticalScrollIndicator={true}
-        scrollEnabled={true}
-        bounces={true}
-        alwaysBounceVertical={true}
+        bounces={Platform.OS === 'ios'}
+        overScrollMode="always"
+        nestedScrollEnabled={false}
+        removeClippedSubviews={false}
       >
         <Animated.View style={{ opacity: fadeAnim }}>
           {/* Header */}

@@ -6,6 +6,7 @@ import {
   ScrollView,
   Linking,
   Image,
+  Platform,
 } from 'react-native';
 import {
   Card,
@@ -83,8 +84,10 @@ const AboutScreen = ({ navigation }) => {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={true}
-        scrollEnabled={true}
-        nestedScrollEnabled={true}
+        bounces={Platform.OS === 'ios'}
+        overScrollMode="always"
+        nestedScrollEnabled={false}
+        removeClippedSubviews={false}
       >
         {/* App Header */}
         <LinearGradient colors={['#4f46e5', '#7c3aed']} style={styles.header}>
@@ -296,6 +299,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 40,
+    flexGrow: 1,
   },
   header: {
     alignItems: 'center',
