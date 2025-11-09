@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   Alert,
   ActivityIndicator,
   Platform,
@@ -18,6 +17,7 @@ import {
   Portal,
   Appbar,
 } from 'react-native-paper';
+import { ScrollView } from 'react-native-gesture-handler';
 import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
@@ -284,12 +284,7 @@ const AdminScreen = ({ navigation }) => {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={true}
-        scrollEnabled={true}
-        bounces={true}
-        alwaysBounceVertical={false}
-        nestedScrollEnabled={false}
-        removeClippedSubviews={false}
-        scrollEventThrottle={16}
+        keyboardShouldPersistTaps='handled'
       >
         <Card style={[styles.card, styles.securityNotice]}>
           <Card.Content>
@@ -339,7 +334,7 @@ const AdminScreen = ({ navigation }) => {
         </Card>
 
         <Card style={styles.card}>
-          <List.Subheader>📢 Marketing Tools</List.Subheader>
+          <List.Subheader>📊 Marketing Tools</List.Subheader>
           
           <List.Item
             title="Create Promotional Offer"
@@ -379,55 +374,46 @@ const AdminScreen = ({ navigation }) => {
       <Portal>
         <Dialog visible={showApiDialog} onDismiss={() => setShowApiDialog(false)}>
           <Dialog.Title>🔐 Configure API Key (Admin Only)</Dialog.Title>
-          <Dialog.ScrollArea>
-            <ScrollView 
-              contentContainerStyle={{ paddingHorizontal: 0 }}
-              bounces={true}
-              scrollEnabled={true}
-              nestedScrollEnabled={true}
-            >
-              <Dialog.Content>
-                <Text style={styles.dialogDescription}>
-                  Select provider and enter API key:
-                </Text>
+          <Dialog.Content>
+            <Text style={styles.dialogDescription}>
+              Select provider and enter API key:
+            </Text>
 
-                <View style={styles.providerSelection}>
-                  {['deepseek', 'openai', 'openrouter'].map((provider) => (
-                    <Chip
-                      key={provider}
-                      selected={selectedProvider === provider}
-                      onPress={() => setSelectedProvider(provider)}
-                      style={styles.dialogChip}
-                    >
-                      {provider.toUpperCase()}
-                    </Chip>
-                  ))}
-                </View>
-                
-                <TextInput
-                  label={`${selectedProvider.toUpperCase()} API Key`}
-                  value={apiKey}
-                  onChangeText={setApiKey}
-                  mode="outlined"
-                  secureTextEntry
-                  style={styles.dialogInput}
-                />
+            <View style={styles.providerSelection}>
+              {['deepseek', 'openai', 'openrouter'].map((provider) => (
+                <Chip
+                  key={provider}
+                  selected={selectedProvider === provider}
+                  onPress={() => setSelectedProvider(provider)}
+                  style={styles.dialogChip}
+                >
+                  {provider.toUpperCase()}
+                </Chip>
+              ))}
+            </View>
+            
+            <TextInput
+              label={`${selectedProvider.toUpperCase()} API Key`}
+              value={apiKey}
+              onChangeText={setApiKey}
+              mode="outlined"
+              secureTextEntry
+              style={styles.dialogInput}
+            />
 
-                <Text style={styles.helpText}>
-                  {selectedProvider === 'deepseek' && 'Get API key from: https://platform.deepseek.com'}
-                  {selectedProvider === 'openai' && 'Get API key from: https://platform.openai.com'}
-                  {selectedProvider === 'openrouter' && 'Get API key from: https://openrouter.ai'}
-                </Text>
-                
-                <View style={styles.warningBox}>
-                  <Icon name="alert" size={20} color="#ef4444" />
-                  <Text style={styles.warningText}>
-                    API keys are stored securely and only accessible to admins.
-                  </Text>
-                </View>
-              </Dialog.Content>
-            </ScrollView>
-          </Dialog.ScrollArea>
+            <Text style={styles.helpText}>
+              {selectedProvider === 'deepseek' && 'Get API key from: https://platform.deepseek.com'}
+              {selectedProvider === 'openai' && 'Get API key from: https://platform.openai.com'}
+              {selectedProvider === 'openrouter' && 'Get API key from: https://openrouter.ai'}
+            </Text>
+            
+            <View style={styles.warningBox}>
+              <Icon name="alert" size={20} color="#ef4444" />
+              <Text style={styles.warningText}>
+                API keys are stored securely and only accessible to admins.
+              </Text>
+            </View>
+          </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={() => setShowApiDialog(false)}>Cancel</Button>
             <Button onPress={handleSetApiKey} loading={loading}>Save</Button>
@@ -438,54 +424,45 @@ const AdminScreen = ({ navigation }) => {
       <Portal>
         <Dialog visible={showPromoDialog} onDismiss={() => setShowPromoDialog(false)}>
           <Dialog.Title>Create Promotional Offer</Dialog.Title>
-          <Dialog.ScrollArea>
-            <ScrollView 
-              contentContainerStyle={{ paddingHorizontal: 0 }}
-              bounces={true}
-              scrollEnabled={true}
-              nestedScrollEnabled={true}
-            >
-              <Dialog.Content>
-                <TextInput
-                  label="Offer Title"
-                  value={promoTitle}
-                  onChangeText={setPromoTitle}
-                  mode="outlined"
-                  style={styles.dialogInput}
-                  placeholder="e.g., Limited Time: 50% Off Premium"
-                />
+          <Dialog.Content>
+            <TextInput
+              label="Offer Title"
+              value={promoTitle}
+              onChangeText={setPromoTitle}
+              mode="outlined"
+              style={styles.dialogInput}
+              placeholder="e.g., Limited Time: 50% Off Premium"
+            />
 
-                <TextInput
-                  label="Description"
-                  value={promoDescription}
-                  onChangeText={setPromoDescription}
-                  mode="outlined"
-                  multiline
-                  numberOfLines={3}
-                  style={styles.dialogInput}
-                  placeholder="Describe the offer details..."
-                />
+            <TextInput
+              label="Description"
+              value={promoDescription}
+              onChangeText={setPromoDescription}
+              mode="outlined"
+              multiline
+              numberOfLines={3}
+              style={styles.dialogInput}
+              placeholder="Describe the offer details..."
+            />
 
-                <TextInput
-                  label="Discount"
-                  value={promoDiscount}
-                  onChangeText={setPromoDiscount}
-                  mode="outlined"
-                  style={styles.dialogInput}
-                  placeholder="e.g., 50% OFF, $2.99/month"
-                />
+            <TextInput
+              label="Discount"
+              value={promoDiscount}
+              onChangeText={setPromoDiscount}
+              mode="outlined"
+              style={styles.dialogInput}
+              placeholder="e.g., 50% OFF, $2.99/month"
+            />
 
-                <TextInput
-                  label="Valid for (days)"
-                  value={promoValidDays}
-                  onChangeText={setPromoValidDays}
-                  mode="outlined"
-                  keyboardType="numeric"
-                  style={styles.dialogInput}
-                />
-              </Dialog.Content>
-            </ScrollView>
-          </Dialog.ScrollArea>
+            <TextInput
+              label="Valid for (days)"
+              value={promoValidDays}
+              onChangeText={setPromoValidDays}
+              mode="outlined"
+              keyboardType="numeric"
+              style={styles.dialogInput}
+            />
+          </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={() => setShowPromoDialog(false)}>Cancel</Button>
             <Button onPress={handleCreatePromoOffer} loading={loading}>Create</Button>

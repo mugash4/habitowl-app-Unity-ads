@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   Linking,
   Image,
   Platform,
@@ -14,6 +13,7 @@ import {
   List,
   Appbar
 } from 'react-native-paper';
+import { ScrollView } from 'react-native-gesture-handler';
 import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
@@ -84,12 +84,7 @@ const AboutScreen = ({ navigation }) => {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={true}
-        scrollEnabled={true}
-        bounces={true}
-        alwaysBounceVertical={false}
-        nestedScrollEnabled={false}
-        removeClippedSubviews={false}
-        scrollEventThrottle={16}
+        keyboardShouldPersistTaps='handled'
       >
         {/* App Header */}
         <LinearGradient colors={['#4f46e5', '#7c3aed']} style={styles.header}>
@@ -300,8 +295,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 40,
     flexGrow: 1,
+    paddingBottom: 40,
   },
   header: {
     alignItems: 'center',

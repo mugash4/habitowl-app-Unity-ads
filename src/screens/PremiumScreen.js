@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   Alert,
   Animated,
   Platform,
@@ -17,6 +16,7 @@ import {
   Appbar,
   ActivityIndicator
 } from 'react-native-paper';
+import { ScrollView } from 'react-native-gesture-handler';
 import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
@@ -271,12 +271,7 @@ const PremiumScreen = ({ navigation }) => {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollViewContent}
         showsVerticalScrollIndicator={true}
-        scrollEnabled={true}
-        bounces={true}
-        alwaysBounceVertical={false}
-        nestedScrollEnabled={false}
-        removeClippedSubviews={false}
-        scrollEventThrottle={16}
+        keyboardShouldPersistTaps='handled'
       >
         <Animated.View style={{ opacity: fadeAnim }}>
           {/* Header */}
