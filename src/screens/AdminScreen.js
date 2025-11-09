@@ -284,10 +284,12 @@ const AdminScreen = ({ navigation }) => {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={true}
-        bounces={Platform.OS === 'ios'}
-        overScrollMode="always"
+        scrollEnabled={true}
+        bounces={true}
+        alwaysBounceVertical={false}
         nestedScrollEnabled={false}
         removeClippedSubviews={false}
+        scrollEventThrottle={16}
       >
         <Card style={[styles.card, styles.securityNotice]}>
           <Card.Content>
@@ -305,7 +307,7 @@ const AdminScreen = ({ navigation }) => {
         {renderStats()}
 
         <Card style={styles.card}>
-          <List.Subheader>🤖 AI Configuration (Admin Only)</List.Subheader>
+          <List.Subheader>🔐 AI Configuration (Admin Only)</List.Subheader>
           
           <List.Item
             title="Configure API Keys"
@@ -337,7 +339,7 @@ const AdminScreen = ({ navigation }) => {
         </Card>
 
         <Card style={styles.card}>
-          <List.Subheader>📊 Marketing Tools</List.Subheader>
+          <List.Subheader>📢 Marketing Tools</List.Subheader>
           
           <List.Item
             title="Create Promotional Offer"
@@ -380,8 +382,9 @@ const AdminScreen = ({ navigation }) => {
           <Dialog.ScrollArea>
             <ScrollView 
               contentContainerStyle={{ paddingHorizontal: 0 }}
-              bounces={Platform.OS === 'ios'}
-              overScrollMode="always"
+              bounces={true}
+              scrollEnabled={true}
+              nestedScrollEnabled={true}
             >
               <Dialog.Content>
                 <Text style={styles.dialogDescription}>
@@ -438,8 +441,9 @@ const AdminScreen = ({ navigation }) => {
           <Dialog.ScrollArea>
             <ScrollView 
               contentContainerStyle={{ paddingHorizontal: 0 }}
-              bounces={Platform.OS === 'ios'}
-              overScrollMode="always"
+              bounces={true}
+              scrollEnabled={true}
+              nestedScrollEnabled={true}
             >
               <Dialog.Content>
                 <TextInput

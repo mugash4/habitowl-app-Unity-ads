@@ -1,7 +1,6 @@
 /**
  * Google AdMob Service
- * Handles all ad functionality using Google Mobile Ads SDK
- * FIXED: Proper initialization sequence for banner ads
+ * ✅ FIXED: Proper initialization with banner support
  */
 
 import { Platform } from 'react-native';
@@ -61,22 +60,73 @@ class AdMobService {
     this.initializationError = null;
     this.initializationDetails = [];
     
-    // Premium status listeners
+    // ✅ FIX: Status change listeners for real-time updates
+    this.statusChangeListeners = [];
     this.premiumStatusListeners = [];
     
-    // ✅ FIX: Start loading premium status immediately in constructor
+    // ✅ FIX: Start loading premium status immediately
     this.preloadPremiumStatus();
   }
 
   /**
+   * ✅ FIX: Subscribe to ANY status changes (init, premium, etc)
+   */
+  onStatusChange(callback) {
+    if (typeof callback !== 'function') return () => {};
+    
+    this.statusChangeListeners.push(callback);
+    
+    // Immediately notify with current state
+    setTimeout(() => {
+      try {
+        callback({
+          isInitialized: this.isInitialized,
+          isPremium: this.isPremium,
+          isAdmin: this.isAdmin,
+          premiumStatusLoaded: this.premiumStatusLoaded,
+          shouldShowAds: this.shouldShowAds()
+        });
+      } catch (error) {
+        console.log('Error in immediate status callback:', error);
+      }
+    }, 0);
+    
+    // Return unsubscribe function
+    return () => {
+      this.statusChangeListeners = this.statusChangeListeners.filter(cb => cb !== callback);
+    };
+  }
+
+  /**
+   * ✅ FIX: Notify all listeners of status change
+   */
+  notifyStatusChange() {
+    const status = {
+      isInitialized: this.isInitialized,
+      isPremium: this.isPremium,
+      isAdmin: this.isAdmin,
+      premiumStatusLoaded: this.premiumStatusLoaded,
+      shouldShowAds: this.shouldShowAds()
+    };
+    
+    console.log('[AdMob] 📢 Notifying status change:', status);
+    
+    this.statusChangeListeners.forEach(listener => {
+      try {
+        listener(status);
+      } catch (error) {
+        console.log('Error in status listener:', error);
+      }
+    });
+  }
+
+  /**
    * Pre-load premium status BEFORE initialization
-   * ✅ FIX: Made this run immediately on construction
    */
   async preloadPremiumStatus() {
     try {
       this.log('📊 Loading premium status...');
       
-      // Load from AsyncStorage
       const premium = await AsyncStorage.getItem('user_premium_status');
       const adminStatus = await AsyncStorage.getItem('user_admin_status');
       
@@ -84,10 +134,10 @@ class AdMobService {
       this.isAdmin = adminStatus === 'true';
       this.premiumStatusLoaded = true;
       
-      this.log(`✅ Premium status loaded: ${this.isPremium ? 'PREMIUM' : 'FREE'}`);
-      this.log(`✅ Admin status loaded: ${this.isAdmin ? 'ADMIN' : 'USER'}`);
+      this.log(`✅ Premium: ${this.isPremium}, Admin: ${this.isAdmin}`);
       
-      // Notify listeners immediately
+      // ✅ FIX: Notify status change
+      this.notifyStatusChange();
       this.notifyPremiumStatusChange(this.isPremium || this.isAdmin);
       
       return this.isPremium || this.isAdmin;
@@ -96,6 +146,7 @@ class AdMobService {
       this.isPremium = false;
       this.isAdmin = false;
       this.premiumStatusLoaded = true;
+      this.notifyStatusChange();
       this.notifyPremiumStatusChange(false);
       return false;
     }
@@ -103,7 +154,6 @@ class AdMobService {
 
   /**
    * Subscribe to premium status changes
-   * ✅ FIX: Immediately notify with current status when subscribing
    */
   onPremiumStatusChange(callback) {
     if (typeof callback !== 'function') {
@@ -113,7 +163,7 @@ class AdMobService {
     
     this.premiumStatusListeners.push(callback);
     
-    // ✅ FIX: Immediately call with current status if loaded
+    // Immediately call with current status if loaded
     if (this.premiumStatusLoaded) {
       try {
         callback(this.isPremium || this.isAdmin);
@@ -132,7 +182,7 @@ class AdMobService {
    * Notify listeners of premium status change
    */
   notifyPremiumStatusChange(isPremiumOrAdmin) {
-    this.log(`📢 Notifying ${this.premiumStatusListeners.length} listeners: ${isPremiumOrAdmin}`);
+    this.log(`📢 Notifying ${this.premiumStatusListeners.length} premium listeners: ${isPremiumOrAdmin}`);
     this.premiumStatusListeners.forEach(listener => {
       try {
         listener(isPremiumOrAdmin);
@@ -147,7 +197,6 @@ class AdMobService {
    */
   async initialize() {
     try {
-      // Prevent multiple initialization
       if (this.initializationAttempted) {
         this.log('⚠️ Initialization already attempted');
         return this.isInitialized;
@@ -175,7 +224,7 @@ class AdMobService {
 
       this.log('🚀 Initializing AdMob...');
 
-      // ✅ FIX: Wait for premium status if not loaded yet
+      // Wait for premium status if not loaded yet
       if (!this.premiumStatusLoaded) {
         this.log('⏳ Waiting for premium status...');
         await this.preloadPremiumStatus();
@@ -193,7 +242,8 @@ class AdMobService {
       this.initializationError = null;
       this.initializationDetails.push('✅ Initialized successfully');
       
-      // ✅ FIX: Notify all listeners that initialization is complete
+      // ✅ FIX: Notify all listeners after initialization
+      this.notifyStatusChange();
       this.notifyPremiumStatusChange(this.isPremium || this.isAdmin);
       
       // Create and load ads if not premium/admin
@@ -216,6 +266,7 @@ class AdMobService {
       this.isInitialized = false;
       this.initializationError = errorMsg;
       this.initializationDetails.push(`Error: ${errorMsg}`);
+      this.notifyStatusChange();
       return false;
     }
   }
@@ -225,11 +276,7 @@ class AdMobService {
    */
   createAndLoadAds() {
     this.log('🎬 Creating ad instances...');
-    
-    // Create and load interstitial
     this.createInterstitialAd();
-    
-    // Create and load rewarded
     this.createRewardedAd();
   }
 
@@ -245,10 +292,8 @@ class AdMobService {
       const adUnitId = getAdUnitId('INTERSTITIAL');
       this.log(`Creating interstitial with Ad Unit ID: ${adUnitId}`);
 
-      // Create new interstitial ad
       this.interstitialAd = InterstitialAd.createForAdRequest(adUnitId, ADMOB_CONFIG.getRequestOptions());
 
-      // Set up event listeners
       this.interstitialAd.addAdEventListener(AdEventType.LOADED, () => {
         this.log('✅ Interstitial loaded');
         this.interstitialLoaded = true;
@@ -257,7 +302,6 @@ class AdMobService {
       this.interstitialAd.addAdEventListener(AdEventType.ERROR, (error) => {
         this.log('❌ Interstitial error:', error);
         this.interstitialLoaded = false;
-        // Retry after delay
         setTimeout(() => {
           if (this.shouldShowAds() && this.isInitialized) {
             this.log('🔄 Retrying interstitial load...');
@@ -274,7 +318,6 @@ class AdMobService {
       this.interstitialAd.addAdEventListener(AdEventType.CLOSED, () => {
         this.log('🚪 Interstitial closed');
         this.interstitialLoaded = false;
-        // Create new ad for next time
         setTimeout(() => {
           if (this.shouldShowAds() && this.isInitialized) {
             this.createInterstitialAd();
@@ -282,7 +325,6 @@ class AdMobService {
         }, 1000);
       });
 
-      // Start loading
       this.interstitialAd.load();
       this.log('📥 Interstitial loading...');
 
@@ -308,7 +350,6 @@ class AdMobService {
       return false;
     }
 
-    // Check cooldown
     const now = Date.now();
     if (now - this.lastInterstitialTime < ADMOB_CONFIG.INTERSTITIAL_COOLDOWN) {
       const remaining = Math.ceil((ADMOB_CONFIG.INTERSTITIAL_COOLDOWN - (now - this.lastInterstitialTime)) / 1000);
@@ -316,7 +357,6 @@ class AdMobService {
       return false;
     }
 
-    // Check session limit
     if (this.sessionInterstitialCount >= ADMOB_CONFIG.MAX_INTERSTITIALS_PER_SESSION) {
       this.log('⚠️ Session limit reached');
       return false;
@@ -347,10 +387,8 @@ class AdMobService {
       const adUnitId = getAdUnitId('REWARDED');
       this.log(`Creating rewarded with Ad Unit ID: ${adUnitId}`);
 
-      // Create new rewarded ad
       this.rewardedAd = RewardedAd.createForAdRequest(adUnitId, ADMOB_CONFIG.getRequestOptions());
 
-      // Set up event listeners
       this.rewardedAd.addAdEventListener(RewardedAdEventType.LOADED, () => {
         this.log('✅ Rewarded loaded');
         this.rewardedLoaded = true;
@@ -359,7 +397,6 @@ class AdMobService {
       this.rewardedAd.addAdEventListener(RewardedAdEventType.ERROR, (error) => {
         this.log('❌ Rewarded error:', error);
         this.rewardedLoaded = false;
-        // Retry after delay
         setTimeout(() => {
           if (this.isInitialized) {
             this.log('🔄 Retrying rewarded load...');
@@ -385,7 +422,6 @@ class AdMobService {
       this.rewardedAd.addAdEventListener(RewardedAdEventType.CLOSED, () => {
         this.log('🚪 Rewarded closed');
         this.rewardedLoaded = false;
-        // Create new ad for next time
         setTimeout(() => {
           if (this.isInitialized) {
             this.createRewardedAd();
@@ -393,7 +429,6 @@ class AdMobService {
         }, 1000);
       });
 
-      // Start loading
       this.rewardedAd.load();
       this.log('📥 Rewarded loading...');
 
@@ -455,7 +490,6 @@ class AdMobService {
 
   /**
    * Set premium status
-   * ✅ FIX: Also save admin status and notify listeners
    */
   async setPremiumStatus(isPremium, isAdmin = false) {
     try {
@@ -471,11 +505,11 @@ class AdMobService {
       
       const newStatus = isPremium || isAdmin;
       if (oldStatus !== newStatus) {
+        this.notifyStatusChange();
         this.notifyPremiumStatusChange(newStatus);
         
         if (newStatus) {
           this.log('User upgraded/admin - ads disabled');
-          // Clean up ads
           this.cleanup();
         } else if (this.isInitialized) {
           this.log('User downgraded - starting ad preload');
@@ -489,7 +523,6 @@ class AdMobService {
 
   /**
    * Check if ads should be shown
-   * ✅ FIX: Also check admin status
    */
   shouldShowAds() {
     const should = this.isInitialized && 

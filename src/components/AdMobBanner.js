@@ -1,6 +1,6 @@
 /**
  * AdMob Banner Ad Component
- * ✅ FIXED: Proper initialization and re-render handling with race condition protection
+ * ✅ FIXED: Proper status subscription with real-time updates
  */
 
 import React, { useEffect, useState, useRef } from 'react';
@@ -23,47 +23,43 @@ const AdMobBanner = ({ style = {} }) => {
   const [shouldShow, setShouldShow] = useState(false);
   const [bannerConfig, setBannerConfig] = useState(null);
   const [debugInfo, setDebugInfo] = useState('Initializing...');
-  const checkCountRef = useRef(0);
   const isMountedRef = useRef(true);
 
   useEffect(() => {
     console.log('[Banner] 🎬 Component mounted');
     isMountedRef.current = true;
     
-    // ✅ FIX: Subscribe to premium status changes with immediate response
-    const unsubscribe = adMobService.onPremiumStatusChange((isPremiumOrAdmin) => {
+    // ✅ FIX: Subscribe to all status changes
+    const unsubscribe = adMobService.onStatusChange((status) => {
       if (!isMountedRef.current) return;
       
-      console.log('[Banner] 📢 Premium/Admin status update:', isPremiumOrAdmin);
-      checkAndInitialize();
+      console.log('[Banner] 📢 Status update received:', status);
+      checkAndUpdate(status);
     });
 
-    // ✅ FIX: Multiple check attempts to handle race conditions
-    const checkAttempts = [100, 500, 1000, 2000, 3000];
-    const timeouts = checkAttempts.map((delay) => 
-      setTimeout(() => {
-        if (isMountedRef.current) {
-          checkAndInitialize();
-        }
-      }, delay)
-    );
+    // Initial check
+    checkAndUpdate({
+      isInitialized: adMobService.isInitialized,
+      isPremium: adMobService.isPremium,
+      isAdmin: adMobService.isAdmin,
+      premiumStatusLoaded: adMobService.premiumStatusLoaded,
+      shouldShowAds: adMobService.shouldShowAds()
+    });
 
     return () => {
       console.log('[Banner] 🚪 Component unmounting');
       isMountedRef.current = false;
       unsubscribe();
-      timeouts.forEach(clearTimeout);
     };
   }, []);
 
-  const checkAndInitialize = () => {
+  const checkAndUpdate = (status) => {
     if (!isMountedRef.current) {
-      console.log('[Banner] ⚠️ Component unmounted, skipping check');
+      console.log('[Banner] ⚠️ Component unmounted, skipping update');
       return;
     }
 
-    checkCountRef.current += 1;
-    console.log(`[Banner] 🔍 Check #${checkCountRef.current}: Evaluating ad display conditions...`);
+    console.log('[Banner] 🔍 Checking display conditions...');
     
     // Platform check
     if (Platform.OS === 'web') {
@@ -83,31 +79,9 @@ const AdMobBanner = ({ style = {} }) => {
       return;
     }
 
-    // Premium status loaded check
-    if (!adMobService.premiumStatusLoaded) {
-      const msg = 'Waiting for premium status...';
-      console.log(`[Banner] ⏳ ${msg}`);
-      setDebugInfo(msg);
-      setShouldShow(false);
-      return;
-    }
-
-    // AdMob initialization check
-    if (!adMobService.isInitialized) {
-      const msg = 'AdMob not initialized yet...';
-      console.log(`[Banner] ⏳ ${msg}`);
-      setDebugInfo(msg);
-      setShouldShow(false);
-      return;
-    }
-
     // Check if should show ads
-    const shouldShowAds = adMobService.shouldShowAds();
-    console.log(`[Banner] 🎯 shouldShowAds() = ${shouldShowAds}`);
-    
-    if (!shouldShowAds) {
-      const status = adMobService.getStatus();
-      const msg = `Ads disabled - Premium: ${status.isPremium}, Admin: ${status.isAdmin}`;
+    if (!status.shouldShowAds) {
+      const msg = `Ads disabled - Init: ${status.isInitialized}, Premium: ${status.isPremium}, Admin: ${status.isAdmin}`;
       console.log(`[Banner] 🚫 ${msg}`);
       setDebugInfo(msg);
       setShouldShow(false);

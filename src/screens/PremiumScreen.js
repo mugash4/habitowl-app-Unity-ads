@@ -161,7 +161,7 @@ const PremiumScreen = ({ navigation }) => {
       if (success) {
         // Purchase was successful (or is being processed)
         Alert.alert(
-          '🎉 Welcome to Premium!',
+          '👑 Welcome to Premium!',
           'Your 7-day free trial has started! You can cancel anytime before the trial ends.',
           [
             {
@@ -271,10 +271,12 @@ const PremiumScreen = ({ navigation }) => {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollViewContent}
         showsVerticalScrollIndicator={true}
-        bounces={Platform.OS === 'ios'}
-        overScrollMode="always"
+        scrollEnabled={true}
+        bounces={true}
+        alwaysBounceVertical={false}
         nestedScrollEnabled={false}
         removeClippedSubviews={false}
+        scrollEventThrottle={16}
       >
         <Animated.View style={{ opacity: fadeAnim }}>
           {/* Header */}

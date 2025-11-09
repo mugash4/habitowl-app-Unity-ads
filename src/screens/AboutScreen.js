@@ -84,10 +84,12 @@ const AboutScreen = ({ navigation }) => {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={true}
-        bounces={Platform.OS === 'ios'}
-        overScrollMode="always"
+        scrollEnabled={true}
+        bounces={true}
+        alwaysBounceVertical={false}
         nestedScrollEnabled={false}
         removeClippedSubviews={false}
+        scrollEventThrottle={16}
       >
         {/* App Header */}
         <LinearGradient colors={['#4f46e5', '#7c3aed']} style={styles.header}>
@@ -232,7 +234,7 @@ const AboutScreen = ({ navigation }) => {
             
             <List.Item
               title="Last Updated"
-              description="November 2024"
+              description="November 2025"
               left={(props) => <List.Icon {...props} icon="calendar" />}
             />
             
@@ -278,7 +280,7 @@ const AboutScreen = ({ navigation }) => {
         {/* Copyright */}
         <View style={styles.copyright}>
           <Text style={styles.copyrightText}>
-            © 2024 HabitOwl. All rights reserved.
+            © 2025 HabitOwl. All rights reserved.
           </Text>
           <Text style={styles.copyrightText}>
             Made with ❤️ for habit builders everywhere
