@@ -12,6 +12,7 @@ import { LineChart, BarChart, PieChart } from 'react-native-chart-kit';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { useTabBarHeight } from '../hooks/useTabBarHeight'; // ✅ ADDED
 
 import FirebaseService from '../services/FirebaseService';
 import adMobService from '../services/AdMobService';
@@ -26,6 +27,8 @@ const StatisticsScreen = ({ navigation }) => {
   const [selectedPeriod, setSelectedPeriod] = useState('week'); // week, month, year
   const [isPremium, setIsPremium] = useState(false);
 
+  // ✅ ADDED: Dynamic tab bar height calculation
+  const { totalHeight: tabBarTotalHeight } = useTabBarHeight();
 
   useEffect(() => {
     loadStatistics();
@@ -77,8 +80,6 @@ const StatisticsScreen = ({ navigation }) => {
       setLoading(false);
     }
   };
-
-
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -194,17 +195,17 @@ const StatisticsScreen = ({ navigation }) => {
     backgroundGradientFrom: '#ffffff',
     backgroundGradientTo: '#ffffff',
     color: (opacity = 1) => `rgba(79, 70, 229, ${opacity})`,
-    strokeWidth: 3, // ✅ IMPROVED: Thicker line for better visibility
+    strokeWidth: 3,
     barPercentage: 0.7,
     decimalPlaces: 0,
     propsForDots: {
-      r: '4', // ✅ IMPROVED: Larger dots for data points
+      r: '4',
       strokeWidth: '2',
       stroke: '#4f46e5'
     },
     propsForLabels: {
-      fontSize: 10, // ✅ IMPROVED: Slightly larger font
-      fontWeight: '600' // ✅ IMPROVED: Bold labels
+      fontSize: 10,
+      fontWeight: '600'
     }
   };
 
@@ -253,7 +254,6 @@ const StatisticsScreen = ({ navigation }) => {
     
     if (data.length === 0) return null;
 
-    // ✅ IMPROVED: Calculate max value for better Y-axis scaling
     const maxValue = Math.max(...data, 1);
 
     return (
@@ -299,7 +299,7 @@ const StatisticsScreen = ({ navigation }) => {
             style={styles.chart}
             bezier
             fromZero
-            segments={Math.min(maxValue, 5)} // ✅ IMPROVED: Better Y-axis segments
+            segments={Math.min(maxValue, 5)}
             withInnerLines={true}
             withOuterLines={true}
             withVerticalLines={false}
@@ -308,7 +308,6 @@ const StatisticsScreen = ({ navigation }) => {
             withHorizontalLabels={true}
           />
           
-          {/* ✅ NEW: Add legend for better understanding */}
           <View style={styles.chartLegend}>
             <Icon name="information-outline" size={16} color="#6b7280" />
             <Text style={styles.chartLegendText}>
@@ -321,7 +320,6 @@ const StatisticsScreen = ({ navigation }) => {
   };
 
   const renderCategoryChart = () => {
-    // 🔒 Premium feature - Category breakdown
     if (!isPremium) {
       return (
         <Card style={styles.chartCard}>
@@ -369,7 +367,6 @@ const StatisticsScreen = ({ navigation }) => {
       </Card>
     );
   };
-
 
   const renderStreakChart = () => {
     const streakData = getStreakData();
@@ -434,6 +431,9 @@ const StatisticsScreen = ({ navigation }) => {
 
       <ScrollView
         style={styles.content}
+        contentContainerStyle={{
+          paddingBottom: tabBarTotalHeight + 20 // ✅ FIXED: Dynamic padding
+        }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
@@ -460,11 +460,8 @@ const StatisticsScreen = ({ navigation }) => {
             {renderCompletionChart()}
             {renderCategoryChart()}
             {renderStreakChart()}
-            
           </>
         )}
-
-        <View style={styles.bottomPadding} />
       </ScrollView>
     </View>
   );
@@ -569,9 +566,6 @@ const styles = StyleSheet.create({
   emptyButton: {
     paddingHorizontal: 20,
   },
-  bottomPadding: {
-    height: 148, // ✅ FIXED: Space for tab bar + banner ad
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -624,7 +618,6 @@ const styles = StyleSheet.create({
   premiumButton: {
     backgroundColor: '#4f46e5',
   },
-
 });
 
 export default StatisticsScreen;

@@ -20,6 +20,7 @@ import {
 } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { useTabBarHeight } from '../hooks/useTabBarHeight'; // ✅ ADDED
 
 import FirebaseService from '../services/FirebaseService';
 import SecureAIService from '../services/SecureAIService';
@@ -55,6 +56,9 @@ const SettingsScreen = ({ navigation }) => {
   const [notifications, setNotifications] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  // ✅ ADDED: Dynamic tab bar height calculation
+  const { totalHeight: tabBarTotalHeight } = useTabBarHeight();
 
   useEffect(() => {
     console.log('SettingsScreen: Mounted ✅');
@@ -333,9 +337,11 @@ const SettingsScreen = ({ navigation }) => {
     <View style={styles.container}>
       <ScrollView 
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: tabBarTotalHeight + 20 } // ✅ FIXED: Dynamic padding
+        ]}
         showsVerticalScrollIndicator={false}
-        // ✅ FIX: Ensure scroll is enabled and works smoothly
         scrollEnabled={true}
         bounces={true}
         alwaysBounceVertical={true}
@@ -533,7 +539,6 @@ const SettingsScreen = ({ navigation }) => {
           />
         </Card>
 
-        {/* ✅ FIX: Sign Out button now with guaranteed visibility */}
         <Card style={styles.card}>
           <List.Item
             title="Sign Out"
@@ -542,9 +547,6 @@ const SettingsScreen = ({ navigation }) => {
             onPress={handleSignOut}
           />
         </Card>
-
-        {/* ✅ FIX: Increased bottom padding to ensure Sign Out is fully visible */}
-        <View style={styles.bottomPadding} />
       </ScrollView>
 
       <ContactSupport 
@@ -588,9 +590,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    // ✅ FIX: Increased bottom padding to ensure all content visible above tab bar
-    paddingBottom: 148, // Increased from 20 to provide space for tab bar
-    flexGrow: 1, // ✅ FIX: Ensures content can grow and trigger scroll
+    flexGrow: 1,
   },
   card: {
     margin: 16,
@@ -703,9 +703,6 @@ const styles = StyleSheet.create({
   },
   dialogInput: {
     marginBottom: 16,
-  },
-  bottomPadding: {
-    height: 20, // ✅ FIXED: Space for tab bar + banner ad
   },
   promoContainer: {
     marginBottom: 8,

@@ -191,7 +191,7 @@ const AboutScreen = ({ navigation }) => {
             <Button
               mode="outlined"
               icon="web"
-              onPress={() => handleOpenLink('https://habitowl-app.web.app')}
+              onPress={() => handleOpenLink('https://habitowl-3405d.web.app/')}
               style={styles.contactButton}
               contentStyle={styles.contactButtonContent}
             >
@@ -248,7 +248,7 @@ const AboutScreen = ({ navigation }) => {
             
             <Button
               mode="text"
-              onPress={() => handleOpenLink('https://habitowl-app.web.app/privacy')}
+              onPress={() => handleOpenLink('https://habitowl-3405d.web.app/privacy.html')}
               style={styles.legalButton}
             >
               Privacy Policy
@@ -256,19 +256,13 @@ const AboutScreen = ({ navigation }) => {
             
             <Button
               mode="text"
-              onPress={() => handleOpenLink('https://habitowl-app.web.app/terms')}
+              onPress={() => handleOpenLink('https://habitowl-3405d.web.app/terms.html')}
               style={styles.legalButton}
             >
               Terms of Service
             </Button>
             
-            <Button
-              mode="text"
-              onPress={() => handleOpenLink('https://habitowl-app.web.app/licenses')}
-              style={styles.legalButton}
-            >
-              Open Source Licenses
-            </Button>
+            
           </Card.Content>
         </Card>
 
