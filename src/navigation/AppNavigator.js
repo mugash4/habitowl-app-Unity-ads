@@ -4,6 +4,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Provider as PaperProvider, Portal, MD3LightTheme } from 'react-native-paper';
 import { View, Platform, Dimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 // Screens
@@ -43,21 +44,19 @@ const theme = {
   },
 };
 
-// Calculate proper tab bar height with system navigation consideration
+// Calculate proper tab bar height
 const getTabBarHeight = () => {
-  const { height } = Dimensions.get('window');
   const baseHeight = 60;
-  const hasNotch = height > 800; // iPhone X and newer, modern Android
-  const notchPadding = hasNotch ? 20 : 10;
-  return baseHeight + notchPadding;
+  return baseHeight;
 };
 
-// ✅ FIXED: Main Tab Navigator with banner ad integrated below tab bar
+// ✅ FIXED: Main Tab Navigator with banner ad positioned above system navigation
 const MainTabNavigator = () => {
+  const insets = useSafeAreaInsets(); // Get safe area insets for system bars
   const [tabBarHeight] = useState(getTabBarHeight());
   const [showBanner, setShowBanner] = useState(false);
 
-  // ✅ FIX: Improved banner visibility management
+  // Banner visibility management
   useEffect(() => {
     console.log('[TabNavigator] 🎬 Initializing banner visibility management');
     
@@ -86,10 +85,12 @@ const MainTabNavigator = () => {
     };
   }, []);
 
-  // Calculate heights
-  const bannerHeight = showBanner ? 60 : 0; // Banner height when visible
+  // ✅ FIX: Calculate heights with system navigation consideration
+  const bannerHeight = showBanner ? 60 : 0; // Banner ad height
+  const systemNavHeight = insets.bottom || 0; // System navigation bar height
+  const totalBottomSpace = bannerHeight + systemNavHeight; // Total space at bottom
   
-  console.log(`[TabNavigator] 🎨 Rendering - showBanner: ${showBanner}, bannerHeight: ${bannerHeight}`);
+  console.log(`[TabNavigator] 🎨 Layout - Banner: ${bannerHeight}px, SystemNav: ${systemNavHeight}px, Total: ${totalBottomSpace}px`);
   
   return (
     <View style={{ flex: 1 }}>
@@ -113,14 +114,14 @@ const MainTabNavigator = () => {
           tabBarInactiveTintColor: '#6b7280',
           tabBarStyle: {
             position: 'absolute',
-            bottom: bannerHeight, // ✅ Position above banner
+            bottom: totalBottomSpace, // ✅ Position above banner + system nav
             left: 0,
             right: 0,
             backgroundColor: '#ffffff',
             borderTopWidth: 1,
             borderTopColor: '#e5e7eb',
             height: tabBarHeight,
-            paddingBottom: Platform.OS === 'ios' ? 20 : 8,
+            paddingBottom: 8,
             paddingTop: 8,
             elevation: 10,
             shadowColor: '#000',
@@ -158,11 +159,11 @@ const MainTabNavigator = () => {
         />
       </Tab.Navigator>
 
-      {/* ✅ Banner Ad - Positioned below tab bar, above system navigation */}
+      {/* ✅ FIXED: Banner Ad - Positioned above system navigation */}
       {showBanner && Platform.OS !== 'web' && (
         <View style={{
           position: 'absolute',
-          bottom: 0,
+          bottom: systemNavHeight, // ✅ Push above system navigation
           left: 0,
           right: 0,
           height: bannerHeight,
@@ -193,7 +194,6 @@ const AppNavigator = () => {
     try {
       console.log('[AppNavigator] 🚀 Initializing app services...');
       
-      // ✅ FIX: Initialize AdMob first, then notifications
       await AdMobService.initialize();
       await NotificationService.initialize();
       

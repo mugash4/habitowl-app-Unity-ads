@@ -10,7 +10,6 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain"
-      
     },
     "updates": {
       "fallbackToCacheTimeout": 0
@@ -232,9 +231,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "fa49d950-f9e0-441d-8b80-f38b17682294"
+        "projectId": "29819ecf-9f40-4d2d-a709-88e5cd1dbe3d"
       }
     },
-    "owner": "affiliateswitch74"
+    "owner": "mugash4"
   }
 }
