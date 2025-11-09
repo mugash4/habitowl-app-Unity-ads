@@ -14,6 +14,7 @@ import { FAB, Appbar, Button, Card, Chip } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { useTabBarHeight } from '../hooks/useTabBarHeight';
 
 import HabitCard from '../components/HabitCard';
 import AdMobBanner from '../components/AdMobBanner';
@@ -31,6 +32,9 @@ const HomeScreen = ({ navigation, route }) => {
   const [fadeAnim] = useState(new Animated.Value(0));
   const [screenKey, setScreenKey] = useState(0);
   const [isPremium, setIsPremium] = useState(false);
+
+  const { totalHeight: tabBarTotalHeight } = useTabBarHeight();
+
 
   useFocusEffect(
     useCallback(() => {
@@ -390,12 +394,16 @@ const HomeScreen = ({ navigation, route }) => {
       {/* ✅ FIXED: Header now scrolls WITH the content */}
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.contentContainer}
+        contentContainerStyle={[
+          styles.contentContainer,
+          { paddingBottom: tabBarTotalHeight + 20 } // Dynamic padding
+        ]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
         showsVerticalScrollIndicator={false}
       >
+
         {/* Header is now INSIDE ScrollView */}
         {renderHeader()}
         
@@ -450,12 +458,16 @@ const HomeScreen = ({ navigation, route }) => {
 
       {/* FAB button */}
       <FAB
-        style={styles.fab}
+        style={[
+          styles.fab,
+          { bottom: tabBarTotalHeight + 16 } // Dynamic positioning
+        ]}
         icon="plus"
         color="#ffffff"
         onPress={handleCreateHabit}
         label={habits.length === 0 ? "Add Habit" : undefined}
       />
+
     </Animated.View>
   );
 };
@@ -469,7 +481,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    paddingBottom: 148, // Banner + tab bar space
+    paddingBottom: 20, // Banner + tab bar space
   },
   // ✅ FIXED: Header is now scrollable
   header: {
@@ -619,7 +631,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     margin: 16,
     right: 0,
-    bottom: 148, // Above banner + tab bar
+    bottom: 80, // Above banner + tab bar
     backgroundColor: '#4f46e5',
   },
   loadingContainer: {

@@ -3,7 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Provider as PaperProvider, Portal, MD3LightTheme } from 'react-native-paper';
-import { View, Platform, Dimensions } from 'react-native';
+import { View, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
@@ -44,16 +44,12 @@ const theme = {
   },
 };
 
-// Calculate proper tab bar height
-const getTabBarHeight = () => {
-  const baseHeight = 60;
-  return baseHeight;
-};
+const TAB_BAR_HEIGHT = 60;
+const BANNER_HEIGHT = 60;
 
-// ✅ FIXED: Main Tab Navigator with banner ad positioned above system navigation
+// ✅ FIXED: Banner ad integrated into tab bar panel
 const MainTabNavigator = () => {
-  const insets = useSafeAreaInsets(); // Get safe area insets for system bars
-  const [tabBarHeight] = useState(getTabBarHeight());
+  const insets = useSafeAreaInsets();
   const [showBanner, setShowBanner] = useState(false);
 
   // Banner visibility management
@@ -85,16 +81,16 @@ const MainTabNavigator = () => {
     };
   }, []);
 
-  // ✅ FIX: Calculate heights with system navigation consideration
-  const bannerHeight = showBanner ? 60 : 0; // Banner ad height
-  const systemNavHeight = insets.bottom || 0; // System navigation bar height
-  const totalBottomSpace = bannerHeight + systemNavHeight; // Total space at bottom
+  // ✅ Calculate total bottom space
+  const systemNavHeight = insets.bottom || 0;
+  const bannerSpace = showBanner ? BANNER_HEIGHT : 0;
+  const totalBottomHeight = TAB_BAR_HEIGHT + bannerSpace + systemNavHeight;
   
-  console.log(`[TabNavigator] 🎨 Layout - Banner: ${bannerHeight}px, SystemNav: ${systemNavHeight}px, Total: ${totalBottomSpace}px`);
+  console.log(`[TabNavigator] 🎨 Layout - Tab: ${TAB_BAR_HEIGHT}px, Banner: ${bannerSpace}px, SystemNav: ${systemNavHeight}px, Total: ${totalBottomHeight}px`);
   
   return (
     <View style={{ flex: 1 }}>
-      {/* Main Tab Navigator */}
+      {/* Main content area */}
       <Tab.Navigator
         screenOptions={({ route }) => ({
           tabBarIcon: ({ focused, color, size }) => {
@@ -114,24 +110,24 @@ const MainTabNavigator = () => {
           tabBarInactiveTintColor: '#6b7280',
           tabBarStyle: {
             position: 'absolute',
-            bottom: totalBottomSpace, // ✅ Position above banner + system nav
+            bottom: 0,
             left: 0,
             right: 0,
             backgroundColor: '#ffffff',
-            borderTopWidth: 1,
-            borderTopColor: '#e5e7eb',
-            height: tabBarHeight,
-            paddingBottom: 8,
+            borderTopWidth: 0, // Remove border since banner will have its own
+            height: totalBottomHeight, // ✅ Container holds both tab bar + banner
+            paddingBottom: systemNavHeight, // System navigation spacing
             paddingTop: 8,
-            elevation: 10,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: -2 },
-            shadowOpacity: 0.15,
-            shadowRadius: 4,
+            elevation: 0,
+            shadowOpacity: 0,
+          },
+          tabBarItemStyle: {
+            paddingBottom: bannerSpace, // ✅ Push tabs up when banner shows
           },
           tabBarLabelStyle: {
             fontSize: 12,
             fontWeight: '500',
+            marginBottom: bannerSpace > 0 ? 4 : 0, // Adjust label spacing
           },
           headerShown: false,
         })}
@@ -159,25 +155,36 @@ const MainTabNavigator = () => {
         />
       </Tab.Navigator>
 
-      {/* ✅ FIXED: Banner Ad - Positioned above system navigation */}
+      {/* ✅ Banner Ad - Positioned inside tab bar container at bottom */}
       {showBanner && Platform.OS !== 'web' && (
         <View style={{
           position: 'absolute',
-          bottom: systemNavHeight, // ✅ Push above system navigation
+          bottom: systemNavHeight, // Above system navigation
           left: 0,
           right: 0,
-          height: bannerHeight,
+          height: BANNER_HEIGHT,
           backgroundColor: '#ffffff',
           borderTopWidth: 1,
           borderTopColor: '#e5e7eb',
           alignItems: 'center',
           justifyContent: 'center',
-          zIndex: 999,
-          elevation: 20,
+          zIndex: 1000,
+          elevation: 8,
         }}>
           <AdMobBanner />
         </View>
       )}
+
+      {/* Top border for entire tab panel */}
+      <View style={{
+        position: 'absolute',
+        bottom: totalBottomHeight,
+        left: 0,
+        right: 0,
+        height: 1,
+        backgroundColor: '#e5e7eb',
+        zIndex: 999,
+      }} />
     </View>
   );
 };
