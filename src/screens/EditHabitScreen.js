@@ -23,6 +23,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 
 import FirebaseService from '../services/FirebaseService';
 import NotificationService from '../services/NotificationService';
+import adMobService from '../services/AdMobService'; // ✅ ADDED
 
 const EditHabitScreen = ({ navigation, route }) => {
   const { habit, onGoBack } = route.params;
@@ -47,6 +48,9 @@ const EditHabitScreen = ({ navigation, route }) => {
   const [customMessage, setCustomMessage] = useState(habit.reminderMessage || '');
   const [isLoading, setIsLoading] = useState(false);
 
+  // ✅ ADDED: Track interactions for ads
+  const [interactionCount, setInteractionCount] = useState(0);
+
   const categories = [
     { value: 'wellness', label: 'Wellness', icon: 'leaf', color: '#10b981' },
     { value: 'fitness', label: 'Fitness', icon: 'dumbbell', color: '#f59e0b' },
@@ -59,6 +63,25 @@ const EditHabitScreen = ({ navigation, route }) => {
   ];
 
   const timeOptions = ['5 min', '10 min', '15 min', '30 min', '45 min', '1 hour', '2 hours'];
+
+  // ✅ ADDED: Ad tracking function
+  const trackInteractionAndShowAd = async (actionName) => {
+    const newCount = interactionCount + 1;
+    setInteractionCount(newCount);
+    
+    console.log(`[EditHabit] Interaction #${newCount}: ${actionName}`);
+    
+    // Show ad every 2 interactions in edit screen
+    if (newCount % 2 === 0) {
+      setTimeout(async () => {
+        try {
+          await adMobService.showInterstitialAd(`edit_habit_${actionName}`);
+        } catch (error) {
+          console.log('[EditHabit] Ad not shown:', error);
+        }
+      }, 500);
+    }
+  };
 
   const validateForm = () => {
     if (!habitName.trim()) {
@@ -79,6 +102,7 @@ const EditHabitScreen = ({ navigation, route }) => {
     return true;
   };
 
+  // ✅ UPDATED: Track ad when habit is updated
   const handleUpdateHabit = async () => {
     if (!validateForm()) return;
 
@@ -101,7 +125,6 @@ const EditHabitScreen = ({ navigation, route }) => {
       await FirebaseService.updateHabit(habit.id, updates);
       console.log('✅ Habit updated successfully');
 
-      // Update notifications
       if (reminderEnabled) {
         const updatedHabit = { ...habit, ...updates };
         await NotificationService.scheduleHabitReminder(updatedHabit);
@@ -111,7 +134,6 @@ const EditHabitScreen = ({ navigation, route }) => {
         console.log('🔕 Reminder cancelled');
       }
 
-      // Track event
       try {
         await FirebaseService.trackEvent('habit_updated', {
           category,
@@ -122,20 +144,19 @@ const EditHabitScreen = ({ navigation, route }) => {
         console.error('Tracking error:', trackError);
       }
 
-      // 🔧 FIX: Wait for Firestore to sync, then navigate back
+      // ✅ ADDED: Show ad after updating habit
+      trackInteractionAndShowAd('habit_updated');
+
       console.log('⏳ Waiting for Firestore sync...');
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      // 🔧 FIX: Call onGoBack callback to force HomeScreen reload
       if (onGoBack) {
         onGoBack();
       }
       
-      // Navigate back
       console.log('🔧 Navigating back to Home screen...');
       navigation.goBack();
       
-      // Show success message after navigation
       setTimeout(() => {
         Alert.alert(
           'Success! ✅',
@@ -152,6 +173,7 @@ const EditHabitScreen = ({ navigation, route }) => {
     }
   };
 
+  // ✅ UPDATED: Track ad when habit is deleted
   const handleDeleteHabit = () => {
     Alert.alert(
       'Delete Habit',
@@ -170,16 +192,16 @@ const EditHabitScreen = ({ navigation, route }) => {
               await NotificationService.cancelHabitNotifications(habit.id);
               
               console.log('✅ Habit deleted successfully');
+
+              // ✅ ADDED: Show ad after deleting habit
+              trackInteractionAndShowAd('habit_deleted');
               
-              // 🔧 FIX: Wait for Firestore sync
               await new Promise(resolve => setTimeout(resolve, 500));
               
-              // 🔧 FIX: Call onGoBack callback
               if (onGoBack) {
                 onGoBack();
               }
               
-              // Navigate back
               navigation.goBack();
               
               setTimeout(() => {
@@ -223,7 +245,6 @@ const EditHabitScreen = ({ navigation, route }) => {
     >
       <Appbar.Header style={styles.appbar}>
         <Appbar.BackAction onPress={() => {
-          // 🔧 FIX: Call onGoBack even when using back button
           if (onGoBack) {
             onGoBack();
           }

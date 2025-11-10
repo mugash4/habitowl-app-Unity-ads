@@ -25,6 +25,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import FirebaseService from '../services/FirebaseService';
 import NotificationService from '../services/NotificationService';
 import AIService from '../services/AIService';
+import adMobService from '../services/AdMobService'; // ✅ ADDED
 
 const CreateHabitScreen = ({ navigation, route }) => {
   const scrollViewRef = useRef(null);
@@ -40,6 +41,9 @@ const CreateHabitScreen = ({ navigation, route }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+
+  // ✅ ADDED: Track interactions for ads
+  const [interactionCount, setInteractionCount] = useState(0);
 
   const categories = [
     { value: 'wellness', label: 'Wellness', icon: 'leaf', color: '#10b981' },
@@ -57,6 +61,25 @@ const CreateHabitScreen = ({ navigation, route }) => {
   useEffect(() => {
     loadAISuggestions();
   }, []);
+
+  // ✅ ADDED: Ad tracking function
+  const trackInteractionAndShowAd = async (actionName) => {
+    const newCount = interactionCount + 1;
+    setInteractionCount(newCount);
+    
+    console.log(`[CreateHabit] Interaction #${newCount}: ${actionName}`);
+    
+    // Show ad every 3 interactions
+    if (newCount % 3 === 0) {
+      setTimeout(async () => {
+        try {
+          await adMobService.showInterstitialAd(`create_habit_${actionName}`);
+        } catch (error) {
+          console.log('[CreateHabit] Ad not shown:', error);
+        }
+      }, 500);
+    }
+  };
 
   const loadAISuggestions = async () => {
     try {
@@ -77,7 +100,9 @@ const CreateHabitScreen = ({ navigation, route }) => {
     }
   };
 
+  // ✅ UPDATED: Track ad when suggestion is selected
   const handleSuggestionSelect = (suggestion) => {
+    trackInteractionAndShowAd('suggestion_select');
     setHabitName(suggestion.name);
     setDescription(suggestion.description);
     setCategory(suggestion.category);
@@ -104,19 +129,16 @@ const CreateHabitScreen = ({ navigation, route }) => {
     return true;
   };
 
-  // 🔧 NEW: Check habit limit before creating
   const checkHabitLimit = async () => {
     try {
       const userStats = await FirebaseService.getUserStats();
       const isPremium = userStats?.isPremium || false;
       
-      // Get current habits count
       const userHabits = await FirebaseService.getUserHabits();
       const currentHabitsCount = userHabits ? userHabits.length : 0;
       
       console.log(`User has ${currentHabitsCount} habits. Premium: ${isPremium}`);
       
-      // Free users can only have 5 habits
       const FREE_HABIT_LIMIT = 5;
       
       if (!isPremium && currentHabitsCount >= FREE_HABIT_LIMIT) {
@@ -126,12 +148,10 @@ const CreateHabitScreen = ({ navigation, route }) => {
       return true;
     } catch (error) {
       console.error('Error checking habit limit:', error);
-      // If there's an error, allow creation (fail gracefully)
       return true;
     }
   };
 
-  // 🔧 NEW: Show upgrade prompt
   const showUpgradePrompt = () => {
     Alert.alert(
       '🔒 Upgrade to Premium',
@@ -151,7 +171,7 @@ const CreateHabitScreen = ({ navigation, route }) => {
     );
   };
 
-  // 🔧 UPDATED: Complete fix for habit creation with limit check
+  // ✅ UPDATED: Track ad when habit is created
   const handleCreateHabit = async () => {
     if (!validateForm()) return;
 
@@ -160,7 +180,6 @@ const CreateHabitScreen = ({ navigation, route }) => {
     try {
       setIsLoading(true);
 
-      // 🔧 NEW: Check habit limit before creating
       const canCreate = await checkHabitLimit();
       
       if (!canCreate) {
@@ -187,23 +206,23 @@ const CreateHabitScreen = ({ navigation, route }) => {
       const newHabit = await FirebaseService.createHabit(habitData);
       console.log('✅ Habit created successfully with ID:', newHabit.id);
 
-      // Schedule reminder if enabled (don't block navigation)
       if (reminderEnabled) {
         NotificationService.scheduleHabitReminder(newHabit).catch(err => {
           console.error('⚠️ Reminder error:', err);
         });
       }
 
-      // Track event (don't wait for this)
       FirebaseService.trackEvent('habit_created', {
         category,
         difficulty,
         has_reminder: reminderEnabled
       }).catch(err => console.error('⚠️ Tracking error:', err));
 
+      // ✅ ADDED: Show ad after creating habit
+      trackInteractionAndShowAd('habit_created');
+
       console.log('🔄 Navigating back to Home with refresh...');
       
-      // Use replace to ensure proper navigation
       navigation.reset({
         index: 0,
         routes: [
@@ -224,7 +243,6 @@ const CreateHabitScreen = ({ navigation, route }) => {
         ],
       });
       
-      // Show success message after navigation
       setTimeout(() => {
         Alert.alert(
           '🎉 Success!',

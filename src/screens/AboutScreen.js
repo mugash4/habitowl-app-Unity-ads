@@ -24,11 +24,7 @@ import adMobService from '../services/AdMobService';
 const AboutScreen = ({ navigation }) => {
   const [showContactSupport, setShowContactSupport] = useState(false);
 
-  const handleOpenLink = (url) => {
-    Linking.openURL(url);
-  };
-
-  // ✅ NEW: Track interactions for ads
+  // ✅ Track interactions for ads
   const [interactionCount, setInteractionCount] = useState(0);
 
   const trackInteractionAndShowAd = async (actionName) => {
@@ -49,15 +45,15 @@ const AboutScreen = ({ navigation }) => {
     }
   };
 
-
-  const handleLinkPress = (url) => {
-    trackInteractionAndShowAd('link_press'); // Add this line
+  // ✅ FIXED: Updated to include ad tracking
+  const handleOpenLink = (url) => {
+    trackInteractionAndShowAd('link_press');
     Linking.openURL(url);
   };
 
-
-
+  // ✅ FIXED: Updated to include ad tracking
   const handleContactSupport = () => {
+    trackInteractionAndShowAd('contact_support');
     console.log('Opening support chat...');
     setShowContactSupport(true);
   
