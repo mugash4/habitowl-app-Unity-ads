@@ -47,18 +47,17 @@ const theme = {
 const TAB_BAR_HEIGHT = 60;
 const BANNER_HEIGHT = 60;
 
-// ✅ FIXED: Proper banner ad integration with dynamic tab bar
+// ✅ FIXED: Proper banner ad integration directly in tab bar
 const MainTabNavigator = () => {
   const insets = useSafeAreaInsets();
   const [showBanner, setShowBanner] = useState(false);
 
-  // ✅ FIX: Subscribe to ALL status changes, not just premium
   useEffect(() => {
     console.log('[TabNavigator] 🎬 Setting up status subscription');
     
-    // Subscribe to comprehensive status updates
+    // Subscribe to ALL status changes
     const unsubscribe = AdMobService.onStatusChange((status) => {
-      console.log('[TabNavigator] 📢 Status update:', status);
+      console.log('[TabNavigator] 📢 Status update received:', status);
       
       // Show banner only if all conditions are met
       const shouldShow = status.shouldShowAds && 
@@ -67,15 +66,23 @@ const MainTabNavigator = () => {
                         !status.isAdmin &&
                         status.premiumStatusLoaded;
       
-      console.log(`[TabNavigator] Setting showBanner = ${shouldShow}`);
+      console.log(`[TabNavigator] ⚙️ Setting showBanner = ${shouldShow}`);
+      console.log('[TabNavigator] 📊 Status breakdown:', {
+        shouldShowAds: status.shouldShowAds,
+        isInitialized: status.isInitialized,
+        isPremium: status.isPremium,
+        isAdmin: status.isAdmin,
+        premiumStatusLoaded: status.premiumStatusLoaded
+      });
+      
       setShowBanner(shouldShow);
     });
     
-    // Also do initial check after delay to catch late initialization
+    // Also do delayed checks to catch late initialization
     const timeoutIds = [500, 1500, 3000].map((delay) =>
       setTimeout(() => {
         const shouldShow = AdMobService.shouldShowAds();
-        console.log(`[TabNavigator] Delayed check (${delay}ms): ${shouldShow}`);
+        console.log(`[TabNavigator] ⏰ Delayed check (${delay}ms): ${shouldShow}`);
         setShowBanner(shouldShow);
       }, delay)
     );
@@ -115,16 +122,15 @@ const MainTabNavigator = () => {
           tabBarActiveTintColor: '#4f46e5',
           tabBarInactiveTintColor: '#6b7280',
           tabBarStyle: {
-            // ✅ FIX: Container grows/shrinks based on banner visibility
             position: 'absolute',
             bottom: 0,
             left: 0,
             right: 0,
-            height: totalTabBarHeight, // Dynamic total height
+            height: totalTabBarHeight,
             backgroundColor: '#ffffff',
             borderTopWidth: 1,
             borderTopColor: '#e5e7eb',
-            paddingBottom: systemNavHeight + bannerSpace, // Space for system nav + banner
+            paddingBottom: systemNavHeight + bannerSpace,
             paddingTop: 8,
             elevation: 8,
             shadowColor: '#000',
@@ -133,7 +139,6 @@ const MainTabNavigator = () => {
             shadowRadius: 3,
           },
           tabBarItemStyle: {
-            // ✅ FIX: Tabs stay in their normal position
             height: TAB_BAR_HEIGHT,
           },
           tabBarLabelStyle: {
@@ -167,11 +172,11 @@ const MainTabNavigator = () => {
         />
       </Tab.Navigator>
 
-      {/* ✅ FIX: Banner positioned at bottom of tab bar container */}
+      {/* ✅ FIXED: Banner positioned at BOTTOM of tab bar container - NO OVERLAY */}
       {showBanner && Platform.OS !== 'web' && (
         <View style={{
           position: 'absolute',
-          bottom: systemNavHeight, // Above system navigation bar
+          bottom: systemNavHeight,
           left: 0,
           right: 0,
           height: BANNER_HEIGHT,
@@ -213,8 +218,8 @@ const AppNavigator = () => {
         console.log('[AppNavigator] 🔐 Auth state changed:', user ? 'Logged in' : 'Logged out');
         
         if (user) {
-          // User logged in - reload premium status
-          console.log('[AppNavigator] 👤 User logged in, checking premium status...');
+          // User logged in - reload premium/admin status
+          console.log('[AppNavigator] 👤 User logged in, checking premium/admin status...');
           await AdMobService.preloadPremiumStatus();
         }
         

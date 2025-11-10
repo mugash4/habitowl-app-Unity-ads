@@ -18,6 +18,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import ContactSupport from '../components/ContactSupport';
 import FirebaseService from '../services/FirebaseService';
+import adMobService from '../services/AdMobService'; 
+
 
 const AboutScreen = ({ navigation }) => {
   const [showContactSupport, setShowContactSupport] = useState(false);
@@ -25,6 +27,35 @@ const AboutScreen = ({ navigation }) => {
   const handleOpenLink = (url) => {
     Linking.openURL(url);
   };
+
+  // ✅ NEW: Track interactions for ads
+  const [interactionCount, setInteractionCount] = useState(0);
+
+  const trackInteractionAndShowAd = async (actionName) => {
+    const newCount = interactionCount + 1;
+    setInteractionCount(newCount);
+  
+    console.log(`[About] Interaction #${newCount}: ${actionName}`);
+  
+    // Show ad every 2 interactions in About screen
+    if (newCount % 2 === 0) {
+      setTimeout(async () => {
+        try {
+          await adMobService.showInterstitialAd(`about_${actionName}`);
+        } catch (error) {
+          console.log('[About] Ad not shown:', error);
+        }
+      }, 500);
+    }
+  };
+
+
+  const handleLinkPress = (url) => {
+    trackInteractionAndShowAd('link_press'); // Add this line
+    Linking.openURL(url);
+  };
+
+
 
   const handleContactSupport = () => {
     console.log('Opening support chat...');
