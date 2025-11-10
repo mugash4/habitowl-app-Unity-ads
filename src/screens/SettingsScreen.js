@@ -20,13 +20,14 @@ import {
 } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { useTabBarHeight } from '../hooks/useTabBarHeight'; // ✅ ADDED
+import { useTabBarHeight } from '../hooks/useTabBarHeight';
 
 import FirebaseService from '../services/FirebaseService';
 import SecureAIService from '../services/SecureAIService';
 import NotificationService from '../services/NotificationService';
 import ContactSupport from '../components/ContactSupport';
 import AdminService from '../services/AdminService';
+import adMobService from '../services/AdMobService'; // ✅ ADDED
 
 let PromoOfferBanner = null;
 try {
@@ -57,7 +58,9 @@ const SettingsScreen = ({ navigation }) => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  // ✅ ADDED: Dynamic tab bar height calculation
+  // ✅ Track user interactions for ad timing
+  const [interactionCount, setInteractionCount] = useState(0);
+
   const { totalHeight: tabBarTotalHeight } = useTabBarHeight();
 
   useEffect(() => {
@@ -154,7 +157,28 @@ const SettingsScreen = ({ navigation }) => {
     }
   };
 
+  // ✅ FIX 3: Show interstitial ad after certain interactions
+  const trackInteractionAndShowAd = async (actionName) => {
+    const newCount = interactionCount + 1;
+    setInteractionCount(newCount);
+    
+    console.log(`[Settings] Interaction #${newCount}: ${actionName}`);
+    
+    // Show ad every 3 interactions (adjust as needed)
+    if (newCount % 3 === 0) {
+      console.log(`[Settings] Showing ad after ${newCount} interactions`);
+      setTimeout(async () => {
+        try {
+          await adMobService.showInterstitialAd(`settings_${actionName}`);
+        } catch (error) {
+          console.log('[Settings] Ad not shown:', error);
+        }
+      }, 500);
+    }
+  };
+
   const handlePremiumUpgrade = () => {
+    trackInteractionAndShowAd('premium_upgrade');
     try {
       navigation.getParent()?.navigate('Premium');
     } catch (error) {
@@ -185,6 +209,7 @@ const SettingsScreen = ({ navigation }) => {
   };
 
   const handleShareApp = async () => {
+    trackInteractionAndShowAd('share_app');
     try {
       const code = userStats?.referralCode || 'HABITOWL';
       const message = `Check out HabitOwl - the smart habit tracker!\n\nUse code: ${code}\n\nDownload: https://habitowl-app.web.app`;
@@ -217,12 +242,14 @@ const SettingsScreen = ({ navigation }) => {
       setReferralCode('');
       Alert.alert('Success!', 'Referral code applied successfully!');
       await loadUserDataSafely();
+      trackInteractionAndShowAd('referral_submit');
     } catch (error) {
       Alert.alert('Error', error.message || 'Failed to process referral code');
     }
   };
 
   const handleAboutPress = () => {
+    trackInteractionAndShowAd('about');
     try {
       navigation.getParent()?.navigate('About');
     } catch (error) {
@@ -241,6 +268,7 @@ const SettingsScreen = ({ navigation }) => {
   };
 
   const handleContactSupport = () => {
+    trackInteractionAndShowAd('contact_support');
     console.log('Opening support chat...');
     setShowContactSupport(true);
   
@@ -250,18 +278,21 @@ const SettingsScreen = ({ navigation }) => {
   };
 
   const handlePrivacyPolicy = () => {
+    trackInteractionAndShowAd('privacy_policy');
     Linking.openURL('https://habitowl-3405d.web.app/privacy').catch(() => 
       Alert.alert('Error', 'Unable to open privacy policy')
     );
   };
 
   const handleTermsOfService = () => {
+    trackInteractionAndShowAd('terms_of_service');
     Linking.openURL('https://habitowl-3405d.web.app/terms').catch(() => 
       Alert.alert('Error', 'Unable to open terms of service')
     );
   };
 
   const handleStatisticsPress = () => {
+    trackInteractionAndShowAd('statistics');
     try {
       navigation.navigate('Statistics');
     } catch (error) {
@@ -270,6 +301,7 @@ const SettingsScreen = ({ navigation }) => {
   };
 
   const toggleNotifications = async (enabled) => {
+    trackInteractionAndShowAd('toggle_notifications');
     try {
       setNotifications(enabled);
       if (!enabled) {
@@ -278,6 +310,26 @@ const SettingsScreen = ({ navigation }) => {
     } catch (error) {
       console.error('Error toggling notifications:', error);
       setNotifications(!enabled);
+    }
+  };
+
+  const handleSmartCoachingPress = () => {
+    trackInteractionAndShowAd('smart_coaching');
+    if (!isPremium && !isAdmin) {
+      Alert.alert(
+        'Premium Feature',
+        'Smart Coaching is available for Premium subscribers only. Upgrade now to get personalized AI-powered habit coaching!',
+        [
+          { text: 'Maybe Later', style: 'cancel' },
+          { text: 'Upgrade to Premium', onPress: handlePremiumUpgrade }
+        ]
+      );
+    } else {
+      Alert.alert(
+        '💡 How to Use AI Coaching',
+        'AI-powered coaching is available!\n\n1. Go to Home screen\n2. Find any habit card\n3. Tap the lightbulb (💡) icon on the habit\n4. Ask questions and get personalized coaching!\n\nThe lightbulb icon is located next to each habit name.',
+        [{ text: 'Got it!', style: 'default' }]
+      );
     }
   };
 
@@ -339,7 +391,7 @@ const SettingsScreen = ({ navigation }) => {
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: tabBarTotalHeight + 20 } // ✅ FIXED: Dynamic padding
+          { paddingBottom: tabBarTotalHeight + 20 }
         ]}
         showsVerticalScrollIndicator={false}
         scrollEnabled={true}
@@ -387,24 +439,7 @@ const SettingsScreen = ({ navigation }) => {
             description={isPremium || isAdmin ? "AI-powered coaching is available! Go to any habit and tap the lightbulb icon to get personalized insights and suggestions." : "Upgrade to Premium to unlock AI coaching"}
             left={(props) => <List.Icon {...props} icon="brain" />}
             right={(props) => <List.Icon {...props} icon="chevron-right" />}
-            onPress={() => {
-              if (!isPremium && !isAdmin) {
-                Alert.alert(
-                  'Premium Feature',
-                  'Smart Coaching is available for Premium subscribers only. Upgrade now to get personalized AI-powered habit coaching!',
-                  [
-                    { text: 'Maybe Later', style: 'cancel' },
-                    { text: 'Upgrade to Premium', onPress: handlePremiumUpgrade }
-                  ]
-                );
-              } else {
-                Alert.alert(
-                  '💡 How to Use AI Coaching',
-                  'AI-powered coaching is available!\n\n1. Go to Home screen\n2. Find any habit card\n3. Tap the lightbulb (💡) icon on the habit\n4. Ask questions and get personalized coaching!\n\nThe lightbulb icon is located next to each habit name.',
-                  [{ text: 'Got it!', style: 'default' }]
-                );
-              }
-            }}
+            onPress={handleSmartCoachingPress}
             titleStyle={styles.listItemTitle}
             descriptionStyle={styles.listItemDescription}
           />

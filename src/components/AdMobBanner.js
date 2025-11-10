@@ -1,6 +1,6 @@
 /**
- * AdMob Banner Ad Component
- * ✅ FIXED: Proper status subscription with real-time updates
+ * ✅ FIXED: AdMob Banner Ad Component
+ * Properly subscribes to status changes and displays banner dynamically
  */
 
 import React, { useEffect, useState, useRef } from 'react';
@@ -15,8 +15,9 @@ try {
   const admobModule = require('react-native-google-mobile-ads');
   BannerAd = admobModule.BannerAd;
   BannerAdSize = admobModule.BannerAdSize;
+  console.log('[Banner] ✅ AdMob SDK loaded');
 } catch (error) {
-  console.log('[Banner] AdMob SDK not available');
+  console.log('[Banner] ℹ️ AdMob SDK not available (normal for Expo Go)');
 }
 
 const AdMobBanner = ({ style = {} }) => {
@@ -29,27 +30,49 @@ const AdMobBanner = ({ style = {} }) => {
     console.log('[Banner] 🎬 Component mounted');
     isMountedRef.current = true;
     
-    // ✅ FIX: Subscribe to all status changes
+    // ✅ FIX: Subscribe to comprehensive status changes
     const unsubscribe = adMobService.onStatusChange((status) => {
       if (!isMountedRef.current) return;
       
-      console.log('[Banner] 📢 Status update received:', status);
+      console.log('[Banner] 📢 Status update:', status);
       checkAndUpdate(status);
     });
 
     // Initial check
-    checkAndUpdate({
+    const initialStatus = {
       isInitialized: adMobService.isInitialized,
       isPremium: adMobService.isPremium,
       isAdmin: adMobService.isAdmin,
       premiumStatusLoaded: adMobService.premiumStatusLoaded,
       shouldShowAds: adMobService.shouldShowAds()
-    });
+    };
+    
+    console.log('[Banner] 🔍 Initial status:', initialStatus);
+    checkAndUpdate(initialStatus);
+
+    // Delayed re-checks to catch late initialization
+    const timeout1 = setTimeout(() => {
+      if (isMountedRef.current) {
+        const status = adMobService.getStatus();
+        console.log('[Banner] 🔄 Delayed check (1s):', status.shouldShowAds);
+        checkAndUpdate(status);
+      }
+    }, 1000);
+
+    const timeout2 = setTimeout(() => {
+      if (isMountedRef.current) {
+        const status = adMobService.getStatus();
+        console.log('[Banner] 🔄 Delayed check (2s):', status.shouldShowAds);
+        checkAndUpdate(status);
+      }
+    }, 2000);
 
     return () => {
       console.log('[Banner] 🚪 Component unmounting');
       isMountedRef.current = false;
       unsubscribe();
+      clearTimeout(timeout1);
+      clearTimeout(timeout2);
     };
   }, []);
 
@@ -81,7 +104,13 @@ const AdMobBanner = ({ style = {} }) => {
 
     // Check if should show ads
     if (!status.shouldShowAds) {
-      const msg = `Ads disabled - Init: ${status.isInitialized}, Premium: ${status.isPremium}, Admin: ${status.isAdmin}`;
+      const reasons = [];
+      if (!status.isInitialized) reasons.push('not initialized');
+      if (status.isPremium) reasons.push('premium user');
+      if (status.isAdmin) reasons.push('admin user');
+      if (!status.premiumStatusLoaded) reasons.push('status loading');
+      
+      const msg = `Ads disabled: ${reasons.join(', ')}`;
       console.log(`[Banner] 🚫 ${msg}`);
       setDebugInfo(msg);
       setShouldShow(false);
@@ -111,8 +140,8 @@ const AdMobBanner = ({ style = {} }) => {
     // Show debug info in development
     if (__DEV__ && Platform.OS !== 'web') {
       return (
-        <View style={[styles.container, style, { height: 50, backgroundColor: '#f0f0f0' }]}>
-          <Text style={{ fontSize: 10, color: '#666', textAlign: 'center' }}>
+        <View style={[styles.container, style, styles.debugContainer]}>
+          <Text style={styles.debugText}>
             Banner Ad: {debugInfo}
           </Text>
         </View>
@@ -162,7 +191,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: '100%',
     backgroundColor: 'transparent',
-    paddingVertical: 5,
+  },
+  debugContainer: {
+    height: 50,
+    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 10,
+  },
+  debugText: {
+    fontSize: 10,
+    color: '#666',
+    textAlign: 'center',
   },
 });
 

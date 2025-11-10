@@ -47,50 +47,56 @@ const theme = {
 const TAB_BAR_HEIGHT = 60;
 const BANNER_HEIGHT = 60;
 
-// ✅ FIXED: Banner ad integrated into tab bar panel
+// ✅ FIXED: Proper banner ad integration with dynamic tab bar
 const MainTabNavigator = () => {
   const insets = useSafeAreaInsets();
   const [showBanner, setShowBanner] = useState(false);
 
-  // Banner visibility management
+  // ✅ FIX: Subscribe to ALL status changes, not just premium
   useEffect(() => {
-    console.log('[TabNavigator] 🎬 Initializing banner visibility management');
+    console.log('[TabNavigator] 🎬 Setting up status subscription');
     
-    // Initial check with multiple attempts
-    const checkAttempts = [500, 1500, 3000];
-    const timeouts = checkAttempts.map((delay) =>
-      setTimeout(() => {
-        const shouldShow = AdMobService.shouldShowAds();
-        console.log(`[TabNavigator] Initial check (${delay}ms): shouldShow = ${shouldShow}`);
-        setShowBanner(shouldShow);
-      }, delay)
-    );
-    
-    // Subscribe to premium status changes
-    const unsubscribe = AdMobService.onPremiumStatusChange((isPremiumOrAdmin) => {
-      console.log('[TabNavigator] 📢 Premium status changed:', isPremiumOrAdmin);
-      const shouldShow = !isPremiumOrAdmin && AdMobService.isInitialized;
+    // Subscribe to comprehensive status updates
+    const unsubscribe = AdMobService.onStatusChange((status) => {
+      console.log('[TabNavigator] 📢 Status update:', status);
+      
+      // Show banner only if all conditions are met
+      const shouldShow = status.shouldShowAds && 
+                        status.isInitialized && 
+                        !status.isPremium && 
+                        !status.isAdmin &&
+                        status.premiumStatusLoaded;
+      
       console.log(`[TabNavigator] Setting showBanner = ${shouldShow}`);
       setShowBanner(shouldShow);
     });
     
+    // Also do initial check after delay to catch late initialization
+    const timeoutIds = [500, 1500, 3000].map((delay) =>
+      setTimeout(() => {
+        const shouldShow = AdMobService.shouldShowAds();
+        console.log(`[TabNavigator] Delayed check (${delay}ms): ${shouldShow}`);
+        setShowBanner(shouldShow);
+      }, delay)
+    );
+    
     return () => {
-      console.log('[TabNavigator] 🚪 Cleaning up');
-      timeouts.forEach(clearTimeout);
+      console.log('[TabNavigator] 🚪 Cleaning up subscriptions');
       unsubscribe();
+      timeoutIds.forEach(clearTimeout);
     };
   }, []);
 
-  // ✅ Calculate total bottom space
+  // ✅ Calculate layout dimensions
   const systemNavHeight = insets.bottom || 0;
   const bannerSpace = showBanner ? BANNER_HEIGHT : 0;
-  const totalBottomHeight = TAB_BAR_HEIGHT + bannerSpace + systemNavHeight;
+  const totalTabBarHeight = TAB_BAR_HEIGHT + bannerSpace + systemNavHeight;
   
-  console.log(`[TabNavigator] 🎨 Layout - Tab: ${TAB_BAR_HEIGHT}px, Banner: ${bannerSpace}px, SystemNav: ${systemNavHeight}px, Total: ${totalBottomHeight}px`);
+  console.log(`[TabNavigator] 📐 Layout - TabBar: ${TAB_BAR_HEIGHT}px, Banner: ${bannerSpace}px, SystemNav: ${systemNavHeight}px, Total: ${totalTabBarHeight}px`);
   
   return (
     <View style={{ flex: 1 }}>
-      {/* Main content area */}
+      {/* Main Tab Navigator */}
       <Tab.Navigator
         screenOptions={({ route }) => ({
           tabBarIcon: ({ focused, color, size }) => {
@@ -109,25 +115,31 @@ const MainTabNavigator = () => {
           tabBarActiveTintColor: '#4f46e5',
           tabBarInactiveTintColor: '#6b7280',
           tabBarStyle: {
+            // ✅ FIX: Container grows/shrinks based on banner visibility
             position: 'absolute',
             bottom: 0,
             left: 0,
             right: 0,
+            height: totalTabBarHeight, // Dynamic total height
             backgroundColor: '#ffffff',
-            borderTopWidth: 0, // Remove border since banner will have its own
-            height: totalBottomHeight, // ✅ Container holds both tab bar + banner
-            paddingBottom: systemNavHeight, // System navigation spacing
+            borderTopWidth: 1,
+            borderTopColor: '#e5e7eb',
+            paddingBottom: systemNavHeight + bannerSpace, // Space for system nav + banner
             paddingTop: 8,
-            elevation: 0,
-            shadowOpacity: 0,
+            elevation: 8,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: -2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 3,
           },
           tabBarItemStyle: {
-            paddingBottom: bannerSpace, // ✅ Push tabs up when banner shows
+            // ✅ FIX: Tabs stay in their normal position
+            height: TAB_BAR_HEIGHT,
           },
           tabBarLabelStyle: {
             fontSize: 12,
             fontWeight: '500',
-            marginBottom: bannerSpace > 0 ? 4 : 0, // Adjust label spacing
+            marginBottom: 4,
           },
           headerShown: false,
         })}
@@ -155,11 +167,11 @@ const MainTabNavigator = () => {
         />
       </Tab.Navigator>
 
-      {/* ✅ Banner Ad - Positioned inside tab bar container at bottom */}
+      {/* ✅ FIX: Banner positioned at bottom of tab bar container */}
       {showBanner && Platform.OS !== 'web' && (
         <View style={{
           position: 'absolute',
-          bottom: systemNavHeight, // Above system navigation
+          bottom: systemNavHeight, // Above system navigation bar
           left: 0,
           right: 0,
           height: BANNER_HEIGHT,
@@ -169,22 +181,11 @@ const MainTabNavigator = () => {
           alignItems: 'center',
           justifyContent: 'center',
           zIndex: 1000,
-          elevation: 8,
+          elevation: 10,
         }}>
           <AdMobBanner />
         </View>
       )}
-
-      {/* Top border for entire tab panel */}
-      <View style={{
-        position: 'absolute',
-        bottom: totalBottomHeight,
-        left: 0,
-        right: 0,
-        height: 1,
-        backgroundColor: '#e5e7eb',
-        zIndex: 999,
-      }} />
     </View>
   );
 };
@@ -201,6 +202,7 @@ const AppNavigator = () => {
     try {
       console.log('[AppNavigator] 🚀 Initializing app services...');
       
+      // Initialize AdMob first (it pre-loads premium status)
       await AdMobService.initialize();
       await NotificationService.initialize();
       
@@ -208,7 +210,14 @@ const AppNavigator = () => {
 
       // Listen for auth state changes
       const unsubscribe = FirebaseService.onAuthStateChanged(async (user) => {
-        console.log('[AppNavigator] Auth state changed:', user ? 'Logged in' : 'Logged out');
+        console.log('[AppNavigator] 🔐 Auth state changed:', user ? 'Logged in' : 'Logged out');
+        
+        if (user) {
+          // User logged in - reload premium status
+          console.log('[AppNavigator] 👤 User logged in, checking premium status...');
+          await AdMobService.preloadPremiumStatus();
+        }
+        
         setIsAuthenticated(!!user);
         setIsInitialized(true);
       });

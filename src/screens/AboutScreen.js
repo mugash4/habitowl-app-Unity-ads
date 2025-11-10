@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -16,10 +16,23 @@ import {
 import { ScrollView } from 'react-native-gesture-handler';
 import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import ContactSupport from '../components/ContactSupport';
+import FirebaseService from '../services/FirebaseService';
 
 const AboutScreen = ({ navigation }) => {
+  const [showContactSupport, setShowContactSupport] = useState(false);
+
   const handleOpenLink = (url) => {
     Linking.openURL(url);
+  };
+
+  const handleContactSupport = () => {
+    console.log('Opening support chat...');
+    setShowContactSupport(true);
+  
+    FirebaseService.trackEvent('support_chat_opened', {
+      from_screen: 'about'
+    }).catch(err => console.log('Analytics tracking failed:', err));
   };
 
   const features = [
@@ -180,8 +193,8 @@ const AboutScreen = ({ navigation }) => {
             
             <Button
               mode="outlined"
-              icon="email"
-              onPress={() => handleOpenLink('mailto:support@habitowl.app')}
+              icon="message-text"
+              onPress={handleContactSupport}
               style={styles.contactButton}
               contentStyle={styles.contactButtonContent}
             >
@@ -261,8 +274,6 @@ const AboutScreen = ({ navigation }) => {
             >
               Terms of Service
             </Button>
-            
-            
           </Card.Content>
         </Card>
 
@@ -276,6 +287,12 @@ const AboutScreen = ({ navigation }) => {
           </Text>
         </View>
       </ScrollView>
+
+      {/* Contact Support Dialog */}
+      <ContactSupport 
+        visible={showContactSupport} 
+        onDismiss={() => setShowContactSupport(false)} 
+      />
     </View>
   );
 };
