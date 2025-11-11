@@ -3,7 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Provider as PaperProvider, Portal, MD3LightTheme } from 'react-native-paper';
-import { View, Platform } from 'react-native';
+import { View, Platform, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
@@ -45,26 +45,16 @@ const theme = {
 };
 
 // ✅ Layout constants
-const TAB_ICONS_HEIGHT = 60; // Space for tab icons + labels
-const BANNER_AD_HEIGHT = 50; // Standard AdMob banner height
+const TAB_ICONS_HEIGHT = 60;
+const BANNER_AD_HEIGHT = 50;
 
 /**
- * ✅ FIXED: Custom Tab Bar with Integrated Banner Ad
- * Banner ad displays directly in tab bar container (no placeholder)
- * Tab bar dynamically resizes for admin/premium users
+ * ✅ FIXED: Simplified Custom Tab Bar
  */
 const CustomTabBar = ({ state, descriptors, navigation, insets, shouldShowAds }) => {
-  // ✅ Dynamic height calculation
   const systemNavHeight = insets.bottom || 0;
   const bannerHeight = (shouldShowAds && Platform.OS !== 'web') ? BANNER_AD_HEIGHT : 0;
   const totalHeight = TAB_ICONS_HEIGHT + bannerHeight + systemNavHeight;
-
-  console.log('[CustomTabBar] Rendering:', {
-    shouldShowAds,
-    totalHeight,
-    bannerHeight,
-    systemNavHeight,
-  });
 
   return (
     <View style={{
@@ -72,7 +62,7 @@ const CustomTabBar = ({ state, descriptors, navigation, insets, shouldShowAds })
       bottom: 0,
       left: 0,
       right: 0,
-      height: totalHeight, // ✅ Dynamically adjusts
+      height: totalHeight,
       backgroundColor: '#ffffff',
       borderTopWidth: 1,
       borderTopColor: '#e5e7eb',
@@ -81,9 +71,9 @@ const CustomTabBar = ({ state, descriptors, navigation, insets, shouldShowAds })
       shadowOffset: { width: 0, height: -2 },
       shadowOpacity: 0.1,
       shadowRadius: 3,
-      flexDirection: 'column', // Stack tabs and banner vertically
+      flexDirection: 'column',
     }}>
-      {/* ✅ Tab Icons Row - Always at the top */}
+      {/* Tab Icons Row */}
       <View style={{
         height: TAB_ICONS_HEIGHT,
         flexDirection: 'row',
@@ -95,7 +85,6 @@ const CustomTabBar = ({ state, descriptors, navigation, insets, shouldShowAds })
           const label = options.tabBarLabel || options.title || route.name;
           const isFocused = state.index === index;
 
-          // Get icon name
           let iconName;
           if (route.name === 'Home') {
             iconName = isFocused ? 'home' : 'home-outline';
@@ -133,27 +122,19 @@ const CustomTabBar = ({ state, descriptors, navigation, insets, shouldShowAds })
                 color={isFocused ? '#4f46e5' : '#6b7280'}
               />
               <View style={{ height: 4 }} />
-              <View style={{ fontSize: 12, fontWeight: '500' }}>
-                {React.createElement(
-                  'text',
-                  {
-                    style: {
-                      fontSize: 12,
-                      fontWeight: '500',
-                      color: isFocused ? '#4f46e5' : '#6b7280',
-                    },
-                  },
-                  label
-                )}
-              </View>
+              <Text style={{
+                fontSize: 12,
+                fontWeight: '500',
+                color: isFocused ? '#4f46e5' : '#6b7280',
+              }}>
+                {label}
+              </Text>
             </View>
           );
         })}
       </View>
 
-      {/* ✅ Banner Ad - Directly integrated below tab icons */}
-      {/* NO placeholder - displays real AdMob banner content */}
-      {/* Auto-hides for admin/premium users (tab bar shrinks) */}
+      {/* Banner Ad */}
       {shouldShowAds && Platform.OS !== 'web' && (
         <View style={{
           height: BANNER_AD_HEIGHT,
@@ -167,7 +148,7 @@ const CustomTabBar = ({ state, descriptors, navigation, insets, shouldShowAds })
         </View>
       )}
 
-      {/* ✅ System Navigation Spacer */}
+      {/* System Navigation Spacer */}
       {systemNavHeight > 0 && (
         <View style={{ height: systemNavHeight, backgroundColor: '#ffffff' }} />
       )}
@@ -176,28 +157,19 @@ const CustomTabBar = ({ state, descriptors, navigation, insets, shouldShowAds })
 };
 
 /**
- * ✅ Main Tab Navigator with Custom Tab Bar
+ * ✅ FIXED: Main Tab Navigator
  */
 const MainTabNavigator = () => {
   const insets = useSafeAreaInsets();
   const [shouldShowAds, setShouldShowAds] = useState(false);
-  const [renderKey, setRenderKey] = useState(0);
+  const [isReady, setIsReady] = useState(false);
 
-  // ✅ Monitor ad display status
   useEffect(() => {
-    console.log('[TabNav] 🎬 Mounting tab navigator');
+    // Set ready immediately - don't wait for AdMob
+    setIsReady(true);
     
-    // Subscribe to AdMob status changes
+    // Subscribe to AdMob status changes (non-blocking)
     const unsubscribe = AdMobService.onStatusChange((status) => {
-      console.log('[TabNav] 📢 Status update:', {
-        shouldShowAds: status.shouldShowAds,
-        isPremium: status.isPremium,
-        isAdmin: status.isAdmin,
-        isInitialized: status.isInitialized,
-        premiumStatusLoaded: status.premiumStatusLoaded
-      });
-      
-      // Show ads only if ALL conditions are met
       const canShowAds = status.shouldShowAds && 
                         status.isInitialized && 
                         !status.isPremium && 
@@ -205,35 +177,36 @@ const MainTabNavigator = () => {
                         status.premiumStatusLoaded;
       
       setShouldShowAds(canShowAds);
-      setRenderKey(prev => prev + 1); // Force re-render
     });
     
-    // Delayed checks for late initialization
-    const delays = [500, 1500, 3000];
-    const timeouts = delays.map(delay =>
-      setTimeout(() => {
-        const status = AdMobService.getStatus();
-        const canShowAds = status.shouldShowAds && 
-                          status.isInitialized && 
-                          !status.isPremium && 
-                          !status.isAdmin &&
-                          status.premiumStatusLoaded;
-        
-        console.log('[TabNav] ⏰ Delayed check (' + delay + 'ms):', canShowAds);
-        setShouldShowAds(canShowAds);
-        setRenderKey(prev => prev + 1);
-      }, delay)
-    );
+    // Delayed check (non-blocking)
+    setTimeout(() => {
+      const status = AdMobService.getStatus();
+      const canShowAds = status.shouldShowAds && 
+                        status.isInitialized && 
+                        !status.isPremium && 
+                        !status.isAdmin &&
+                        status.premiumStatusLoaded;
+      setShouldShowAds(canShowAds);
+    }, 1000);
     
     return () => {
-      console.log('[TabNav] 🚪 Unmounting');
       unsubscribe();
-      timeouts.forEach(clearTimeout);
     };
   }, []);
 
+  // Render immediately - don't wait
+  if (!isReady) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc' }}>
+        <Icon name="loading" size={40} color="#4f46e5" />
+        <Text style={{ marginTop: 16, fontSize: 16, color: '#6b7280' }}>Loading...</Text>
+      </View>
+    );
+  }
+
   return (
-    <View style={{ flex: 1 }} key={renderKey}>
+    <View style={{ flex: 1 }}>
       <Tab.Navigator
         tabBar={(props) => (
           <CustomTabBar {...props} insets={insets} shouldShowAds={shouldShowAds} />
@@ -263,7 +236,7 @@ const MainTabNavigator = () => {
 };
 
 /**
- * Main App Navigator
+ * ✅ FIXED: Main App Navigator - Non-blocking initialization
  */
 const AppNavigator = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(null);
@@ -277,7 +250,7 @@ const AppNavigator = () => {
     try {
       console.log('[AppNav] 🚀 Initializing app...');
       
-      // Initialize services in background
+      // ✅ FIX: Initialize services in background (non-blocking)
       AdMobService.initialize().catch(error => {
         console.log('[AppNav] AdMob init error (non-critical):', error.message);
       });
@@ -286,28 +259,41 @@ const AppNavigator = () => {
         console.log('[AppNav] Notification init error (non-critical):', error.message);
       });
       
-      // Listen for auth changes
+      // ✅ FIX: Set initialized immediately after setting up auth listener
       const unsubscribe = FirebaseService.onAuthStateChanged(async (user) => {
         console.log('[AppNav] 🔐 Auth state:', user ? 'Logged in' : 'Logged out');
         
         if (user) {
           console.log('[AppNav] 👤 User logged in, loading premium status...');
-          await AdMobService.preloadPremiumStatus();
+          // Load premium status in background (non-blocking)
+          AdMobService.preloadPremiumStatus().catch(error => {
+            console.log('[AppNav] Premium status load error (non-critical):', error);
+          });
         }
         
         setIsAuthenticated(!!user);
-        setIsInitialized(true);
+        // ✅ Set initialized immediately
+        if (!isInitialized) {
+          setIsInitialized(true);
+        }
       });
 
       return unsubscribe;
     } catch (error) {
       console.error('[AppNav] ❌ Initialization error:', error);
+      // ✅ Set initialized even on error
       setIsInitialized(true);
     }
   };
 
+  // ✅ Show loading only briefly
   if (!isInitialized) {
-    return null; // Show nothing while initializing
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc' }}>
+        <Icon name="loading" size={40} color="#4f46e5" />
+        <Text style={{ marginTop: 16, fontSize: 16, color: '#6b7280' }}>Initializing...</Text>
+      </View>
+    );
   }
 
   return (
