@@ -1,7 +1,7 @@
 /**
- * AdMob Banner Component - FIXED VERSION
- * ✅ Always reserves space and displays banner when ready
- * ✅ Auto-hides for admin/premium users (shrinks container)
+ * AdMob Banner Component - COMPLETE FIX
+ * ✅ Always displays content when container expects it
+ * ✅ Properly auto-hides for admin/premium users
  */
 
 import React, { useEffect, useState, useRef } from 'react';
@@ -93,7 +93,7 @@ const AdMobBanner = ({ style = {} }) => {
 
     // Check #3: Premium/Admin users (should NOT show ads)
     if (status.isPremium || status.isAdmin) {
-      console.log(`[Banner] 👑 ${status.isPremium ? 'premium' : 'admin'} user - hiding ads`);
+      console.log(`[Banner] 👑 ${status.isPremium ? 'Premium' : 'Admin'} user - hiding ads`);
       setShouldDisplay(false);
       return;
     }
@@ -117,40 +117,27 @@ const AdMobBanner = ({ style = {} }) => {
     }
   };
 
-  // ✅ FIXED: Always return null - the CustomTabBar will handle the space
-  // This component only controls whether the ad loads, not the container
+  // ✅ FIX: Always return a visible component when expected to display
   if (Platform.OS === 'web') {
     return null;
   }
 
   if (!BannerAd || !BannerAdSize) {
-    // Show debug info only in dev mode
-    if (__DEV__) {
-      return (
-        <View style={[styles.debugContainer, style]}>
-          <Text style={styles.debugText}>⚠️ SDK not available</Text>
-          <Text style={[styles.debugText, { fontSize: 9 }]}>
-            Build with EAS to enable ads
-          </Text>
-        </View>
-      );
-    }
-    return null;
+    // ✅ FIX: Return visible placeholder instead of null
+    return (
+      <View style={[styles.container, style]}>
+        <Text style={styles.placeholderText}>Loading...</Text>
+      </View>
+    );
   }
 
   if (!shouldDisplay) {
-    // In dev mode, show why ads aren't showing
-    if (__DEV__) {
-      return (
-        <View style={[styles.debugContainer, style]}>
-          <Text style={styles.debugText}>Banner: Checking conditions...</Text>
-          <Text style={[styles.debugText, { fontSize: 8 }]}>
-            Checks: {checkCounter.current}
-          </Text>
-        </View>
-      );
-    }
-    return null;
+    // ✅ FIX: Return visible loading state instead of null
+    return (
+      <View style={[styles.container, style]}>
+        <Text style={styles.placeholderText}>Loading ad...</Text>
+      </View>
+    );
   }
 
   // ✅ Display the actual banner ad
@@ -180,10 +167,10 @@ const AdMobBanner = ({ style = {} }) => {
           adMobService.trackAdImpression('banner', 'click');
         }}
       />
-      {/* Loading indicator in dev mode */}
-      {__DEV__ && !adLoaded && (
+      {/* Loading indicator while ad loads */}
+      {!adLoaded && (
         <View style={styles.loadingOverlay}>
-          <Text style={styles.loadingText}>Loading ad...</Text>
+          <Text style={styles.loadingText}>Loading...</Text>
         </View>
       )}
     </View>
@@ -196,23 +183,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: '100%',
     height: 50, // Standard banner height
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#f9fafb',
     overflow: 'hidden',
   },
-  debugContainer: {
-    height: 50,
-    width: '100%',
-    backgroundColor: '#fff3cd',
-    borderWidth: 1,
-    borderColor: '#ffc107',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 10,
-  },
-  debugText: {
-    fontSize: 10,
-    color: '#856404',
-    textAlign: 'center',
+  placeholderText: {
+    fontSize: 12,
+    color: '#9ca3af',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   loadingOverlay: {
@@ -221,13 +197,13 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(255, 243, 205, 0.8)',
+    backgroundColor: 'rgba(249, 250, 251, 0.9)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   loadingText: {
-    fontSize: 10,
-    color: '#856404',
+    fontSize: 12,
+    color: '#6b7280',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
 });

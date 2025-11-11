@@ -28,6 +28,22 @@ import {
 import { db, auth } from '../config/firebase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+let adMobService = null;
+
+let adMobService = null; // ✅ ADD THIS LINE
+
+// ✅ ADD THIS FUNCTION after imports
+function getAdMobService() {
+  if (!adMobService) {
+    try {
+      adMobService = require('./AdMobService').default;
+    } catch (error) {
+      console.log('AdMobService not available');
+    }
+  }
+  return adMobService;
+}
+
 
 class FirebaseService {
   constructor() {
@@ -594,26 +610,46 @@ class FirebaseService {
         collection(db, 'users'),
         where('uid', '==', this.currentUser.uid)
       );
-    
+  
       const querySnapshot = await getDocs(userQuery);
-    
+  
       if (!querySnapshot.empty) {
         const userDoc = querySnapshot.docs[0];
         await updateDoc(userDoc.ref, {
           isPremium: isPremium,
           premiumUpdatedAt: new Date().toISOString()
         });
-      
+    
         console.log(`Premium status updated to: ${isPremium}`);
+      
+        // ✅ FIX: Also update AdMobService
+        const adMob = getAdMobService();
+        if (adMob) {
+          // Check if user is admin
+          const userData = userDoc.data();
+          const isAdmin = await this.checkIfUserIsAdmin(this.currentUser.email);
+          await adMob.setPremiumStatus(isPremium, isAdmin);
+        }
+      
         return true;
       }
-    
+  
       return false;
     } catch (error) {
       console.error('Error updating premium status:', error);
       throw error;
     }
   }
+
+  async checkIfUserIsAdmin(email) {
+    try {
+      const AdminService = require('./AdminService').default;
+      return await AdminService.checkAdminStatus(email);
+    } catch (error) {
+      return false;
+    }
+  }
+
 
 }
 

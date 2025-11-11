@@ -54,12 +54,11 @@ const BANNER_AD_HEIGHT = 50;
 const CustomTabBar = ({ state, descriptors, navigation, insets, shouldShowAds }) => {
   const systemNavHeight = insets.bottom || 0;
   
-  // ✅ FIX: Banner height is ALWAYS allocated when shouldShowAds is true
-  // This ensures the space is reserved immediately
+  // ✅ FIX: Only allocate banner space when shouldShowAds is true AND on mobile
   const bannerHeight = (shouldShowAds && Platform.OS !== 'web') ? BANNER_AD_HEIGHT : 0;
   const totalHeight = TAB_ICONS_HEIGHT + bannerHeight + systemNavHeight;
 
-  console.log('[CustomTabBar] Rendering - shouldShowAds:', shouldShowAds, 'bannerHeight:', bannerHeight, 'totalHeight:', totalHeight);
+  console.log('[CustomTabBar] Rendering - shouldShowAds:', shouldShowAds, 'bannerHeight:', bannerHeight);
 
   return (
     <View style={{
@@ -140,7 +139,7 @@ const CustomTabBar = ({ state, descriptors, navigation, insets, shouldShowAds })
         })}
       </View>
 
-      {/* ✅ FIXED: Banner Ad Container - Space is ALWAYS allocated when shouldShowAds is true */}
+      {/* ✅ FIXED: Banner Ad Container - Only rendered when shouldShowAds is true */}
       {shouldShowAds && Platform.OS !== 'web' && (
         <View style={{
           height: BANNER_AD_HEIGHT,
@@ -151,7 +150,7 @@ const CustomTabBar = ({ state, descriptors, navigation, insets, shouldShowAds })
           borderTopWidth: 1,
           borderTopColor: '#e5e7eb',
         }}>
-          {/* ✅ The AdMobBanner component will render the actual ad when ready */}
+          {/* The AdMobBanner component will always return visible content */}
           <AdMobBanner />
         </View>
       )}
@@ -163,6 +162,7 @@ const CustomTabBar = ({ state, descriptors, navigation, insets, shouldShowAds })
     </View>
   );
 };
+
 
 /**
  * ✅ FIXED: Main Tab Navigator with immediate rendering

@@ -2,6 +2,8 @@ import * as RNIap from 'react-native-iap';
 import { Platform, Alert } from 'react-native';
 import FirebaseService from './FirebaseService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import adMobService from './AdMobService'; // ✅ ADD THIS LINE
+
 
 // 🔧 IMPORTANT: Replace these with your actual product IDs from Google Play Console
 const SUBSCRIPTION_SKUS = Platform.select({
@@ -72,35 +74,37 @@ class SubscriptionService {
     // Listen for purchase updates
     this.purchaseUpdateSubscription = RNIap.purchaseUpdatedListener(async (purchase) => {
       console.log('📦 Purchase update received:', purchase);
-      
+  
       const receipt = purchase.transactionReceipt || purchase.purchaseToken;
-      
+  
       if (receipt) {
         try {
           // Verify purchase with Google Play (in production, verify with your backend)
           await this.verifyPurchase(purchase);
-          
+      
           // Acknowledge the purchase (required for Android)
           if (Platform.OS === 'android') {
             await RNIap.acknowledgePurchaseAndroid(purchase.purchaseToken);
             console.log('✅ Purchase acknowledged');
           }
-          
+      
           // Finish transaction (for iOS)
           await RNIap.finishTransaction(purchase);
           console.log('✅ Transaction finished');
-          
-          // Update user premium status
+      
+          // ✅ FIX: Update AdMobService first, then Firebase
+          await adMobService.setPremiumStatus(true, false);
           await FirebaseService.updateUserPremiumStatus(true);
           await AsyncStorage.setItem('premium_status', 'true');
           await AsyncStorage.setItem('subscription_data', JSON.stringify(purchase));
-          
+      
           console.log('✅ Premium status activated!');
         } catch (ackErr) {
           console.error('❌ Purchase acknowledgment error:', ackErr);
         }
       }
     });
+
 
     // Listen for purchase errors
     this.purchaseErrorSubscription = RNIap.purchaseErrorListener((error) => {
@@ -118,25 +122,28 @@ class SubscriptionService {
   async checkPendingPurchases() {
     try {
       console.log('🔍 Checking for pending purchases...');
-      
+    
       // Get available purchases (subscriptions that are active)
       const availablePurchases = await RNIap.getAvailablePurchases();
       console.log('Available purchases:', availablePurchases.length);
-      
+    
       if (availablePurchases.length > 0) {
         // User has active subscription
         const latestPurchase = availablePurchases[0];
         console.log('✅ Active subscription found:', latestPurchase.productId);
-        
-        // Verify and activate premium
+      
+        // ✅ FIX: Update AdMobService first, then Firebase
         await this.verifyPurchase(latestPurchase);
+        await adMobService.setPremiumStatus(true, false);
         await FirebaseService.updateUserPremiumStatus(true);
         await AsyncStorage.setItem('premium_status', 'true');
         await AsyncStorage.setItem('subscription_data', JSON.stringify(latestPurchase));
-        
+      
         return true;
       } else {
         console.log('No active subscriptions found');
+        // ✅ FIX: Update AdMobService first, then Firebase
+        await adMobService.setPremiumStatus(false, false);
         await FirebaseService.updateUserPremiumStatus(false);
         await AsyncStorage.setItem('premium_status', 'false');
         return false;
@@ -146,6 +153,7 @@ class SubscriptionService {
       return false;
     }
   }
+
 
   // Verify purchase (basic client-side verification)
   async verifyPurchase(purchase) {
