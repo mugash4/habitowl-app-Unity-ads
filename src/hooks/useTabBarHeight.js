@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
+import { Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AdMobService from '../services/AdMobService';
 
-const TAB_BAR_HEIGHT = 60;
-const BANNER_HEIGHT = 60;
+const TAB_BAR_HEIGHT = 60; // Tab icons + labels
+const BANNER_HEIGHT = 50; // Standard AdMob banner
 
 /**
- * ✅ FIXED: Custom hook to calculate dynamic tab bar height
- * Now subscribes to comprehensive status changes for real-time updates
+ * ✅ FIXED: Custom hook to calculate dynamic tab bar + banner height
+ * Returns total height that screens need to account for
  */
 export const useTabBarHeight = () => {
   const insets = useSafeAreaInsets();
@@ -16,7 +17,7 @@ export const useTabBarHeight = () => {
   useEffect(() => {
     console.log('[useTabBarHeight] 🎬 Initializing hook');
     
-    // ✅ FIX: Subscribe to comprehensive status changes
+    // ✅ Subscribe to status changes
     const unsubscribe = AdMobService.onStatusChange((status) => {
       console.log('[useTabBarHeight] 📢 Status update:', status);
       
@@ -25,7 +26,8 @@ export const useTabBarHeight = () => {
                         status.isInitialized && 
                         !status.isPremium && 
                         !status.isAdmin &&
-                        status.premiumStatusLoaded;
+                        status.premiumStatusLoaded &&
+                        Platform.OS !== 'web';
       
       console.log(`[useTabBarHeight] Setting showBanner = ${shouldShow}`);
       setShowBanner(shouldShow);
@@ -33,7 +35,7 @@ export const useTabBarHeight = () => {
 
     // Initial check with retries
     const checkInitial = () => {
-      const shouldShow = AdMobService.shouldShowAds();
+      const shouldShow = AdMobService.shouldShowAds() && Platform.OS !== 'web';
       console.log(`[useTabBarHeight] Initial check: ${shouldShow}`);
       setShowBanner(shouldShow);
     };
@@ -58,10 +60,10 @@ export const useTabBarHeight = () => {
   const bannerSpace = showBanner ? BANNER_HEIGHT : 0;
   const totalHeight = TAB_BAR_HEIGHT + bannerSpace + systemNavHeight;
 
-  console.log(`[useTabBarHeight] 📐 Calculated - Total: ${totalHeight}px, Banner: ${bannerSpace}px`);
+  console.log(`[useTabBarHeight] 📐 Calculated - Total: ${totalHeight}px, Banner: ${bannerSpace}px, System: ${systemNavHeight}px`);
 
   return {
-    totalHeight,
+    totalHeight,              // Total space taken (tab + banner + system nav)
     tabBarHeight: TAB_BAR_HEIGHT,
     bannerHeight: bannerSpace,
     systemNavHeight,

@@ -45,13 +45,14 @@ const theme = {
 };
 
 // ✅ FIXED: Layout constants
-const TAB_BAR_HEIGHT = 60; // Height for tab icons
+const TAB_BAR_HEIGHT = 60; // Height for tab icons + labels
 const BANNER_AD_HEIGHT = 50; // Standard AdMob banner height
 
 /**
- * ✅ FIXED: Main Tab Navigator with Integrated Banner Ad
- * Banner ad displays directly in tab bar container (no separate placeholder)
- * Admin/Premium users see NO ads and tab bar auto-resizes
+ * ✅ FIXED: Main Tab Navigator with Banner Ad BELOW Tab Bar
+ * - Banner ad displays BELOW tab bar (not overlapping)
+ * - Tab bar dynamically resizes for admin/premium users
+ * - Admin/Premium users see NO ads anywhere
  */
 const MainTabNavigator = () => {
   const insets = useSafeAreaInsets();
@@ -107,17 +108,17 @@ const MainTabNavigator = () => {
     };
   }, []);
 
-  // ✅ Calculate dynamic tab bar height based on ad display status
+  // ✅ Calculate dynamic heights
   const systemNavHeight = insets.bottom || 0;
   const bannerHeight = (shouldShowAds && Platform.OS !== 'web') ? BANNER_AD_HEIGHT : 0;
-  const totalTabBarHeight = TAB_BAR_HEIGHT + bannerHeight + systemNavHeight;
+  const tabBarOnlyHeight = TAB_BAR_HEIGHT + systemNavHeight;
   
   console.log('[TabNav] 📐 Layout calculation:', {
     shouldShowAds,
     tabBarHeight: TAB_BAR_HEIGHT,
     bannerHeight,
     systemNavHeight,
-    totalHeight: totalTabBarHeight
+    tabBarOnlyHeight,
   });
   
   return (
@@ -139,15 +140,15 @@ const MainTabNavigator = () => {
           tabBarInactiveTintColor: '#6b7280',
           tabBarStyle: {
             position: 'absolute',
-            bottom: 0,
+            bottom: bannerHeight, // ✅ Positioned ABOVE banner ad (or at 0 if no ad)
             left: 0,
             right: 0,
-            height: totalTabBarHeight, // ✅ Dynamically adjusts based on ad display
+            height: tabBarOnlyHeight, // ✅ Fixed height (doesn't include banner)
             backgroundColor: '#ffffff',
             borderTopWidth: 1,
             borderTopColor: '#e5e7eb',
             paddingTop: 8,
-            paddingBottom: systemNavHeight, // Space for system navigation only
+            paddingBottom: systemNavHeight, // Space for system navigation
             elevation: 8,
             shadowColor: '#000',
             shadowOffset: { width: 0, height: -2 },
@@ -182,13 +183,12 @@ const MainTabNavigator = () => {
         />
       </Tab.Navigator>
 
-      {/* ✅ FIXED: Banner ad displays directly in tab bar container */}
-      {/* No placeholder - shows real ad content from AdMob */}
-      {/* Auto-hides for admin/premium users */}
+      {/* ✅ FIXED: Banner ad positioned BELOW tab bar */}
+      {/* Shows above system navigation, auto-hides for admin/premium */}
       {shouldShowAds && Platform.OS !== 'web' && (
         <View style={{
           position: 'absolute',
-          bottom: TAB_BAR_HEIGHT + systemNavHeight, // Position between tabs and system nav
+          bottom: systemNavHeight, // ✅ Position above system navigation only
           left: 0,
           right: 0,
           height: BANNER_AD_HEIGHT,
