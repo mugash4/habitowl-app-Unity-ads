@@ -44,15 +44,139 @@ const theme = {
   },
 };
 
-// ✅ FIXED: Layout constants
-const TAB_BAR_HEIGHT = 60; // Height for tab icons + labels
+// ✅ Layout constants
+const TAB_ICONS_HEIGHT = 60; // Space for tab icons + labels
 const BANNER_AD_HEIGHT = 50; // Standard AdMob banner height
 
 /**
- * ✅ FIXED: Main Tab Navigator with Banner Ad BELOW Tab Bar
- * - Banner ad displays BELOW tab bar (not overlapping)
- * - Tab bar dynamically resizes for admin/premium users
- * - Admin/Premium users see NO ads anywhere
+ * ✅ FIXED: Custom Tab Bar with Integrated Banner Ad
+ * Banner ad displays directly in tab bar container (no placeholder)
+ * Tab bar dynamically resizes for admin/premium users
+ */
+const CustomTabBar = ({ state, descriptors, navigation, insets, shouldShowAds }) => {
+  // ✅ Dynamic height calculation
+  const systemNavHeight = insets.bottom || 0;
+  const bannerHeight = (shouldShowAds && Platform.OS !== 'web') ? BANNER_AD_HEIGHT : 0;
+  const totalHeight = TAB_ICONS_HEIGHT + bannerHeight + systemNavHeight;
+
+  console.log('[CustomTabBar] Rendering:', {
+    shouldShowAds,
+    totalHeight,
+    bannerHeight,
+    systemNavHeight,
+  });
+
+  return (
+    <View style={{
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      height: totalHeight, // ✅ Dynamically adjusts
+      backgroundColor: '#ffffff',
+      borderTopWidth: 1,
+      borderTopColor: '#e5e7eb',
+      elevation: 8,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: -2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 3,
+      flexDirection: 'column', // Stack tabs and banner vertically
+    }}>
+      {/* ✅ Tab Icons Row - Always at the top */}
+      <View style={{
+        height: TAB_ICONS_HEIGHT,
+        flexDirection: 'row',
+        paddingTop: 8,
+        paddingBottom: 4,
+      }}>
+        {state.routes.map((route, index) => {
+          const { options } = descriptors[route.key];
+          const label = options.tabBarLabel || options.title || route.name;
+          const isFocused = state.index === index;
+
+          // Get icon name
+          let iconName;
+          if (route.name === 'Home') {
+            iconName = isFocused ? 'home' : 'home-outline';
+          } else if (route.name === 'Statistics') {
+            iconName = isFocused ? 'chart-line' : 'chart-line';
+          } else if (route.name === 'Settings') {
+            iconName = isFocused ? 'cog' : 'cog-outline';
+          }
+
+          const onPress = () => {
+            const event = navigation.emit({
+              type: 'tabPress',
+              target: route.key,
+              canPreventDefault: true,
+            });
+
+            if (!isFocused && !event.defaultPrevented) {
+              navigation.navigate(route.name);
+            }
+          };
+
+          return (
+            <View
+              key={route.key}
+              style={{
+                flex: 1,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              onTouchEnd={onPress}
+            >
+              <Icon
+                name={iconName}
+                size={24}
+                color={isFocused ? '#4f46e5' : '#6b7280'}
+              />
+              <View style={{ height: 4 }} />
+              <View style={{ fontSize: 12, fontWeight: '500' }}>
+                {React.createElement(
+                  'text',
+                  {
+                    style: {
+                      fontSize: 12,
+                      fontWeight: '500',
+                      color: isFocused ? '#4f46e5' : '#6b7280',
+                    },
+                  },
+                  label
+                )}
+              </View>
+            </View>
+          );
+        })}
+      </View>
+
+      {/* ✅ Banner Ad - Directly integrated below tab icons */}
+      {/* NO placeholder - displays real AdMob banner content */}
+      {/* Auto-hides for admin/premium users (tab bar shrinks) */}
+      {shouldShowAds && Platform.OS !== 'web' && (
+        <View style={{
+          height: BANNER_AD_HEIGHT,
+          width: '100%',
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderTopWidth: 1,
+          borderTopColor: '#f3f4f6',
+        }}>
+          <AdMobBanner />
+        </View>
+      )}
+
+      {/* ✅ System Navigation Spacer */}
+      {systemNavHeight > 0 && (
+        <View style={{ height: systemNavHeight, backgroundColor: '#ffffff' }} />
+      )}
+    </View>
+  );
+};
+
+/**
+ * ✅ Main Tab Navigator with Custom Tab Bar
  */
 const MainTabNavigator = () => {
   const insets = useSafeAreaInsets();
@@ -108,63 +232,15 @@ const MainTabNavigator = () => {
     };
   }, []);
 
-  // ✅ Calculate dynamic heights
-  const systemNavHeight = insets.bottom || 0;
-  const bannerHeight = (shouldShowAds && Platform.OS !== 'web') ? BANNER_AD_HEIGHT : 0;
-  const tabBarOnlyHeight = TAB_BAR_HEIGHT + systemNavHeight;
-  
-  console.log('[TabNav] 📐 Layout calculation:', {
-    shouldShowAds,
-    tabBarHeight: TAB_BAR_HEIGHT,
-    bannerHeight,
-    systemNavHeight,
-    tabBarOnlyHeight,
-  });
-  
   return (
     <View style={{ flex: 1 }} key={renderKey}>
       <Tab.Navigator
-        screenOptions={({ route }) => ({
-          tabBarIcon: ({ focused, color, size }) => {
-            let iconName;
-            if (route.name === 'Home') {
-              iconName = focused ? 'home' : 'home-outline';
-            } else if (route.name === 'Statistics') {
-              iconName = focused ? 'chart-line' : 'chart-line';
-            } else if (route.name === 'Settings') {
-              iconName = focused ? 'cog' : 'cog-outline';
-            }
-            return <Icon name={iconName} size={size} color={color} />;
-          },
-          tabBarActiveTintColor: '#4f46e5',
-          tabBarInactiveTintColor: '#6b7280',
-          tabBarStyle: {
-            position: 'absolute',
-            bottom: bannerHeight, // ✅ Positioned ABOVE banner ad (or at 0 if no ad)
-            left: 0,
-            right: 0,
-            height: tabBarOnlyHeight, // ✅ Fixed height (doesn't include banner)
-            backgroundColor: '#ffffff',
-            borderTopWidth: 1,
-            borderTopColor: '#e5e7eb',
-            paddingTop: 8,
-            paddingBottom: systemNavHeight, // Space for system navigation
-            elevation: 8,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: -2 },
-            shadowOpacity: 0.1,
-            shadowRadius: 3,
-          },
-          tabBarItemStyle: {
-            height: TAB_BAR_HEIGHT - 8, // Account for paddingTop
-          },
-          tabBarLabelStyle: {
-            fontSize: 12,
-            fontWeight: '500',
-            marginBottom: 4,
-          },
+        tabBar={(props) => (
+          <CustomTabBar {...props} insets={insets} shouldShowAds={shouldShowAds} />
+        )}
+        screenOptions={{
           headerShown: false,
-        })}
+        }}
       >
         <Tab.Screen 
           name="Home" 
@@ -182,26 +258,6 @@ const MainTabNavigator = () => {
           options={{ tabBarLabel: 'Settings' }}
         />
       </Tab.Navigator>
-
-      {/* ✅ FIXED: Banner ad positioned BELOW tab bar */}
-      {/* Shows above system navigation, auto-hides for admin/premium */}
-      {shouldShowAds && Platform.OS !== 'web' && (
-        <View style={{
-          position: 'absolute',
-          bottom: systemNavHeight, // ✅ Position above system navigation only
-          left: 0,
-          right: 0,
-          height: BANNER_AD_HEIGHT,
-          backgroundColor: '#ffffff',
-          alignItems: 'center',
-          justifyContent: 'center',
-          borderTopWidth: 1,
-          borderTopColor: '#e5e7eb',
-          zIndex: 999,
-        }}>
-          <AdMobBanner />
-        </View>
-      )}
     </View>
   );
 };

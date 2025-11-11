@@ -3,12 +3,13 @@ import { Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AdMobService from '../services/AdMobService';
 
-const TAB_BAR_HEIGHT = 60; // Tab icons + labels
+const TAB_ICONS_HEIGHT = 60; // Tab icons + labels
 const BANNER_HEIGHT = 50; // Standard AdMob banner
 
 /**
- * ✅ FIXED: Custom hook to calculate dynamic tab bar + banner height
- * Returns total height that screens need to account for
+ * ✅ FIXED: Custom hook to calculate dynamic tab bar height
+ * Tab bar includes banner ad space for free users
+ * Tab bar shrinks (no banner) for admin/premium users
  */
 export const useTabBarHeight = () => {
   const insets = useSafeAreaInsets();
@@ -58,13 +59,13 @@ export const useTabBarHeight = () => {
 
   const systemNavHeight = insets.bottom || 0;
   const bannerSpace = showBanner ? BANNER_HEIGHT : 0;
-  const totalHeight = TAB_BAR_HEIGHT + bannerSpace + systemNavHeight;
+  const totalHeight = TAB_ICONS_HEIGHT + bannerSpace + systemNavHeight;
 
   console.log(`[useTabBarHeight] 📐 Calculated - Total: ${totalHeight}px, Banner: ${bannerSpace}px, System: ${systemNavHeight}px`);
 
   return {
-    totalHeight,              // Total space taken (tab + banner + system nav)
-    tabBarHeight: TAB_BAR_HEIGHT,
+    totalHeight,              // Total space: tabs + banner (if showing) + system nav
+    tabBarHeight: TAB_ICONS_HEIGHT,
     bannerHeight: bannerSpace,
     systemNavHeight,
     showBanner,
