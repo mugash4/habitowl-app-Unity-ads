@@ -1,6 +1,8 @@
 /**
- * Google AdMob Service - FIXED VERSION
- * ✅ Non-blocking initialization
+ * Google AdMob Service - COMPLETE FIX
+ * ✅ Aggressive non-blocking initialization
+ * ✅ Better status tracking and notification
+ * ✅ Immediate premium status loading
  */
 
 import { Platform } from 'react-native';
@@ -62,10 +64,21 @@ class AdMobService {
     this.statusChangeListeners = [];
     this.premiumStatusListeners = [];
     
-    // ✅ FIX: Start loading premium status immediately (non-blocking)
+    // ✅ FIX: Immediately start loading premium status in constructor
+    console.log('[AdMob] 🚀 Constructor: Starting immediate premium status load');
     this.preloadPremiumStatus().catch(error => {
-      console.log('[AdMob] Premium status load error:', error);
+      console.log('[AdMob] Premium status load error (non-critical):', error);
     });
+    
+    // ✅ FIX: Also start AdMob initialization immediately
+    if (Platform.OS !== 'web' && sdkAvailable) {
+      console.log('[AdMob] 🚀 Constructor: Starting immediate AdMob initialization');
+      setTimeout(() => {
+        this.initialize().catch(error => {
+          console.log('[AdMob] Auto-initialization error (non-critical):', error);
+        });
+      }, 100); // Small delay to allow app to settle
+    }
   }
 
   /**
@@ -76,14 +89,16 @@ class AdMobService {
     
     this.statusChangeListeners.push(callback);
     
-    // Call immediately with current state
-    callback({
-      isInitialized: this.isInitialized,
-      isPremium: this.isPremium,
-      isAdmin: this.isAdmin,
-      premiumStatusLoaded: this.premiumStatusLoaded,
-      shouldShowAds: this.shouldShowAds()
-    });
+    // ✅ Call immediately with current state
+    setTimeout(() => {
+      callback({
+        isInitialized: this.isInitialized,
+        isPremium: this.isPremium,
+        isAdmin: this.isAdmin,
+        premiumStatusLoaded: this.premiumStatusLoaded,
+        shouldShowAds: this.shouldShowAds()
+      });
+    }, 0);
     
     return () => {
       this.statusChangeListeners = this.statusChangeListeners.filter(cb => cb !== callback);
@@ -91,7 +106,7 @@ class AdMobService {
   }
 
   /**
-   * ✅ Notify all listeners
+   * ✅ Notify all listeners (call this after ANY status change)
    */
   notifyStatusChange() {
     const status = {
@@ -101,6 +116,8 @@ class AdMobService {
       premiumStatusLoaded: this.premiumStatusLoaded,
       shouldShowAds: this.shouldShowAds()
     };
+    
+    console.log('[AdMob] 📢 Broadcasting status to', this.statusChangeListeners.length, 'listeners:', status);
     
     this.statusChangeListeners.forEach((listener) => {
       try {
@@ -112,30 +129,38 @@ class AdMobService {
   }
 
   /**
-   * ✅ CRITICAL: Pre-load premium/admin status
+   * ✅ CRITICAL: Pre-load premium/admin status IMMEDIATELY
    */
   async preloadPremiumStatus() {
     try {
-      console.log('[AdMob] 📊 Loading premium/admin status...');
+      console.log('[AdMob] 📊 Loading premium/admin status from AsyncStorage...');
       
-      const premium = await AsyncStorage.getItem('user_premium_status');
-      const adminStatus = await AsyncStorage.getItem('user_admin_status');
+      const [premium, adminStatus] = await Promise.all([
+        AsyncStorage.getItem('user_premium_status'),
+        AsyncStorage.getItem('user_admin_status')
+      ]);
       
       this.isPremium = premium === 'true';
       this.isAdmin = adminStatus === 'true';
       this.premiumStatusLoaded = true;
       
-      console.log('[AdMob] ✅ Status loaded - Premium:', this.isPremium, 'Admin:', this.isAdmin);
+      console.log('[AdMob] ✅ Status loaded from storage:');
+      console.log('[AdMob]    - Premium:', this.isPremium);
+      console.log('[AdMob]    - Admin:', this.isAdmin);
+      console.log('[AdMob]    - Should show ads:', this.shouldShowAds());
       
+      // ✅ Notify listeners immediately
       this.notifyStatusChange();
       this.notifyPremiumStatusChange(this.isPremium || this.isAdmin);
       
       return this.isPremium || this.isAdmin;
     } catch (error) {
-      console.log('[AdMob] ⚠️ Error loading status:', error);
+      console.log('[AdMob] ⚠️ Error loading status (defaulting to free user):', error);
       this.isPremium = false;
       this.isAdmin = false;
       this.premiumStatusLoaded = true;
+      
+      // ✅ Still notify listeners
       this.notifyStatusChange();
       this.notifyPremiumStatusChange(false);
       return false;
@@ -151,7 +176,9 @@ class AdMobService {
     this.premiumStatusListeners.push(callback);
     
     if (this.premiumStatusLoaded) {
-      callback(this.isPremium || this.isAdmin);
+      setTimeout(() => {
+        callback(this.isPremium || this.isAdmin);
+      }, 0);
     }
     
     return () => {
@@ -163,6 +190,8 @@ class AdMobService {
    * Notify listeners of premium status change
    */
   notifyPremiumStatusChange(isPremiumOrAdmin) {
+    console.log('[AdMob] 📢 Broadcasting premium status:', isPremiumOrAdmin, 'to', this.premiumStatusListeners.length, 'listeners');
+    
     this.premiumStatusListeners.forEach(listener => {
       try {
         listener(isPremiumOrAdmin);
@@ -178,7 +207,7 @@ class AdMobService {
   async initialize() {
     try {
       if (this.initializationAttempted) {
-        console.log('[AdMob] ⚠️ Already initialized');
+        console.log('[AdMob] ⚠️ Already attempted initialization');
         return this.isInitialized;
       }
       
@@ -194,50 +223,55 @@ class AdMobService {
 
       // Check SDK
       if (!sdkAvailable || !mobileAds) {
-        console.log('[AdMob] ⚠️ SDK not available');
+        console.log('[AdMob] ⚠️ SDK not available (requires EAS build)');
         this.initializationDetails.push('SDK not available');
         this.initializationError = 'SDK not available';
         return false;
       }
 
-      console.log('[AdMob] 🚀 Initializing...');
+      console.log('[AdMob] 🚀 Starting AdMob initialization...');
 
-      // ✅ FIX: Don't wait for premium status - it's already loading
+      // ✅ Wait for premium status if not loaded yet
       if (!this.premiumStatusLoaded) {
-        console.log('[AdMob] ⏳ Premium status not yet loaded (will continue in background)');
-      } else {
-        console.log('[AdMob] 👤 User type:', this.isPremium || this.isAdmin ? 'PREMIUM/ADMIN' : 'FREE');
+        console.log('[AdMob] ⏳ Waiting for premium status to load...');
+        await this.preloadPremiumStatus();
       }
+      
+      console.log('[AdMob] 👤 User type:', this.isPremium || this.isAdmin ? 'PREMIUM/ADMIN' : 'FREE');
       this.initializationDetails.push(`Premium: ${this.isPremium}, Admin: ${this.isAdmin}`);
 
       // Initialize SDK
       console.log('[AdMob] 📡 Calling mobileAds().initialize()...');
       await mobileAds().initialize();
       
-      console.log('[AdMob] ✅ Initialized successfully!');
+      console.log('[AdMob] ✅✅✅ ADMOB INITIALIZED SUCCESSFULLY! ✅✅✅');
       this.isInitialized = true;
       this.initializationError = null;
-      this.initializationDetails.push('Initialized');
+      this.initializationDetails.push('Initialized successfully');
       
+      // ✅ Notify all listeners
       this.notifyStatusChange();
       this.notifyPremiumStatusChange(this.isPremium || this.isAdmin);
       
       // Load ads for free users
       if (!this.isPremium && !this.isAdmin && ADMOB_CONFIG.AUTO_LOAD_ADS) {
-        console.log('[AdMob] 🎯 Loading ads...');
-        setTimeout(() => this.createAndLoadAds(), 1000);
+        console.log('[AdMob] 🎯 User is FREE - loading ads...');
+        setTimeout(() => this.createAndLoadAds(), 500);
       } else {
-        console.log('[AdMob] 👑 Premium/Admin - ads disabled');
-        this.initializationDetails.push('Premium user - ads disabled');
+        console.log('[AdMob] 👑 Premium/Admin user - ads disabled');
+        this.initializationDetails.push('Premium/Admin - ads disabled');
       }
       
       return true;
 
     } catch (error) {
-      console.log('[AdMob] ❌ Init error:', error.message);
+      console.log('[AdMob] ❌ Initialization error:', error.message);
+      console.log('[AdMob] ❌ Error stack:', error.stack);
       this.isInitialized = false;
       this.initializationError = error.message;
       this.initializationDetails.push(`Error: ${error.message}`);
+      
+      // ✅ Still notify listeners
       this.notifyStatusChange();
       return false;
     }
@@ -401,7 +435,9 @@ class AdMobService {
    * Get banner config
    */
   getBannerConfig() {
-    if (!this.shouldShowAds() || !BannerAdSize) {
+    // ✅ FIX: Only check basic requirements, not shouldShowAds
+    // The component will handle display logic
+    if (!BannerAdSize || Platform.OS === 'web') {
       return null;
     }
 
@@ -421,21 +457,26 @@ class AdMobService {
       this.isAdmin = isAdmin;
       this.premiumStatusLoaded = true;
       
-      await AsyncStorage.setItem('user_premium_status', isPremium.toString());
-      await AsyncStorage.setItem('user_admin_status', isAdmin.toString());
+      await Promise.all([
+        AsyncStorage.setItem('user_premium_status', isPremium.toString()),
+        AsyncStorage.setItem('user_admin_status', isAdmin.toString())
+      ]);
       
-      console.log('[AdMob] ✅ Status updated - Premium:', isPremium, 'Admin:', isAdmin);
+      console.log('[AdMob] ✅ Status updated in storage:');
+      console.log('[AdMob]    - Premium:', isPremium);
+      console.log('[AdMob]    - Admin:', isAdmin);
       
       const newStatus = isPremium || isAdmin;
       if (oldStatus !== newStatus) {
+        // ✅ Notify all listeners
         this.notifyStatusChange();
         this.notifyPremiumStatusChange(newStatus);
         
         if (newStatus) {
-          console.log('[AdMob] 👑 Upgraded - disabling ads');
+          console.log('[AdMob] 👑 Upgraded to premium/admin - disabling ads');
           this.cleanup();
         } else if (this.isInitialized) {
-          console.log('[AdMob] 📉 Downgraded - loading ads');
+          console.log('[AdMob] 📉 Downgraded to free - loading ads');
           this.createAndLoadAds();
         }
       }
@@ -448,12 +489,26 @@ class AdMobService {
    * ✅ Check if ads should show
    */
   shouldShowAds() {
-    return this.isInitialized && 
+    const result = this.isInitialized && 
            !this.isPremium && 
            !this.isAdmin &&
            Platform.OS !== 'web' && 
            sdkAvailable &&
            this.premiumStatusLoaded;
+    
+    // Log periodically for debugging
+    if (Math.random() < 0.1) { // 10% of calls
+      console.log('[AdMob] shouldShowAds():', result, {
+        isInitialized: this.isInitialized,
+        isPremium: this.isPremium,
+        isAdmin: this.isAdmin,
+        platform: Platform.OS,
+        sdkAvailable,
+        premiumStatusLoaded: this.premiumStatusLoaded
+      });
+    }
+    
+    return result;
   }
 
   /**
