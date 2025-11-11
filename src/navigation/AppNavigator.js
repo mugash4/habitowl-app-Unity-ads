@@ -49,12 +49,19 @@ const TAB_ICONS_HEIGHT = 60;
 const BANNER_AD_HEIGHT = 50;
 
 /**
- * ✅ FIXED: Simplified Custom Tab Bar
+ * ✅ FIXED: Simplified Custom Tab Bar with better banner visibility
  */
 const CustomTabBar = ({ state, descriptors, navigation, insets, shouldShowAds }) => {
   const systemNavHeight = insets.bottom || 0;
   const bannerHeight = (shouldShowAds && Platform.OS !== 'web') ? BANNER_AD_HEIGHT : 0;
   const totalHeight = TAB_ICONS_HEIGHT + bannerHeight + systemNavHeight;
+
+  console.log('[CustomTabBar] Rendering with:', {
+    shouldShowAds,
+    bannerHeight,
+    totalHeight,
+    platform: Platform.OS
+  });
 
   return (
     <View style={{
@@ -79,6 +86,7 @@ const CustomTabBar = ({ state, descriptors, navigation, insets, shouldShowAds })
         flexDirection: 'row',
         paddingTop: 8,
         paddingBottom: 4,
+        backgroundColor: '#ffffff',
       }}>
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
@@ -134,15 +142,16 @@ const CustomTabBar = ({ state, descriptors, navigation, insets, shouldShowAds })
         })}
       </View>
 
-      {/* Banner Ad */}
+      {/* ✅ Banner Ad Container - Always rendered when shouldShowAds is true */}
       {shouldShowAds && Platform.OS !== 'web' && (
         <View style={{
           height: BANNER_AD_HEIGHT,
           width: '100%',
           alignItems: 'center',
           justifyContent: 'center',
+          backgroundColor: '#f9fafb',
           borderTopWidth: 1,
-          borderTopColor: '#f3f4f6',
+          borderTopColor: '#e5e7eb',
         }}>
           <AdMobBanner />
         </View>
@@ -157,7 +166,7 @@ const CustomTabBar = ({ state, descriptors, navigation, insets, shouldShowAds })
 };
 
 /**
- * ✅ FIXED: Main Tab Navigator
+ * ✅ FIXED: Main Tab Navigator with better ad status tracking
  */
 const MainTabNavigator = () => {
   const insets = useSafeAreaInsets();
@@ -165,6 +174,8 @@ const MainTabNavigator = () => {
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
+    console.log('[MainTab] Initializing...');
+    
     // Set ready immediately - don't wait for AdMob
     setIsReady(true);
     
@@ -176,22 +187,28 @@ const MainTabNavigator = () => {
                         !status.isAdmin &&
                         status.premiumStatusLoaded;
       
+      console.log('[MainTab] Status update - canShowAds:', canShowAds, status);
       setShouldShowAds(canShowAds);
     });
     
-    // Delayed check (non-blocking)
-    setTimeout(() => {
-      const status = AdMobService.getStatus();
-      const canShowAds = status.shouldShowAds && 
-                        status.isInitialized && 
-                        !status.isPremium && 
-                        !status.isAdmin &&
-                        status.premiumStatusLoaded;
-      setShouldShowAds(canShowAds);
-    }, 1000);
+    // Delayed checks (non-blocking)
+    const delays = [500, 1000, 2000, 3000];
+    const timeouts = delays.map(delay => 
+      setTimeout(() => {
+        const status = AdMobService.getStatus();
+        const canShowAds = status.shouldShowAds && 
+                          status.isInitialized && 
+                          !status.isPremium && 
+                          !status.isAdmin &&
+                          status.premiumStatusLoaded;
+        console.log(`[MainTab] Delayed check (${delay}ms) - canShowAds:`, canShowAds);
+        setShouldShowAds(canShowAds);
+      }, delay)
+    );
     
     return () => {
       unsubscribe();
+      timeouts.forEach(clearTimeout);
     };
   }, []);
 

@@ -116,21 +116,7 @@ const AdMobBanner = ({ style = {} }) => {
       return;
     }
 
-    // ✅ Check #4: Initialization status
-    if (!status.isInitialized) {
-      console.log('[Banner] ⏳ AdMob not initialized yet');
-      setDebugMsg('Initializing AdMob...');
-      // Don't return - allow it to show when ready
-    }
-
-    // ✅ Check #5: Premium status loading
-    if (!status.premiumStatusLoaded) {
-      console.log('[Banner] ⏳ Premium status loading...');
-      setDebugMsg('Checking user status...');
-      // Don't return - allow it to show when ready
-    }
-
-    // ✅ Check #6: Get ad configuration
+    // ✅ Check #4: Get ad configuration
     const config = adMobService.getBannerConfig();
     if (!config || !config.adUnitId) {
       console.log('[Banner] ⚠️ Ad configuration unavailable');
@@ -139,7 +125,7 @@ const AdMobBanner = ({ style = {} }) => {
       return;
     }
 
-    // ✅ Check #7: All conditions met?
+    // ✅ Check #5: All conditions met?
     if (status.shouldShowAds && status.isInitialized && status.premiumStatusLoaded) {
       // ✅ ALL CHECKS PASSED - Show banner ad
       if (!hasLoggedDisplay.current) {
@@ -164,7 +150,7 @@ const AdMobBanner = ({ style = {} }) => {
     }
   };
 
-  // ✅ Render logic: Show actual banner or debug info
+  // ✅ Render logic: Show actual banner or nothing
   const renderContent = () => {
     // Case 1: Web platform - don't show anything
     if (Platform.OS === 'web') {
@@ -254,7 +240,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: '100%',
     height: 50, // Standard banner height
-    backgroundColor: 'transparent',
+    backgroundColor: '#f0f0f0',
     overflow: 'hidden',
   },
   debugContainer: {
