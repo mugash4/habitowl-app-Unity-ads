@@ -1,8 +1,7 @@
 /**
- * AdMob Banner Component - COMPLETE FIX
- * ✅ Displays real banner ad content (no placeholder)
- * ✅ Auto-hides for admin/premium users
- * ✅ Better error handling and fallback logic
+ * AdMob Banner Component - FIXED VERSION
+ * ✅ Always reserves space and displays banner when ready
+ * ✅ Auto-hides for admin/premium users (shrinks container)
  */
 
 import React, { useEffect, useState, useRef } from 'react';
@@ -25,16 +24,13 @@ try {
 const AdMobBanner = ({ style = {} }) => {
   const [shouldDisplay, setShouldDisplay] = useState(false);
   const [adConfig, setAdConfig] = useState(null);
-  const [debugMsg, setDebugMsg] = useState('Initializing...');
   const [adLoaded, setAdLoaded] = useState(false);
   const isMounted = useRef(true);
   const checkCounter = useRef(0);
-  const hasLoggedDisplay = useRef(false);
 
   useEffect(() => {
     console.log('[Banner] 🎬 Component mounted');
     isMounted.current = true;
-    hasLoggedDisplay.current = false;
     
     // ✅ Immediate check on mount
     const immediateCheck = () => {
@@ -56,25 +52,17 @@ const AdMobBanner = ({ style = {} }) => {
       if (!isMounted.current) return;
       
       checkCounter.current++;
-      console.log('[Banner] 📢 Status update #' + checkCounter.current + ':', {
-        shouldShowAds: status.shouldShowAds,
-        isPremium: status.isPremium,
-        isAdmin: status.isAdmin,
-        isInitialized: status.isInitialized,
-        premiumStatusLoaded: status.premiumStatusLoaded
-      });
-      
+      console.log('[Banner] 📢 Status update #' + checkCounter.current);
       evaluateDisplayConditions(status);
     });
 
-    // ✅ Aggressive delayed checks for late initialization
-    const checkDelays = [100, 300, 500, 1000, 1500, 2000, 3000];
-    const timeoutIds = checkDelays.map((delay) =>
+    // ✅ Delayed checks for late initialization
+    const delays = [200, 500, 1000, 2000, 3000];
+    const timeoutIds = delays.map((delay) =>
       setTimeout(() => {
         if (isMounted.current) {
-          checkCounter.current++;
           const currentStatus = adMobService.getStatus();
-          console.log('[Banner] ⏰ Delayed check #' + checkCounter.current + ' (' + delay + 'ms)');
+          console.log('[Banner] ⏰ Delayed check (' + delay + 'ms)');
           evaluateDisplayConditions(currentStatus);
         }
       }, delay)
@@ -91,147 +79,115 @@ const AdMobBanner = ({ style = {} }) => {
   const evaluateDisplayConditions = (status) => {
     if (!isMounted.current) return;
 
-    console.log('[Banner] 🔍 Evaluating display conditions...');
-    
-    // ✅ Check #1: Platform
+    // Check #1: Platform
     if (Platform.OS === 'web') {
-      setDebugMsg('Web platform - ads not supported');
       setShouldDisplay(false);
       return;
     }
 
-    // ✅ Check #2: SDK availability
+    // Check #2: SDK availability
     if (!BannerAd || !BannerAdSize) {
-      setDebugMsg('AdMob SDK not loaded (requires EAS build)');
       setShouldDisplay(false);
       return;
     }
 
-    // ✅ Check #3: Premium/Admin users (should NOT show ads)
+    // Check #3: Premium/Admin users (should NOT show ads)
     if (status.isPremium || status.isAdmin) {
-      const userType = status.isPremium ? 'premium' : 'admin';
-      console.log(`[Banner] 👑 ${userType} user - hiding ads`);
-      setDebugMsg(`Hidden: ${userType} user`);
+      console.log(`[Banner] 👑 ${status.isPremium ? 'premium' : 'admin'} user - hiding ads`);
       setShouldDisplay(false);
       return;
     }
 
-    // ✅ Check #4: Get ad configuration
+    // Check #4: Get ad configuration
     const config = adMobService.getBannerConfig();
     if (!config || !config.adUnitId) {
       console.log('[Banner] ⚠️ Ad configuration unavailable');
-      setDebugMsg('Ad configuration unavailable');
       setShouldDisplay(false);
       return;
     }
 
-    // ✅ Check #5: All conditions met?
+    // Check #5: All conditions met?
     if (status.shouldShowAds && status.isInitialized && status.premiumStatusLoaded) {
-      // ✅ ALL CHECKS PASSED - Show banner ad
-      if (!hasLoggedDisplay.current) {
-        console.log('[Banner] ✅✅✅ DISPLAYING BANNER AD ✅✅✅');
-        console.log('[Banner] 📱 Ad Unit ID:', config.adUnitId);
-        hasLoggedDisplay.current = true;
-      }
-      setDebugMsg('Active: ' + config.adUnitId);
+      console.log('[Banner] ✅✅✅ DISPLAYING BANNER AD ✅✅✅');
+      console.log('[Banner] 📱 Ad Unit ID:', config.adUnitId);
       setAdConfig(config);
       setShouldDisplay(true);
     } else {
-      // Still waiting for conditions
-      const reasons = [];
-      if (!status.shouldShowAds) reasons.push('shouldShowAds=false');
-      if (!status.isInitialized) reasons.push('not initialized');
-      if (!status.premiumStatusLoaded) reasons.push('loading status');
-      
-      const message = 'Waiting: ' + reasons.join(', ');
-      console.log('[Banner] ⏳', message);
-      setDebugMsg(message);
       setShouldDisplay(false);
     }
   };
 
-  // ✅ Render logic: Show actual banner or nothing
-  const renderContent = () => {
-    // Case 1: Web platform - don't show anything
-    if (Platform.OS === 'web') {
-      return null;
-    }
+  // ✅ FIXED: Always return null - the CustomTabBar will handle the space
+  // This component only controls whether the ad loads, not the container
+  if (Platform.OS === 'web') {
+    return null;
+  }
 
-    // Case 2: SDK not available - show debug in dev mode only
-    if (!BannerAd || !BannerAdSize) {
-      if (__DEV__) {
-        return (
-          <View style={[styles.debugContainer, style]}>
-            <Text style={styles.debugText}>⚠️ SDK not available</Text>
-            <Text style={[styles.debugText, { fontSize: 9 }]}>
-              Build with EAS to enable ads
-            </Text>
-          </View>
-        );
-      }
-      return null;
-    }
-
-    // Case 3: Should display - render actual AdMob banner
-    if (shouldDisplay && adConfig) {
-      console.log('[Banner] 🎨 Rendering BannerAd component with:', adConfig.adUnitId);
-      
-      return (
-        <View style={[styles.container, style]}>
-          <BannerAd
-            unitId={adConfig.adUnitId}
-            size={BannerAdSize.BANNER}
-            requestOptions={{
-              requestNonPersonalizedAdsOnly: false,
-            }}
-            onAdLoaded={() => {
-              console.log('[Banner] ✅✅✅ AD LOADED SUCCESSFULLY! ✅✅✅');
-              if (isMounted.current) {
-                setAdLoaded(true);
-                setDebugMsg('Ad displayed');
-              }
-              adMobService.trackAdImpression('banner', 'loaded');
-            }}
-            onAdFailedToLoad={(error) => {
-              console.log('[Banner] ❌ Ad load failed:', error.message);
-              console.log('[Banner] ❌ Error code:', error.code);
-              if (isMounted.current) {
-                setAdLoaded(false);
-                setDebugMsg('Load failed: ' + (error.message || 'Unknown'));
-              }
-            }}
-            onAdOpened={() => {
-              console.log('[Banner] 👁️ Ad clicked by user');
-              adMobService.trackAdImpression('banner', 'click');
-            }}
-          />
-          {/* Debug overlay in dev mode */}
-          {__DEV__ && !adLoaded && (
-            <View style={styles.loadingOverlay}>
-              <Text style={styles.loadingText}>Loading ad...</Text>
-            </View>
-          )}
-        </View>
-      );
-    }
-
-    // Case 4: Not ready to display - show debug in dev mode
+  if (!BannerAd || !BannerAdSize) {
+    // Show debug info only in dev mode
     if (__DEV__) {
       return (
         <View style={[styles.debugContainer, style]}>
-          <Text style={styles.debugText}>Banner: {debugMsg}</Text>
+          <Text style={styles.debugText}>⚠️ SDK not available</Text>
+          <Text style={[styles.debugText, { fontSize: 9 }]}>
+            Build with EAS to enable ads
+          </Text>
+        </View>
+      );
+    }
+    return null;
+  }
+
+  if (!shouldDisplay) {
+    // In dev mode, show why ads aren't showing
+    if (__DEV__) {
+      return (
+        <View style={[styles.debugContainer, style]}>
+          <Text style={styles.debugText}>Banner: Checking conditions...</Text>
           <Text style={[styles.debugText, { fontSize: 8 }]}>
             Checks: {checkCounter.current}
           </Text>
         </View>
       );
     }
-
-    // Case 5: Production & not ready - show nothing
     return null;
-  };
+  }
 
-  return renderContent();
+  // ✅ Display the actual banner ad
+  return (
+    <View style={[styles.container, style]}>
+      <BannerAd
+        unitId={adConfig.adUnitId}
+        size={BannerAdSize.BANNER}
+        requestOptions={{
+          requestNonPersonalizedAdsOnly: false,
+        }}
+        onAdLoaded={() => {
+          console.log('[Banner] ✅✅✅ AD LOADED SUCCESSFULLY! ✅✅✅');
+          if (isMounted.current) {
+            setAdLoaded(true);
+          }
+          adMobService.trackAdImpression('banner', 'loaded');
+        }}
+        onAdFailedToLoad={(error) => {
+          console.log('[Banner] ❌ Ad load failed:', error.message);
+          if (isMounted.current) {
+            setAdLoaded(false);
+          }
+        }}
+        onAdOpened={() => {
+          console.log('[Banner] 👁️ Ad clicked by user');
+          adMobService.trackAdImpression('banner', 'click');
+        }}
+      />
+      {/* Loading indicator in dev mode */}
+      {__DEV__ && !adLoaded && (
+        <View style={styles.loadingOverlay}>
+          <Text style={styles.loadingText}>Loading ad...</Text>
+        </View>
+      )}
+    </View>
+  );
 };
 
 const styles = StyleSheet.create({

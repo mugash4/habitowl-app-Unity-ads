@@ -49,19 +49,17 @@ const TAB_ICONS_HEIGHT = 60;
 const BANNER_AD_HEIGHT = 50;
 
 /**
- * ✅ FIXED: Simplified Custom Tab Bar with better banner visibility
+ * ✅ COMPLETELY FIXED: Custom Tab Bar with proper banner display and auto-hide
  */
 const CustomTabBar = ({ state, descriptors, navigation, insets, shouldShowAds }) => {
   const systemNavHeight = insets.bottom || 0;
+  
+  // ✅ FIX: Banner height is ALWAYS allocated when shouldShowAds is true
+  // This ensures the space is reserved immediately
   const bannerHeight = (shouldShowAds && Platform.OS !== 'web') ? BANNER_AD_HEIGHT : 0;
   const totalHeight = TAB_ICONS_HEIGHT + bannerHeight + systemNavHeight;
 
-  console.log('[CustomTabBar] Rendering with:', {
-    shouldShowAds,
-    bannerHeight,
-    totalHeight,
-    platform: Platform.OS
-  });
+  console.log('[CustomTabBar] Rendering - shouldShowAds:', shouldShowAds, 'bannerHeight:', bannerHeight, 'totalHeight:', totalHeight);
 
   return (
     <View style={{
@@ -142,7 +140,7 @@ const CustomTabBar = ({ state, descriptors, navigation, insets, shouldShowAds })
         })}
       </View>
 
-      {/* ✅ Banner Ad Container - Always rendered when shouldShowAds is true */}
+      {/* ✅ FIXED: Banner Ad Container - Space is ALWAYS allocated when shouldShowAds is true */}
       {shouldShowAds && Platform.OS !== 'web' && (
         <View style={{
           height: BANNER_AD_HEIGHT,
@@ -153,6 +151,7 @@ const CustomTabBar = ({ state, descriptors, navigation, insets, shouldShowAds })
           borderTopWidth: 1,
           borderTopColor: '#e5e7eb',
         }}>
+          {/* ✅ The AdMobBanner component will render the actual ad when ready */}
           <AdMobBanner />
         </View>
       )}
@@ -166,20 +165,32 @@ const CustomTabBar = ({ state, descriptors, navigation, insets, shouldShowAds })
 };
 
 /**
- * ✅ FIXED: Main Tab Navigator with better ad status tracking
+ * ✅ FIXED: Main Tab Navigator with immediate rendering
  */
 const MainTabNavigator = () => {
   const insets = useSafeAreaInsets();
   const [shouldShowAds, setShouldShowAds] = useState(false);
-  const [isReady, setIsReady] = useState(false);
+  const [isReady, setIsReady] = useState(true); // ✅ FIXED: Start ready immediately
 
   useEffect(() => {
     console.log('[MainTab] Initializing...');
     
-    // Set ready immediately - don't wait for AdMob
-    setIsReady(true);
+    // ✅ IMMEDIATE: Check initial status
+    const initialCheck = () => {
+      const status = AdMobService.getStatus();
+      const canShowAds = status.shouldShowAds && 
+                        status.isInitialized && 
+                        !status.isPremium && 
+                        !status.isAdmin &&
+                        status.premiumStatusLoaded;
+      
+      console.log('[MainTab] Initial check - canShowAds:', canShowAds);
+      setShouldShowAds(canShowAds);
+    };
     
-    // Subscribe to AdMob status changes (non-blocking)
+    initialCheck();
+    
+    // ✅ Subscribe to AdMob status changes
     const unsubscribe = AdMobService.onStatusChange((status) => {
       const canShowAds = status.shouldShowAds && 
                         status.isInitialized && 
@@ -187,12 +198,12 @@ const MainTabNavigator = () => {
                         !status.isAdmin &&
                         status.premiumStatusLoaded;
       
-      console.log('[MainTab] Status update - canShowAds:', canShowAds, status);
+      console.log('[MainTab] Status update - canShowAds:', canShowAds);
       setShouldShowAds(canShowAds);
     });
     
-    // Delayed checks (non-blocking)
-    const delays = [500, 1000, 2000, 3000];
+    // ✅ Delayed checks (non-blocking)
+    const delays = [300, 800, 1500, 2500];
     const timeouts = delays.map(delay => 
       setTimeout(() => {
         const status = AdMobService.getStatus();
@@ -212,16 +223,7 @@ const MainTabNavigator = () => {
     };
   }, []);
 
-  // Render immediately - don't wait
-  if (!isReady) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc' }}>
-        <Icon name="loading" size={40} color="#4f46e5" />
-        <Text style={{ marginTop: 16, fontSize: 16, color: '#6b7280' }}>Loading...</Text>
-      </View>
-    );
-  }
-
+  // ✅ Render immediately - no loading screen
   return (
     <View style={{ flex: 1 }}>
       <Tab.Navigator
@@ -276,7 +278,7 @@ const AppNavigator = () => {
         console.log('[AppNav] Notification init error (non-critical):', error.message);
       });
       
-      // ✅ FIX: Set initialized immediately after setting up auth listener
+      // ✅ Set initialized immediately after setting up auth listener
       const unsubscribe = FirebaseService.onAuthStateChanged(async (user) => {
         console.log('[AppNav] 🔐 Auth state:', user ? 'Logged in' : 'Logged out');
         
