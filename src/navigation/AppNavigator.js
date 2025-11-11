@@ -44,66 +44,84 @@ const theme = {
   },
 };
 
-// ✅ FIXED: Constants for layout
-const TAB_BAR_HEIGHT = 60;
-const BANNER_HEIGHT = 60;
+// ✅ FIXED: Layout constants
+const TAB_BAR_HEIGHT = 60; // Height for tab icons
+const BANNER_AD_HEIGHT = 50; // Standard AdMob banner height
 
 /**
- * ✅ FIXED: Main Tab Navigator with Banner Ad Integration
+ * ✅ FIXED: Main Tab Navigator with Integrated Banner Ad
+ * Banner ad displays directly in tab bar container (no separate placeholder)
+ * Admin/Premium users see NO ads and tab bar auto-resizes
  */
 const MainTabNavigator = () => {
   const insets = useSafeAreaInsets();
-  const [showBanner, setShowBanner] = useState(false);
+  const [shouldShowAds, setShouldShowAds] = useState(false);
   const [renderKey, setRenderKey] = useState(0);
 
-  // ✅ FIX: Subscribe to status changes
+  // ✅ Monitor ad display status
   useEffect(() => {
-    console.log('[TabNav] 🎬 Setting up status subscription');
+    console.log('[TabNav] 🎬 Mounting tab navigator');
     
+    // Subscribe to AdMob status changes
     const unsubscribe = AdMobService.onStatusChange((status) => {
-      console.log('[TabNav] 📢 Status update:', status);
+      console.log('[TabNav] 📢 Status update:', {
+        shouldShowAds: status.shouldShowAds,
+        isPremium: status.isPremium,
+        isAdmin: status.isAdmin,
+        isInitialized: status.isInitialized,
+        premiumStatusLoaded: status.premiumStatusLoaded
+      });
       
-      // ✅ Show banner if all conditions met
-      const shouldShow = status.shouldShowAds && 
+      // Show ads only if ALL conditions are met
+      const canShowAds = status.shouldShowAds && 
                         status.isInitialized && 
                         !status.isPremium && 
                         !status.isAdmin &&
                         status.premiumStatusLoaded;
       
-      console.log('[TabNav] Setting showBanner =', shouldShow);
-      setShowBanner(shouldShow);
-      
-      // ✅ Force re-render when status changes
-      setRenderKey(prev => prev + 1);
+      setShouldShowAds(canShowAds);
+      setRenderKey(prev => prev + 1); // Force re-render
     });
     
-    // ✅ Delayed checks for late initialization
-    const timeouts = [500, 1500, 3000].map((delay) =>
+    // Delayed checks for late initialization
+    const delays = [500, 1500, 3000];
+    const timeouts = delays.map(delay =>
       setTimeout(() => {
-        const shouldShow = AdMobService.shouldShowAds();
-        console.log('[TabNav] Delayed check (' + delay + 'ms):', shouldShow);
-        setShowBanner(shouldShow);
+        const status = AdMobService.getStatus();
+        const canShowAds = status.shouldShowAds && 
+                          status.isInitialized && 
+                          !status.isPremium && 
+                          !status.isAdmin &&
+                          status.premiumStatusLoaded;
+        
+        console.log('[TabNav] ⏰ Delayed check (' + delay + 'ms):', canShowAds);
+        setShouldShowAds(canShowAds);
         setRenderKey(prev => prev + 1);
       }, delay)
     );
     
     return () => {
-      console.log('[TabNav] 🚪 Cleaning up');
+      console.log('[TabNav] 🚪 Unmounting');
       unsubscribe();
       timeouts.forEach(clearTimeout);
     };
   }, []);
 
-  // ✅ Calculate layout dimensions
+  // ✅ Calculate dynamic tab bar height based on ad display status
   const systemNavHeight = insets.bottom || 0;
-  const bannerSpace = showBanner ? BANNER_HEIGHT : 0;
-  const totalTabBarHeight = TAB_BAR_HEIGHT + bannerSpace + systemNavHeight;
+  const bannerHeight = (shouldShowAds && Platform.OS !== 'web') ? BANNER_AD_HEIGHT : 0;
+  const totalTabBarHeight = TAB_BAR_HEIGHT + bannerHeight + systemNavHeight;
   
-  console.log('[TabNav] 📐 Layout - TabBar:', TAB_BAR_HEIGHT, 'Banner:', bannerSpace, 'SystemNav:', systemNavHeight, 'Total:', totalTabBarHeight);
+  console.log('[TabNav] 📐 Layout calculation:', {
+    shouldShowAds,
+    tabBarHeight: TAB_BAR_HEIGHT,
+    bannerHeight,
+    systemNavHeight,
+    totalHeight: totalTabBarHeight
+  });
   
   return (
     <View style={{ flex: 1 }} key={renderKey}>
-      {/* Main Tabs */}
       <Tab.Navigator
         screenOptions={({ route }) => ({
           tabBarIcon: ({ focused, color, size }) => {
@@ -124,12 +142,12 @@ const MainTabNavigator = () => {
             bottom: 0,
             left: 0,
             right: 0,
-            height: totalTabBarHeight, // ✅ Dynamic height
+            height: totalTabBarHeight, // ✅ Dynamically adjusts based on ad display
             backgroundColor: '#ffffff',
             borderTopWidth: 1,
             borderTopColor: '#e5e7eb',
-            paddingBottom: systemNavHeight + bannerSpace, // ✅ Space for banner
             paddingTop: 8,
+            paddingBottom: systemNavHeight, // Space for system navigation only
             elevation: 8,
             shadowColor: '#000',
             shadowOffset: { width: 0, height: -2 },
@@ -137,7 +155,7 @@ const MainTabNavigator = () => {
             shadowRadius: 3,
           },
           tabBarItemStyle: {
-            height: TAB_BAR_HEIGHT,
+            height: TAB_BAR_HEIGHT - 8, // Account for paddingTop
           },
           tabBarLabelStyle: {
             fontSize: 12,
@@ -164,21 +182,22 @@ const MainTabNavigator = () => {
         />
       </Tab.Navigator>
 
-      {/* ✅ FIX: Banner positioned at bottom of tab bar */}
-      {showBanner && Platform.OS !== 'web' && (
+      {/* ✅ FIXED: Banner ad displays directly in tab bar container */}
+      {/* No placeholder - shows real ad content from AdMob */}
+      {/* Auto-hides for admin/premium users */}
+      {shouldShowAds && Platform.OS !== 'web' && (
         <View style={{
           position: 'absolute',
-          bottom: systemNavHeight, // Above system nav
+          bottom: TAB_BAR_HEIGHT + systemNavHeight, // Position between tabs and system nav
           left: 0,
           right: 0,
-          height: BANNER_HEIGHT,
+          height: BANNER_AD_HEIGHT,
           backgroundColor: '#ffffff',
-          borderTopWidth: 1,
-          borderTopColor: '#e5e7eb',
           alignItems: 'center',
           justifyContent: 'center',
-          zIndex: 1000,
-          elevation: 10,
+          borderTopWidth: 1,
+          borderTopColor: '#e5e7eb',
+          zIndex: 999,
         }}>
           <AdMobBanner />
         </View>
@@ -200,20 +219,23 @@ const AppNavigator = () => {
 
   const initializeApp = async () => {
     try {
-      console.log('[AppNav] 🚀 Initializing...');
+      console.log('[AppNav] 🚀 Initializing app...');
       
-      // Initialize services
-      await AdMobService.initialize();
-      await NotificationService.initialize();
+      // Initialize services in background
+      AdMobService.initialize().catch(error => {
+        console.log('[AppNav] AdMob init error (non-critical):', error.message);
+      });
       
-      console.log('[AppNav] ✅ Services initialized');
-
+      NotificationService.initialize().catch(error => {
+        console.log('[AppNav] Notification init error (non-critical):', error.message);
+      });
+      
       // Listen for auth changes
       const unsubscribe = FirebaseService.onAuthStateChanged(async (user) => {
-        console.log('[AppNav] 🔐 Auth:', user ? 'Logged in' : 'Logged out');
+        console.log('[AppNav] 🔐 Auth state:', user ? 'Logged in' : 'Logged out');
         
         if (user) {
-          console.log('[AppNav] 👤 User logged in, checking premium...');
+          console.log('[AppNav] 👤 User logged in, loading premium status...');
           await AdMobService.preloadPremiumStatus();
         }
         
@@ -223,13 +245,13 @@ const AppNavigator = () => {
 
       return unsubscribe;
     } catch (error) {
-      console.error('[AppNav] ❌ Init error:', error);
+      console.error('[AppNav] ❌ Initialization error:', error);
       setIsInitialized(true);
     }
   };
 
   if (!isInitialized) {
-    return null;
+    return null; // Show nothing while initializing
   }
 
   return (
@@ -249,11 +271,31 @@ const AppNavigator = () => {
                   component={MainTabNavigator}
                   options={{ headerShown: false }}
                 />
-                <Stack.Screen name="CreateHabit" component={CreateHabitScreen} options={{ headerShown: false, presentation: 'modal' }} />
-                <Stack.Screen name="EditHabit" component={EditHabitScreen} options={{ headerShown: false, presentation: 'modal' }} />
-                <Stack.Screen name="Premium" component={PremiumScreen} options={{ headerShown: false, presentation: 'modal' }} />
-                <Stack.Screen name="Admin" component={AdminScreen} options={{ headerShown: false, presentation: 'modal' }} />
-                <Stack.Screen name="About" component={AboutScreen} options={{ headerShown: false, presentation: 'modal' }} />
+                <Stack.Screen 
+                  name="CreateHabit" 
+                  component={CreateHabitScreen} 
+                  options={{ headerShown: false, presentation: 'modal' }} 
+                />
+                <Stack.Screen 
+                  name="EditHabit" 
+                  component={EditHabitScreen} 
+                  options={{ headerShown: false, presentation: 'modal' }} 
+                />
+                <Stack.Screen 
+                  name="Premium" 
+                  component={PremiumScreen} 
+                  options={{ headerShown: false, presentation: 'modal' }} 
+                />
+                <Stack.Screen 
+                  name="Admin" 
+                  component={AdminScreen} 
+                  options={{ headerShown: false, presentation: 'modal' }} 
+                />
+                <Stack.Screen 
+                  name="About" 
+                  component={AboutScreen} 
+                  options={{ headerShown: false, presentation: 'modal' }} 
+                />
               </>
             ) : (
               <Stack.Screen name="Auth" component={AuthScreen} />
