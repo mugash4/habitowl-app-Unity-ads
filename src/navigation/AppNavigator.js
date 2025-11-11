@@ -44,46 +44,53 @@ const theme = {
   },
 };
 
+// ✅ FIXED: Constants for layout
 const TAB_BAR_HEIGHT = 60;
 const BANNER_HEIGHT = 60;
 
-// ✅ FIXED: Proper banner ad integration with dynamic tab bar
+/**
+ * ✅ FIXED: Main Tab Navigator with Banner Ad Integration
+ */
 const MainTabNavigator = () => {
   const insets = useSafeAreaInsets();
   const [showBanner, setShowBanner] = useState(false);
+  const [renderKey, setRenderKey] = useState(0);
 
-  // ✅ FIX: Subscribe to ALL status changes, not just premium
+  // ✅ FIX: Subscribe to status changes
   useEffect(() => {
-    console.log('[TabNavigator] 🎬 Setting up status subscription');
+    console.log('[TabNav] 🎬 Setting up status subscription');
     
-    // Subscribe to comprehensive status updates
     const unsubscribe = AdMobService.onStatusChange((status) => {
-      console.log('[TabNavigator] 📢 Status update:', status);
+      console.log('[TabNav] 📢 Status update:', status);
       
-      // Show banner only if all conditions are met
+      // ✅ Show banner if all conditions met
       const shouldShow = status.shouldShowAds && 
                         status.isInitialized && 
                         !status.isPremium && 
                         !status.isAdmin &&
                         status.premiumStatusLoaded;
       
-      console.log(`[TabNavigator] Setting showBanner = ${shouldShow}`);
+      console.log('[TabNav] Setting showBanner =', shouldShow);
       setShowBanner(shouldShow);
+      
+      // ✅ Force re-render when status changes
+      setRenderKey(prev => prev + 1);
     });
     
-    // Also do initial check after delay to catch late initialization
-    const timeoutIds = [500, 1500, 3000].map((delay) =>
+    // ✅ Delayed checks for late initialization
+    const timeouts = [500, 1500, 3000].map((delay) =>
       setTimeout(() => {
         const shouldShow = AdMobService.shouldShowAds();
-        console.log(`[TabNavigator] Delayed check (${delay}ms): ${shouldShow}`);
+        console.log('[TabNav] Delayed check (' + delay + 'ms):', shouldShow);
         setShowBanner(shouldShow);
+        setRenderKey(prev => prev + 1);
       }, delay)
     );
     
     return () => {
-      console.log('[TabNavigator] 🚪 Cleaning up subscriptions');
+      console.log('[TabNav] 🚪 Cleaning up');
       unsubscribe();
-      timeoutIds.forEach(clearTimeout);
+      timeouts.forEach(clearTimeout);
     };
   }, []);
 
@@ -92,16 +99,15 @@ const MainTabNavigator = () => {
   const bannerSpace = showBanner ? BANNER_HEIGHT : 0;
   const totalTabBarHeight = TAB_BAR_HEIGHT + bannerSpace + systemNavHeight;
   
-  console.log(`[TabNavigator] 📐 Layout - TabBar: ${TAB_BAR_HEIGHT}px, Banner: ${bannerSpace}px, SystemNav: ${systemNavHeight}px, Total: ${totalTabBarHeight}px`);
+  console.log('[TabNav] 📐 Layout - TabBar:', TAB_BAR_HEIGHT, 'Banner:', bannerSpace, 'SystemNav:', systemNavHeight, 'Total:', totalTabBarHeight);
   
   return (
-    <View style={{ flex: 1 }}>
-      {/* Main Tab Navigator */}
+    <View style={{ flex: 1 }} key={renderKey}>
+      {/* Main Tabs */}
       <Tab.Navigator
         screenOptions={({ route }) => ({
           tabBarIcon: ({ focused, color, size }) => {
             let iconName;
-
             if (route.name === 'Home') {
               iconName = focused ? 'home' : 'home-outline';
             } else if (route.name === 'Statistics') {
@@ -109,22 +115,20 @@ const MainTabNavigator = () => {
             } else if (route.name === 'Settings') {
               iconName = focused ? 'cog' : 'cog-outline';
             }
-
             return <Icon name={iconName} size={size} color={color} />;
           },
           tabBarActiveTintColor: '#4f46e5',
           tabBarInactiveTintColor: '#6b7280',
           tabBarStyle: {
-            // ✅ FIX: Container grows/shrinks based on banner visibility
             position: 'absolute',
             bottom: 0,
             left: 0,
             right: 0,
-            height: totalTabBarHeight, // Dynamic total height
+            height: totalTabBarHeight, // ✅ Dynamic height
             backgroundColor: '#ffffff',
             borderTopWidth: 1,
             borderTopColor: '#e5e7eb',
-            paddingBottom: systemNavHeight + bannerSpace, // Space for system nav + banner
+            paddingBottom: systemNavHeight + bannerSpace, // ✅ Space for banner
             paddingTop: 8,
             elevation: 8,
             shadowColor: '#000',
@@ -133,7 +137,6 @@ const MainTabNavigator = () => {
             shadowRadius: 3,
           },
           tabBarItemStyle: {
-            // ✅ FIX: Tabs stay in their normal position
             height: TAB_BAR_HEIGHT,
           },
           tabBarLabelStyle: {
@@ -147,31 +150,25 @@ const MainTabNavigator = () => {
         <Tab.Screen 
           name="Home" 
           component={HomeScreen}
-          options={{
-            tabBarLabel: 'Habits',
-          }}
+          options={{ tabBarLabel: 'Habits' }}
         />
         <Tab.Screen 
           name="Statistics" 
           component={StatisticsScreen}
-          options={{
-            tabBarLabel: 'Stats',
-          }}
+          options={{ tabBarLabel: 'Stats' }}
         />
         <Tab.Screen 
           name="Settings" 
           component={SettingsScreen}
-          options={{
-            tabBarLabel: 'Settings',
-          }}
+          options={{ tabBarLabel: 'Settings' }}
         />
       </Tab.Navigator>
 
-      {/* ✅ FIX: Banner positioned at bottom of tab bar container */}
+      {/* ✅ FIX: Banner positioned at bottom of tab bar */}
       {showBanner && Platform.OS !== 'web' && (
         <View style={{
           position: 'absolute',
-          bottom: systemNavHeight, // Above system navigation bar
+          bottom: systemNavHeight, // Above system nav
           left: 0,
           right: 0,
           height: BANNER_HEIGHT,
@@ -190,6 +187,9 @@ const MainTabNavigator = () => {
   );
 };
 
+/**
+ * Main App Navigator
+ */
 const AppNavigator = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(null);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -200,21 +200,20 @@ const AppNavigator = () => {
 
   const initializeApp = async () => {
     try {
-      console.log('[AppNavigator] 🚀 Initializing app services...');
+      console.log('[AppNav] 🚀 Initializing...');
       
-      // Initialize AdMob first (it pre-loads premium status)
+      // Initialize services
       await AdMobService.initialize();
       await NotificationService.initialize();
       
-      console.log('[AppNavigator] ✅ Services initialized');
+      console.log('[AppNav] ✅ Services initialized');
 
-      // Listen for auth state changes
+      // Listen for auth changes
       const unsubscribe = FirebaseService.onAuthStateChanged(async (user) => {
-        console.log('[AppNavigator] 🔐 Auth state changed:', user ? 'Logged in' : 'Logged out');
+        console.log('[AppNav] 🔐 Auth:', user ? 'Logged in' : 'Logged out');
         
         if (user) {
-          // User logged in - reload premium status
-          console.log('[AppNavigator] 👤 User logged in, checking premium status...');
+          console.log('[AppNav] 👤 User logged in, checking premium...');
           await AdMobService.preloadPremiumStatus();
         }
         
@@ -224,7 +223,7 @@ const AppNavigator = () => {
 
       return unsubscribe;
     } catch (error) {
-      console.error('[AppNavigator] ❌ Error initializing app:', error);
+      console.error('[AppNav] ❌ Init error:', error);
       setIsInitialized(true);
     }
   };
@@ -250,56 +249,11 @@ const AppNavigator = () => {
                   component={MainTabNavigator}
                   options={{ headerShown: false }}
                 />
-                <Stack.Screen 
-                  name="CreateHabit" 
-                  component={CreateHabitScreen}
-                  options={{
-                    headerShown: false,
-                    presentation: 'modal',
-                    gestureEnabled: true,
-                    cardOverlayEnabled: true,
-                  }}
-                />
-                <Stack.Screen 
-                  name="EditHabit" 
-                  component={EditHabitScreen}
-                  options={{
-                    headerShown: false,
-                    presentation: 'modal',
-                    gestureEnabled: true,
-                    cardOverlayEnabled: true,
-                  }}
-                />
-                <Stack.Screen 
-                  name="Premium" 
-                  component={PremiumScreen}
-                  options={{
-                    headerShown: false,
-                    presentation: 'modal',
-                    gestureEnabled: true,
-                    cardOverlayEnabled: true,
-                  }}
-                />
-                <Stack.Screen 
-                  name="Admin" 
-                  component={AdminScreen}
-                  options={{
-                    headerShown: false,
-                    presentation: 'modal',
-                    gestureEnabled: true,
-                    cardOverlayEnabled: true,
-                  }}
-                />
-                <Stack.Screen 
-                  name="About" 
-                  component={AboutScreen}
-                  options={{
-                    headerShown: false,
-                    presentation: 'modal',
-                    gestureEnabled: true,
-                    cardOverlayEnabled: true,
-                  }}
-                />
+                <Stack.Screen name="CreateHabit" component={CreateHabitScreen} options={{ headerShown: false, presentation: 'modal' }} />
+                <Stack.Screen name="EditHabit" component={EditHabitScreen} options={{ headerShown: false, presentation: 'modal' }} />
+                <Stack.Screen name="Premium" component={PremiumScreen} options={{ headerShown: false, presentation: 'modal' }} />
+                <Stack.Screen name="Admin" component={AdminScreen} options={{ headerShown: false, presentation: 'modal' }} />
+                <Stack.Screen name="About" component={AboutScreen} options={{ headerShown: false, presentation: 'modal' }} />
               </>
             ) : (
               <Stack.Screen name="Auth" component={AuthScreen} />

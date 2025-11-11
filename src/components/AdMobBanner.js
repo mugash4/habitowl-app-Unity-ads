@@ -1,13 +1,13 @@
 /**
- * ✅ FIXED: AdMob Banner Ad Component
- * Properly subscribes to status changes and displays banner dynamically
+ * AdMob Banner Component - FIXED VERSION
+ * ✅ Properly displays and hides based on user status
  */
 
 import React, { useEffect, useState, useRef } from 'react';
 import { View, StyleSheet, Platform, Text } from 'react-native';
 import adMobService from '../services/AdMobService';
 
-// Import banner component
+// Import AdMob components
 let BannerAd = null;
 let BannerAdSize = null;
 
@@ -15,94 +15,72 @@ try {
   const admobModule = require('react-native-google-mobile-ads');
   BannerAd = admobModule.BannerAd;
   BannerAdSize = admobModule.BannerAdSize;
-  console.log('[Banner] ✅ AdMob SDK loaded');
+  console.log('[Banner] ✅ SDK loaded');
 } catch (error) {
-  console.log('[Banner] ℹ️ AdMob SDK not available (normal for Expo Go)');
+  console.log('[Banner] ℹ️ SDK not available');
 }
 
 const AdMobBanner = ({ style = {} }) => {
   const [shouldShow, setShouldShow] = useState(false);
   const [bannerConfig, setBannerConfig] = useState(null);
   const [debugInfo, setDebugInfo] = useState('Initializing...');
-  const isMountedRef = useRef(true);
+  const isMounted = useRef(true);
+  const checkCount = useRef(0);
 
   useEffect(() => {
     console.log('[Banner] 🎬 Component mounted');
-    isMountedRef.current = true;
+    isMounted.current = true;
     
-    // ✅ FIX: Subscribe to comprehensive status changes
+    // ✅ FIX: Subscribe to status changes
     const unsubscribe = adMobService.onStatusChange((status) => {
-      if (!isMountedRef.current) return;
+      if (!isMounted.current) return;
       
-      console.log('[Banner] 📢 Status update:', status);
+      checkCount.current++;
+      console.log('[Banner] 📢 Status update #' + checkCount.current + ':', status);
       checkAndUpdate(status);
     });
 
-    // Initial check
-    const initialStatus = {
-      isInitialized: adMobService.isInitialized,
-      isPremium: adMobService.isPremium,
-      isAdmin: adMobService.isAdmin,
-      premiumStatusLoaded: adMobService.premiumStatusLoaded,
-      shouldShowAds: adMobService.shouldShowAds()
-    };
-    
-    console.log('[Banner] 🔍 Initial status:', initialStatus);
-    checkAndUpdate(initialStatus);
-
-    // Delayed re-checks to catch late initialization
-    const timeout1 = setTimeout(() => {
-      if (isMountedRef.current) {
-        const status = adMobService.getStatus();
-        console.log('[Banner] 🔄 Delayed check (1s):', status.shouldShowAds);
-        checkAndUpdate(status);
-      }
-    }, 1000);
-
-    const timeout2 = setTimeout(() => {
-      if (isMountedRef.current) {
-        const status = adMobService.getStatus();
-        console.log('[Banner] 🔄 Delayed check (2s):', status.shouldShowAds);
-        checkAndUpdate(status);
-      }
-    }, 2000);
+    // ✅ FIX: Delayed checks for late initialization
+    const delays = [500, 1500, 3000];
+    const timeouts = delays.map((delay) =>
+      setTimeout(() => {
+        if (isMounted.current) {
+          checkCount.current++;
+          const status = adMobService.getStatus();
+          console.log('[Banner] 🔄 Delayed check #' + checkCount.current + ' (' + delay + 'ms):', status.shouldShowAds);
+          checkAndUpdate(status);
+        }
+      }, delay)
+    );
 
     return () => {
-      console.log('[Banner] 🚪 Component unmounting');
-      isMountedRef.current = false;
+      console.log('[Banner] 🚪 Unmounting');
+      isMounted.current = false;
       unsubscribe();
-      clearTimeout(timeout1);
-      clearTimeout(timeout2);
+      timeouts.forEach(clearTimeout);
     };
   }, []);
 
   const checkAndUpdate = (status) => {
-    if (!isMountedRef.current) {
-      console.log('[Banner] ⚠️ Component unmounted, skipping update');
-      return;
-    }
+    if (!isMounted.current) return;
 
     console.log('[Banner] 🔍 Checking display conditions...');
     
     // Platform check
     if (Platform.OS === 'web') {
-      const msg = 'Web platform - ads not supported';
-      console.log(`[Banner] ℹ️ ${msg}`);
-      setDebugInfo(msg);
+      setDebugInfo('Web - not supported');
       setShouldShow(false);
       return;
     }
 
-    // SDK availability check
+    // SDK check
     if (!BannerAd || !BannerAdSize) {
-      const msg = 'AdMob SDK not loaded (need EAS build)';
-      console.log(`[Banner] ⚠️ ${msg}`);
-      setDebugInfo(msg);
+      setDebugInfo('SDK not loaded (need EAS build)');
       setShouldShow(false);
       return;
     }
 
-    // Check if should show ads
+    // ✅ FIX: Check shouldShowAds status
     if (!status.shouldShowAds) {
       const reasons = [];
       if (!status.isInitialized) reasons.push('not initialized');
@@ -110,47 +88,43 @@ const AdMobBanner = ({ style = {} }) => {
       if (status.isAdmin) reasons.push('admin user');
       if (!status.premiumStatusLoaded) reasons.push('status loading');
       
-      const msg = `Ads disabled: ${reasons.join(', ')}`;
-      console.log(`[Banner] 🚫 ${msg}`);
+      const msg = 'Disabled: ' + reasons.join(', ');
+      console.log('[Banner] 🚫', msg);
       setDebugInfo(msg);
       setShouldShow(false);
       return;
     }
 
-    // Get banner config
+    // Get config
     const config = adMobService.getBannerConfig();
     if (!config || !config.adUnitId) {
-      const msg = 'Banner config unavailable';
-      console.log(`[Banner] ❌ ${msg}`);
-      setDebugInfo(msg);
+      setDebugInfo('Config unavailable');
       setShouldShow(false);
       return;
     }
 
-    // ✅ All checks passed - show banner
-    console.log('[Banner] ✅ All checks passed! Showing banner ad');
-    console.log('[Banner] 📱 Ad Unit ID:', config.adUnitId);
-    setDebugInfo(`Showing ad: ${config.adUnitId}`);
+    // ✅ All checks passed
+    console.log('[Banner] ✅ SHOWING BANNER');
+    console.log('[Banner] 📱 Ad Unit:', config.adUnitId);
+    setDebugInfo('Showing: ' + config.adUnitId);
     setBannerConfig(config);
     setShouldShow(true);
   };
 
   // Don't render if shouldn't show
   if (!shouldShow || !bannerConfig || !BannerAd || Platform.OS === 'web') {
-    // Show debug info in development
+    // Debug view in development
     if (__DEV__ && Platform.OS !== 'web') {
       return (
         <View style={[styles.container, style, styles.debugContainer]}>
-          <Text style={styles.debugText}>
-            Banner Ad: {debugInfo}
-          </Text>
+          <Text style={styles.debugText}>Banner: {debugInfo}</Text>
         </View>
       );
     }
     return null;
   }
 
-  console.log('[Banner] 🎨 Rendering banner ad component');
+  console.log('[Banner] 🎨 Rendering banner');
 
   return (
     <View style={[styles.container, style]}>
@@ -161,24 +135,21 @@ const AdMobBanner = ({ style = {} }) => {
           requestNonPersonalizedAdsOnly: false,
         }}
         onAdLoaded={() => {
-          console.log('[Banner] ✅ Ad loaded successfully!');
+          console.log('[Banner] ✅ Ad loaded!');
           adMobService.trackAdImpression('banner', 'loaded');
-          if (isMountedRef.current) {
-            setDebugInfo('Ad loaded successfully');
+          if (isMounted.current) {
+            setDebugInfo('Ad loaded');
           }
         }}
         onAdFailedToLoad={(error) => {
-          console.log('[Banner] ❌ Ad load failed:', error);
-          if (isMountedRef.current) {
-            setDebugInfo(`Load failed: ${error.message || 'Unknown error'}`);
+          console.log('[Banner] ❌ Load failed:', error);
+          if (isMounted.current) {
+            setDebugInfo('Failed: ' + (error.message || 'Unknown'));
           }
         }}
         onAdOpened={() => {
-          console.log('[Banner] 👁️ Ad opened/clicked');
+          console.log('[Banner] 👁️ Ad clicked');
           adMobService.trackAdImpression('banner', 'click');
-        }}
-        onAdClosed={() => {
-          console.log('[Banner] 🚪 Ad closed');
         }}
       />
     </View>
@@ -194,13 +165,14 @@ const styles = StyleSheet.create({
   },
   debugContainer: {
     height: 50,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#ffebee',
     paddingHorizontal: 10,
   },
   debugText: {
     fontSize: 10,
-    color: '#666',
+    color: '#c62828',
     textAlign: 'center',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
 });
 

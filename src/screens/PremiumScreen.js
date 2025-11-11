@@ -161,7 +161,7 @@ const PremiumScreen = ({ navigation }) => {
       if (success) {
         // Purchase was successful (or is being processed)
         Alert.alert(
-          '👑 Welcome to Premium!',
+          '🎉 Welcome to Premium!',
           'Your 7-day free trial has started! You can cancel anytime before the trial ends.',
           [
             {
@@ -342,7 +342,7 @@ const PremiumScreen = ({ navigation }) => {
             ))}
           </View>
 
-          {/* Subscribe Button */}
+          {/* Subscribe Button - ✅ FIXED: White text color added */}
           <View style={styles.subscribeContainer}>
             <Button
               mode="contained"
@@ -351,6 +351,8 @@ const PremiumScreen = ({ navigation }) => {
               disabled={isPurchasing || subscriptions.length === 0}
               style={styles.subscribeButton}
               contentStyle={styles.subscribeButtonContent}
+              textColor="#ffffff"
+              labelStyle={{ color: '#ffffff', fontWeight: 'bold' }}
             >
               {isPurchasing ? 'Processing...' : 'Start 7-Day Free Trial'}
             </Button>
