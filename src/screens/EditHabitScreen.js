@@ -23,7 +23,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 
 import FirebaseService from '../services/FirebaseService';
 import NotificationService from '../services/NotificationService';
-import adMobService from '../services/AdMobService'; // ✅ ADDED
+import adMobService from '../services/AdMobService';
 
 const EditHabitScreen = ({ navigation, route }) => {
   const { habit, onGoBack } = route.params;
@@ -48,7 +48,8 @@ const EditHabitScreen = ({ navigation, route }) => {
   const [customMessage, setCustomMessage] = useState(habit.reminderMessage || '');
   const [isLoading, setIsLoading] = useState(false);
 
-  // ✅ ADDED: Track interactions for ads
+  // ✅ FIXED: Track premium/admin status properly
+  const [isPremiumOrAdmin, setIsPremiumOrAdmin] = useState(false);
   const [interactionCount, setInteractionCount] = useState(0);
 
   const categories = [
@@ -64,8 +65,42 @@ const EditHabitScreen = ({ navigation, route }) => {
 
   const timeOptions = ['5 min', '10 min', '15 min', '30 min', '45 min', '1 hour', '2 hours'];
 
-  // ✅ ADDED: Ad tracking function
+  useEffect(() => {
+    checkPremiumStatus(); // ✅ ADDED: Check on mount
+  }, []);
+
+  // ✅ ADDED: Check premium/admin status
+  const checkPremiumStatus = async () => {
+    try {
+      const userStats = await FirebaseService.getUserStats();
+      const isPremium = userStats?.isPremium || false;
+      
+      // Also check admin status
+      const user = FirebaseService.currentUser;
+      let isAdmin = false;
+      if (user && user.email) {
+        const AdminService = require('../services/AdminService').default;
+        isAdmin = await AdminService.checkAdminStatus(user.email);
+      }
+      
+      const premiumOrAdmin = isPremium || isAdmin;
+      setIsPremiumOrAdmin(premiumOrAdmin);
+      
+      console.log('[EditHabit] Premium/Admin status:', premiumOrAdmin, '(Premium:', isPremium, 'Admin:', isAdmin, ')');
+    } catch (error) {
+      console.log('[EditHabit] Error checking status:', error);
+      setIsPremiumOrAdmin(false);
+    }
+  };
+
+  // ✅ FIXED: Only show ads for FREE users
   const trackInteractionAndShowAd = async (actionName) => {
+    // ✅ CRITICAL FIX: Check status FIRST before showing any ads
+    if (isPremiumOrAdmin) {
+      console.log(`[EditHabit] 👑 Premium/Admin user - no ads for ${actionName}`);
+      return;
+    }
+
     const newCount = interactionCount + 1;
     setInteractionCount(newCount);
     
@@ -75,7 +110,10 @@ const EditHabitScreen = ({ navigation, route }) => {
     if (newCount % 2 === 0) {
       setTimeout(async () => {
         try {
-          await adMobService.showInterstitialAd(`edit_habit_${actionName}`);
+          // ✅ Double-check before showing ad
+          if (!isPremiumOrAdmin) {
+            await adMobService.showInterstitialAd(`edit_habit_${actionName}`);
+          }
         } catch (error) {
           console.log('[EditHabit] Ad not shown:', error);
         }
@@ -102,7 +140,6 @@ const EditHabitScreen = ({ navigation, route }) => {
     return true;
   };
 
-  // ✅ UPDATED: Track ad when habit is updated
   const handleUpdateHabit = async () => {
     if (!validateForm()) return;
 
@@ -144,7 +181,7 @@ const EditHabitScreen = ({ navigation, route }) => {
         console.error('Tracking error:', trackError);
       }
 
-      // ✅ ADDED: Show ad after updating habit
+      // ✅ FIXED: Show ad only if user is FREE
       trackInteractionAndShowAd('habit_updated');
 
       console.log('⏳ Waiting for Firestore sync...');
@@ -173,7 +210,6 @@ const EditHabitScreen = ({ navigation, route }) => {
     }
   };
 
-  // ✅ UPDATED: Track ad when habit is deleted
   const handleDeleteHabit = () => {
     Alert.alert(
       'Delete Habit',
@@ -193,7 +229,7 @@ const EditHabitScreen = ({ navigation, route }) => {
               
               console.log('✅ Habit deleted successfully');
 
-              // ✅ ADDED: Show ad after deleting habit
+              // ✅ FIXED: Show ad only if user is FREE
               trackInteractionAndShowAd('habit_deleted');
               
               await new Promise(resolve => setTimeout(resolve, 500));

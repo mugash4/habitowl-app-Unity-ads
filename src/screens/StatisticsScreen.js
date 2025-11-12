@@ -12,7 +12,7 @@ import { LineChart, BarChart, PieChart } from 'react-native-chart-kit';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { useTabBarHeight } from '../hooks/useTabBarHeight'; // ✅ ADDED
+import { useTabBarHeight } from '../hooks/useTabBarHeight';
 
 import FirebaseService from '../services/FirebaseService';
 import adMobService from '../services/AdMobService';
@@ -26,15 +26,14 @@ const StatisticsScreen = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState('week'); // week, month, year
   const [isPremium, setIsPremium] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false); // ✅ ADDED
 
-  // ✅ ADDED: Dynamic tab bar height calculation
   const { totalHeight: tabBarTotalHeight } = useTabBarHeight();
 
   useEffect(() => {
     loadStatistics();
   }, []);
 
-  // 🔧 FIX: Reload statistics when screen comes into focus
   useFocusEffect(
     useCallback(() => {
       console.log('📊 Statistics screen focused - reloading data...');
@@ -55,14 +54,15 @@ const StatisticsScreen = ({ navigation }) => {
   
       // ✅ FIX: Check both premium status AND admin status
       let premiumStatus = stats?.isPremium || false;
+      let adminStatus = false;
     
       // Double-check admin status if not premium
       if (!premiumStatus) {
         const user = FirebaseService.currentUser;
         if (user && user.email) {
           const AdminService = require('../services/AdminService').default;
-          const isAdmin = await AdminService.checkAdminStatus(user.email);
-          if (isAdmin) {
+          adminStatus = await AdminService.checkAdminStatus(user.email);
+          if (adminStatus) {
             console.log('✅ Admin user - enabling all premium features');
             premiumStatus = true;
           }
@@ -70,6 +70,7 @@ const StatisticsScreen = ({ navigation }) => {
       }
     
       setIsPremium(premiumStatus);
+      setIsAdmin(adminStatus); // ✅ ADDED
       setHabits(userHabits || []);
       setUserStats(stats);
     } catch (error) {
@@ -86,14 +87,18 @@ const StatisticsScreen = ({ navigation }) => {
     await loadStatistics();
     setRefreshing(false);
     
-    // Show interstitial ad occasionally after viewing stats
-    setTimeout(async () => {
-      try {
-        await adMobService.showInterstitialAd('statistics_view');
-      } catch (error) {
-        console.log('Ad not shown:', error);
-      }
-    }, 500);
+    // ✅ FIXED: Only show ads for FREE users
+    if (!isPremium && !isAdmin) {
+      setTimeout(async () => {
+        try {
+          await adMobService.showInterstitialAd('statistics_view');
+        } catch (error) {
+          console.log('[Statistics] Ad not shown:', error);
+        }
+      }, 500);
+    } else {
+      console.log('[Statistics] 👑 Premium/Admin user - no ads on refresh');
+    }
   };
 
   const getCompletionData = () => {
@@ -112,19 +117,15 @@ const StatisticsScreen = ({ navigation }) => {
       
       data.push(completions);
       
-      // ✅ IMPROVED: Better label formatting for clarity
       if (selectedPeriod === 'week') {
-        // Show day names for week view
         labels.push(date.toLocaleDateString('en', { weekday: 'short' }));
       } else if (selectedPeriod === 'month') {
-        // Show date with month for month view (every 3rd day to avoid crowding)
         if (i % 3 === 0 || i === 0 || i === days - 1) {
           labels.push(date.toLocaleDateString('en', { day: 'numeric', month: 'short' }));
         } else {
           labels.push('');
         }
       } else {
-        // Show months for year view (every 30th day)
         if (i % 30 === 0 || i === 0 || i === days - 1) {
           labels.push(date.toLocaleDateString('en', { month: 'short' }));
         } else {
@@ -320,7 +321,7 @@ const StatisticsScreen = ({ navigation }) => {
   };
 
   const renderCategoryChart = () => {
-    if (!isPremium) {
+    if (!isPremium && !isAdmin) {
       return (
         <Card style={styles.chartCard}>
           <Card.Content>
@@ -432,7 +433,7 @@ const StatisticsScreen = ({ navigation }) => {
       <ScrollView
         style={styles.content}
         contentContainerStyle={{
-          paddingBottom: tabBarTotalHeight + 20 // ✅ FIXED: Dynamic padding
+          paddingBottom: tabBarTotalHeight + 20
         }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />

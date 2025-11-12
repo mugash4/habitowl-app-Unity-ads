@@ -25,7 +25,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import FirebaseService from '../services/FirebaseService';
 import NotificationService from '../services/NotificationService';
 import AIService from '../services/AIService';
-import adMobService from '../services/AdMobService'; // ✅ ADDED
+import adMobService from '../services/AdMobService';
 
 const CreateHabitScreen = ({ navigation, route }) => {
   const scrollViewRef = useRef(null);
@@ -42,7 +42,8 @@ const CreateHabitScreen = ({ navigation, route }) => {
   const [aiSuggestions, setAiSuggestions] = useState([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
 
-  // ✅ ADDED: Track interactions for ads
+  // ✅ FIXED: Track premium/admin status properly
+  const [isPremiumOrAdmin, setIsPremiumOrAdmin] = useState(false);
   const [interactionCount, setInteractionCount] = useState(0);
 
   const categories = [
@@ -60,21 +61,39 @@ const CreateHabitScreen = ({ navigation, route }) => {
 
   useEffect(() => {
     loadAISuggestions();
+    checkPremiumStatus(); // ✅ ADDED: Check on mount
   }, []);
 
-  // ✅ FIX: Only show ads for FREE users
-  const trackInteractionAndShowAd = async (actionName) => {
-    // ✅ Check current premium status
+  // ✅ ADDED: Check premium/admin status
+  const checkPremiumStatus = async () => {
     try {
       const userStats = await FirebaseService.getUserStats();
-      const isPremiumUser = userStats?.isPremium || false;
+      const isPremium = userStats?.isPremium || false;
       
-      if (isPremiumUser) {
-        console.log(`[CreateHabit] 👑 Premium/Admin user - no ads for ${actionName}`);
-        return;
+      // Also check admin status
+      const user = FirebaseService.currentUser;
+      let isAdmin = false;
+      if (user && user.email) {
+        const AdminService = require('../services/AdminService').default;
+        isAdmin = await AdminService.checkAdminStatus(user.email);
       }
+      
+      const premiumOrAdmin = isPremium || isAdmin;
+      setIsPremiumOrAdmin(premiumOrAdmin);
+      
+      console.log('[CreateHabit] Premium/Admin status:', premiumOrAdmin, '(Premium:', isPremium, 'Admin:', isAdmin, ')');
     } catch (error) {
-      console.log('[CreateHabit] Error checking premium status:', error);
+      console.log('[CreateHabit] Error checking status:', error);
+      setIsPremiumOrAdmin(false);
+    }
+  };
+
+  // ✅ FIXED: Only show ads for FREE users
+  const trackInteractionAndShowAd = async (actionName) => {
+    // ✅ CRITICAL FIX: Check status FIRST before showing any ads
+    if (isPremiumOrAdmin) {
+      console.log(`[CreateHabit] 👑 Premium/Admin user - no ads for ${actionName}`);
+      return;
     }
 
     const newCount = interactionCount + 1;
@@ -86,14 +105,16 @@ const CreateHabitScreen = ({ navigation, route }) => {
     if (newCount % 3 === 0) {
       setTimeout(async () => {
         try {
-          await adMobService.showInterstitialAd(`create_habit_${actionName}`);
+          // ✅ Double-check before showing ad
+          if (!isPremiumOrAdmin) {
+            await adMobService.showInterstitialAd(`create_habit_${actionName}`);
+          }
         } catch (error) {
           console.log('[CreateHabit] Ad not shown:', error);
         }
       }, 500);
     }
   };
-
 
   const loadAISuggestions = async () => {
     try {
@@ -114,7 +135,6 @@ const CreateHabitScreen = ({ navigation, route }) => {
     }
   };
 
-  // ✅ UPDATED: Track ad when suggestion is selected
   const handleSuggestionSelect = (suggestion) => {
     trackInteractionAndShowAd('suggestion_select');
     setHabitName(suggestion.name);
@@ -185,7 +205,6 @@ const CreateHabitScreen = ({ navigation, route }) => {
     );
   };
 
-  // ✅ UPDATED: Track ad when habit is created
   const handleCreateHabit = async () => {
     if (!validateForm()) return;
 
@@ -232,7 +251,7 @@ const CreateHabitScreen = ({ navigation, route }) => {
         has_reminder: reminderEnabled
       }).catch(err => console.error('⚠️ Tracking error:', err));
 
-      // ✅ ADDED: Show ad after creating habit
+      // ✅ FIXED: Show ad only if user is FREE
       trackInteractionAndShowAd('habit_created');
 
       console.log('🔄 Navigating back to Home with refresh...');
