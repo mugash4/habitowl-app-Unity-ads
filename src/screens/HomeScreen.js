@@ -185,11 +185,51 @@ const HomeScreen = ({ navigation, route }) => {
     return 'evening';
   };
 
+  // ✅ FIX: Show interstitial ad when user refreshes the screen
   const onRefresh = async () => {
     console.log('🔄 Manual refresh triggered');
     setRefreshing(true);
     setScreenKey(prev => prev + 1);
-    await loadHabits(true);
+    
+    // ✅ NEW: Show interstitial ad after refresh (for free users only)
+    try {
+      // Wait a bit for the refresh to start
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // Load the data
+      await loadHabits(true);
+      
+      // ✅ Check if user is free (not premium/admin)
+      console.log('[Refresh] Checking ad eligibility - isPremium:', isPremium);
+      
+      if (!isPremium) {
+        // Double-check with AdMobService
+        const status = adMobService.getStatus();
+        if (!status.isPremium && !status.isAdmin && status.shouldShowAds) {
+          console.log('[Refresh] 💰 FREE user confirmed - showing interstitial ad after refresh');
+          
+          // Wait a bit after refresh completes to show ad
+          setTimeout(async () => {
+            try {
+              const adShown = await adMobService.showInterstitialAd('homescreen_refresh');
+              if (adShown) {
+                console.log('[Refresh] ✅ Interstitial ad shown successfully');
+              } else {
+                console.log('[Refresh] ⏳ Interstitial ad not ready or cooldown active');
+              }
+            } catch (error) {
+              console.log('[Refresh] ❌ Error showing ad:', error.message);
+            }
+          }, 800);
+        } else {
+          console.log('[Refresh] 👑 Premium/Admin user - no ads after refresh');
+        }
+      } else {
+        console.log('[Refresh] 👑 Premium user - no ads after refresh');
+      }
+    } catch (error) {
+      console.error('[Refresh] Error:', error);
+    }
   };
 
   const handleHabitComplete = async (habit, isNowCompleted) => {
@@ -203,7 +243,7 @@ const HomeScreen = ({ navigation, route }) => {
           await NotificationService.scheduleStreakCelebration(habit, newStreak);
         }
       
-        // ✅ FIX: Check premium/admin status before showing ads
+        // ✅ Check premium/admin status before showing ads
         console.log('[Home] Checking ad eligibility - isPremium:', isPremium);
       
         if (!isPremium) {
@@ -405,7 +445,7 @@ const HomeScreen = ({ navigation, route }) => {
     <Animated.View style={[styles.container, { opacity: fadeAnim }]} key={screenKey}>
       <StatusBar barStyle="light-content" backgroundColor="#4f46e5" />
       
-      {/* ✅ FIXED: Header now scrolls WITH the content */}
+      {/* ✅ Header now scrolls WITH the content */}
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[
