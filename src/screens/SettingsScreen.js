@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -21,13 +21,14 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useTabBarHeight } from '../hooks/useTabBarHeight';
+import { useFocusEffect } from '@react-navigation/native'; // ✅ ADDED
 
 import FirebaseService from '../services/FirebaseService';
 import SecureAIService from '../services/SecureAIService';
 import NotificationService from '../services/NotificationService';
 import ContactSupport from '../components/ContactSupport';
 import AdminService from '../services/AdminService';
-import adMobService from '../services/AdMobService'; // ✅ ADDED
+import adMobService from '../services/AdMobService';
 
 let PromoOfferBanner = null;
 try {
@@ -57,35 +58,58 @@ const SettingsScreen = ({ navigation }) => {
   const [notifications, setNotifications] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-
-  // ✅ Track user interactions for ad timing
   const [interactionCount, setInteractionCount] = useState(0);
 
   const { totalHeight: tabBarTotalHeight } = useTabBarHeight();
 
-  useEffect(() => {
-    console.log('SettingsScreen: Mounted ✅');
-    loadAllDataInBackground();
-  }, []);
+  // ✅ FIX: Use useFocusEffect instead of useEffect to reload stats when screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      console.log('⚙️ SettingsScreen FOCUSED - Reloading user stats...');
+      
+      let isActive = true;
+      
+      const reloadData = async () => {
+        try {
+          await loadAllDataInBackground(isActive);
+        } catch (error) {
+          console.error('Error reloading settings data:', error);
+        }
+      };
+      
+      reloadData();
+      
+      return () => {
+        console.log('👋 SettingsScreen BLURRED - Cleaning up');
+        isActive = false;
+      };
+    }, []) // Empty dependency array - reload every time screen is focused
+  );
 
-  const loadAllDataInBackground = async () => {
+  // ✅ FIX: Modified to accept isActive parameter
+  const loadAllDataInBackground = async (isActive = true) => {
+    if (!isActive) return;
+    
     setIsLoading(true);
     
     try {
       await Promise.allSettled([
-        loadUserDataSafely(),
-        loadSettingsSafely(),
-        checkAdminStatusSafely()
+        loadUserDataSafely(isActive),
+        loadSettingsSafely(isActive),
+        checkAdminStatusSafely(isActive)
       ]);
     } catch (error) {
       console.log('SettingsScreen: Background load error:', error.message);
     } finally {
-      setIsLoading(false);
-      console.log('SettingsScreen: Data loaded ✅');
+      if (isActive) {
+        setIsLoading(false);
+        console.log('SettingsScreen: Data loaded ✅');
+      }
     }
   };
 
-  const loadUserDataSafely = async () => {
+  // ✅ FIX: Modified to accept isActive parameter
+  const loadUserDataSafely = async (isActive = true) => {
     try {
       const timeout = new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Timeout')), 3000)
@@ -96,7 +120,15 @@ const SettingsScreen = ({ navigation }) => {
         timeout
       ]);
       
+      if (!isActive) return;
+      
       if (stats && typeof stats === 'object') {
+        console.log('📊 Updated user stats:', {
+          totalHabits: stats.totalHabits,
+          longestStreak: stats.longestStreak,
+          referralCount: stats.referralCount
+        });
+        
         setUserStats(prevStats => ({
           ...prevStats,
           ...stats
@@ -108,7 +140,8 @@ const SettingsScreen = ({ navigation }) => {
     }
   };
 
-  const loadSettingsSafely = async () => {
+  // ✅ FIX: Modified to accept isActive parameter
+  const loadSettingsSafely = async (isActive = true) => {
     try {
       const timeout = new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Timeout')), 2000)
@@ -120,16 +153,22 @@ const SettingsScreen = ({ navigation }) => {
       })();
       
       const provider = await Promise.race([settingsPromise, timeout]);
+      
+      if (!isActive) return;
+      
       if (provider) {
         setApiProvider(provider);
       }
     } catch (error) {
       console.log('Settings load failed:', error.message);
-      setApiProvider('deepseek');
+      if (isActive) {
+        setApiProvider('deepseek');
+      }
     }
   };
 
-  const checkAdminStatusSafely = async () => {
+  // ✅ FIX: Modified to accept isActive parameter
+  const checkAdminStatusSafely = async (isActive = true) => {
     try {
       const user = FirebaseService.currentUser;
       if (!user?.email) {
@@ -145,6 +184,8 @@ const SettingsScreen = ({ navigation }) => {
         timeout
       ]);
       
+      if (!isActive) return;
+      
       setIsAdmin(!!adminStatus);
       
       if (adminStatus && !isPremium) {
@@ -153,13 +194,13 @@ const SettingsScreen = ({ navigation }) => {
       }
     } catch (error) {
       console.log('Admin check failed:', error.message);
-      setIsAdmin(false);
+      if (isActive) {
+        setIsAdmin(false);
+      }
     }
   };
 
-  // ✅ FIX: Only show ads for FREE users
   const trackInteractionAndShowAd = async (actionName) => {
-    // ✅ Check if user is premium or admin
     if (isPremium || isAdmin) {
       console.log(`[Settings] 👑 Premium/Admin user - no ads for ${actionName}`);
       return;
@@ -170,7 +211,6 @@ const SettingsScreen = ({ navigation }) => {
     
     console.log(`[Settings] Interaction #${newCount}: ${actionName}`);
     
-    // Show ad every 3 interactions (adjust as needed)
     if (newCount % 3 === 0) {
       console.log(`[Settings] Showing ad after ${newCount} interactions`);
       setTimeout(async () => {
@@ -247,7 +287,7 @@ const SettingsScreen = ({ navigation }) => {
       setShowReferralDialog(false);
       setReferralCode('');
       Alert.alert('Success!', 'Referral code applied successfully!');
-      await loadUserDataSafely();
+      await loadUserDataSafely(); // ✅ Reload stats after referral
       trackInteractionAndShowAd('referral_submit');
     } catch (error) {
       Alert.alert('Error', error.message || 'Failed to process referral code');

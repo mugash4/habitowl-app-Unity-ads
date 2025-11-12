@@ -49,69 +49,79 @@ const TAB_ICONS_HEIGHT = 60;
 const BANNER_AD_HEIGHT = 50;
 
 /**
- * ✅ COMPLETELY FIXED: Custom Tab Bar with proper banner rendering
- * - Banner container ONLY renders when user is FREE (not premium/admin)
- * - Eliminates empty gray box for premium/admin users
+ * ✅ COMPLETELY FIXED: Custom Tab Bar - NO banner container for admin/premium
  */
 const CustomTabBar = ({ state, descriptors, navigation, insets }) => {
   const [shouldShowBanner, setShouldShowBanner] = useState(false);
   
   useEffect(() => {
-    // Check if banner should display
+    let isMounted = true;
+    
     const checkBannerStatus = () => {
+      if (!isMounted) return;
+      
       if (Platform.OS === 'web') {
         setShouldShowBanner(false);
         return;
       }
       
-      // Get full status from AdMobService
       const status = AdMobService.getStatus();
       
-      // ✅ CRITICAL: Banner shows ONLY when ALL conditions are true
+      // ✅ CRITICAL FIX: Banner shows ONLY for free users
       const willShowBanner = status.shouldShowAds && 
                             status.isInitialized && 
                             !status.isPremium && 
                             !status.isAdmin &&
                             status.premiumStatusLoaded;
       
-      console.log('[CustomTabBar] Banner will show:', willShowBanner, 'Status:', {
-        shouldShowAds: status.shouldShowAds,
-        isInitialized: status.isInitialized,
+      console.log('[CustomTabBar] Banner status check:', {
+        willShowBanner,
         isPremium: status.isPremium,
         isAdmin: status.isAdmin,
+        shouldShowAds: status.shouldShowAds,
+        isInitialized: status.isInitialized,
         premiumStatusLoaded: status.premiumStatusLoaded
       });
       
       setShouldShowBanner(willShowBanner);
     };
     
+    // Initial check
     checkBannerStatus();
     
     // Subscribe to status changes
     const unsubscribe = AdMobService.onStatusChange(() => {
-      checkBannerStatus();
+      if (isMounted) {
+        checkBannerStatus();
+      }
     });
     
-    // Delayed checks for late initialization
-    const timeout1 = setTimeout(checkBannerStatus, 300);
-    const timeout2 = setTimeout(checkBannerStatus, 1000);
-    const timeout3 = setTimeout(checkBannerStatus, 2000);
+    // Multiple delayed checks to catch late initialization
+    const timeouts = [100, 300, 500, 1000, 2000, 3000].map(delay =>
+      setTimeout(() => {
+        if (isMounted) checkBannerStatus();
+      }, delay)
+    );
     
     return () => {
+      isMounted = false;
       unsubscribe();
-      clearTimeout(timeout1);
-      clearTimeout(timeout2);
-      clearTimeout(timeout3);
+      timeouts.forEach(clearTimeout);
     };
   }, []);
   
   const systemNavHeight = insets.bottom || 0;
   
-  // ✅ CRITICAL FIX: Only allocate banner space when banner WILL actually render
+  // ✅ CRITICAL FIX: Only allocate space for banner when it WILL display
   const bannerHeight = shouldShowBanner ? BANNER_AD_HEIGHT : 0;
   const totalHeight = TAB_ICONS_HEIGHT + bannerHeight + systemNavHeight;
 
-  console.log('[CustomTabBar] Rendering - shouldShowBanner:', shouldShowBanner, 'bannerHeight:', bannerHeight, 'totalHeight:', totalHeight);
+  console.log('[CustomTabBar] Rendering with:', {
+    shouldShowBanner,
+    bannerHeight,
+    totalHeight,
+    systemNavHeight
+  });
 
   return (
     <View style={{
@@ -192,7 +202,7 @@ const CustomTabBar = ({ state, descriptors, navigation, insets }) => {
         })}
       </View>
 
-      {/* ✅ CRITICAL FIX: Only render banner container when banner WILL display (FREE users only) */}
+      {/* ✅ CRITICAL FIX: Banner container ONLY renders for free users */}
       {shouldShowBanner && (
         <View style={{
           height: BANNER_AD_HEIGHT,
@@ -217,7 +227,7 @@ const CustomTabBar = ({ state, descriptors, navigation, insets }) => {
 
 
 /**
- * ✅ FIXED: Main Tab Navigator with proper state management
+ * ✅ Main Tab Navigator
  */
 const MainTabNavigator = () => {
   const insets = useSafeAreaInsets();
@@ -253,7 +263,7 @@ const MainTabNavigator = () => {
 };
 
 /**
- * ✅ FIXED: Main App Navigator - Non-blocking initialization
+ * ✅ Main App Navigator
  */
 const AppNavigator = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(null);
@@ -267,7 +277,7 @@ const AppNavigator = () => {
     try {
       console.log('[AppNav] 🚀 Initializing app...');
       
-      // ✅ FIX: Initialize services in background (non-blocking)
+      // ✅ Initialize services in background
       AdMobService.initialize().catch(error => {
         console.log('[AppNav] AdMob init error (non-critical):', error.message);
       });
@@ -276,20 +286,19 @@ const AppNavigator = () => {
         console.log('[AppNav] Notification init error (non-critical):', error.message);
       });
       
-      // ✅ Set initialized immediately after setting up auth listener
+      // Set up auth listener
       const unsubscribe = FirebaseService.onAuthStateChanged(async (user) => {
         console.log('[AppNav] 🔐 Auth state:', user ? 'Logged in' : 'Logged out');
         
         if (user) {
-          console.log('[AppNav] 👤 User logged in, loading premium status...');
-          // Load premium status in background (non-blocking)
+          console.log('[AppNav] 👤 User logged in, preloading premium status...');
+          // Preload premium status in background
           AdMobService.preloadPremiumStatus().catch(error => {
             console.log('[AppNav] Premium status load error (non-critical):', error);
           });
         }
         
         setIsAuthenticated(!!user);
-        // ✅ Set initialized immediately
         if (!isInitialized) {
           setIsInitialized(true);
         }
@@ -298,12 +307,10 @@ const AppNavigator = () => {
       return unsubscribe;
     } catch (error) {
       console.error('[AppNav] ❌ Initialization error:', error);
-      // ✅ Set initialized even on error
       setIsInitialized(true);
     }
   };
 
-  // ✅ Show loading only briefly
   if (!isInitialized) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc' }}>

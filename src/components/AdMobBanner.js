@@ -1,6 +1,6 @@
 /**
- * AdMob Banner Component - COMPLETE FIX
- * ✅ Returns null for premium/admin users (no container, no gray box)
+ * ✅ COMPLETELY FIXED: AdMob Banner Component
+ * Returns null (nothing) for premium/admin users - NO gray box, NO container
  */
 
 import React, { useEffect, useState, useRef } from 'react';
@@ -29,36 +29,73 @@ const AdMobBanner = ({ style = {} }) => {
     console.log('[Banner] 🎬 Component mounted');
     isMounted.current = true;
     
-    // ✅ Immediate check on mount
-    const immediateCheck = () => {
-      const status = adMobService.getStatus();
-      console.log('[Banner] 📊 Immediate status check:', {
-        shouldShowAds: status.shouldShowAds,
-        isPremium: status.isPremium,
-        isAdmin: status.isAdmin,
-        isInitialized: status.isInitialized,
-        premiumStatusLoaded: status.premiumStatusLoaded
-      });
-      evaluateDisplayConditions(status);
+    const evaluateDisplayConditions = (status) => {
+      if (!isMounted.current) return;
+
+      console.log('[Banner] 📊 Evaluating display conditions:', status);
+
+      // ✅ FIX #1: Premium/Admin users - HIGHEST PRIORITY
+      if (status.isPremium || status.isAdmin) {
+        console.log('[Banner] 👑 Premium/Admin user - RETURNING NULL (no banner, no container)');
+        setShouldDisplay(false);
+        return;
+      }
+
+      // Check #2: Platform
+      if (Platform.OS === 'web') {
+        console.log('[Banner] 🌐 Web platform - ads not supported');
+        setShouldDisplay(false);
+        return;
+      }
+
+      // Check #3: SDK availability
+      if (!BannerAd || !BannerAdSize) {
+        console.log('[Banner] ⚠️ AdMob SDK not available');
+        setShouldDisplay(false);
+        return;
+      }
+
+      // Check #4: Get ad configuration
+      const config = adMobService.getBannerConfig();
+      if (!config || !config.adUnitId) {
+        console.log('[Banner] ⚠️ Ad configuration unavailable');
+        setShouldDisplay(false);
+        return;
+      }
+
+      // Check #5: All conditions met for FREE users
+      if (status.shouldShowAds && status.isInitialized && status.premiumStatusLoaded) {
+        console.log('[Banner] ✅ FREE USER - DISPLAYING BANNER AD');
+        setAdConfig(config);
+        setShouldDisplay(true);
+      } else {
+        console.log('[Banner] ❌ Conditions not met:', {
+          shouldShowAds: status.shouldShowAds,
+          isInitialized: status.isInitialized,
+          premiumStatusLoaded: status.premiumStatusLoaded
+        });
+        setShouldDisplay(false);
+      }
     };
     
-    immediateCheck();
+    // Immediate check
+    const immediateStatus = adMobService.getStatus();
+    evaluateDisplayConditions(immediateStatus);
     
-    // ✅ Subscribe to AdMob status changes
+    // Subscribe to status changes
     const unsubscribe = adMobService.onStatusChange((status) => {
-      if (!isMounted.current) return;
-      
-      console.log('[Banner] 📢 Status update received');
-      evaluateDisplayConditions(status);
+      if (isMounted.current) {
+        console.log('[Banner] 📢 Status update received');
+        evaluateDisplayConditions(status);
+      }
     });
 
-    // ✅ Delayed checks for late initialization
-    const delays = [200, 500, 1000, 2000];
-    const timeoutIds = delays.map((delay) =>
+    // Multiple delayed checks to catch late initialization
+    const timeouts = [100, 300, 500, 1000, 2000, 3000].map((delay) =>
       setTimeout(() => {
         if (isMounted.current) {
           const currentStatus = adMobService.getStatus();
-          console.log('[Banner] ⏰ Delayed check (' + delay + 'ms)');
+          console.log(`[Banner] ⏰ Delayed check (${delay}ms)`);
           evaluateDisplayConditions(currentStatus);
         }
       }, delay)
@@ -68,59 +105,12 @@ const AdMobBanner = ({ style = {} }) => {
       console.log('[Banner] 🚪 Component unmounting');
       isMounted.current = false;
       unsubscribe();
-      timeoutIds.forEach(clearTimeout);
+      timeouts.forEach(clearTimeout);
     };
   }, []);
 
-  const evaluateDisplayConditions = (status) => {
-    if (!isMounted.current) return;
-
-    // ✅ FIX: Check #1 - Premium/Admin users (HIGHEST PRIORITY)
-    if (status.isPremium || status.isAdmin) {
-      console.log(`[Banner] 👑 ${status.isPremium ? 'Premium' : 'Admin'} user detected - HIDING BANNER (will return null)`);
-      setShouldDisplay(false);
-      return;
-    }
-
-    // Check #2: Platform
-    if (Platform.OS === 'web') {
-      console.log('[Banner] 🌐 Web platform - ads not supported');
-      setShouldDisplay(false);
-      return;
-    }
-
-    // Check #3: SDK availability
-    if (!BannerAd || !BannerAdSize) {
-      console.log('[Banner] ⚠️ AdMob SDK not available');
-      setShouldDisplay(false);
-      return;
-    }
-
-    // Check #4: Get ad configuration
-    const config = adMobService.getBannerConfig();
-    if (!config || !config.adUnitId) {
-      console.log('[Banner] ⚠️ Ad configuration unavailable');
-      setShouldDisplay(false);
-      return;
-    }
-
-    // Check #5: All conditions met?
-    if (status.shouldShowAds && status.isInitialized && status.premiumStatusLoaded) {
-      console.log('[Banner] ✅ FREE USER CONFIRMED - DISPLAYING BANNER AD');
-      console.log('[Banner] 📱 Ad Unit ID:', config.adUnitId);
-      setAdConfig(config);
-      setShouldDisplay(true);
-    } else {
-      console.log('[Banner] ❌ Conditions not met for display:', {
-        shouldShowAds: status.shouldShowAds,
-        isInitialized: status.isInitialized,
-        premiumStatusLoaded: status.premiumStatusLoaded
-      });
-      setShouldDisplay(false);
-    }
-  };
-
-  // ✅ FIX: Return null immediately when ads should NOT display (no container at all)
+  // ✅ CRITICAL FIX: Return NULL immediately when ads should NOT display
+  // This means NO CONTAINER, NO GRAY BOX - absolutely nothing rendered
   if (Platform.OS === 'web') {
     return null;
   }
@@ -130,11 +120,12 @@ const AdMobBanner = ({ style = {} }) => {
   }
 
   if (!shouldDisplay) {
-    console.log('[Banner] 🚫 shouldDisplay is false - returning null (no gray box)');
+    console.log('[Banner] 🚫 Returning NULL - no banner, no container');
     return null;
   }
 
-  // ✅ Only render container when we actually have an ad to display
+  // Only render when we have a FREE user with ad to display
+  console.log('[Banner] ✅ Rendering banner container for FREE user');
   return (
     <View style={[styles.container, style]}>
       <BannerAd
