@@ -16,6 +16,7 @@ import {
   Dialog,
   Portal,
   Appbar,
+  DataTable,
 } from 'react-native-paper';
 import { ScrollView } from 'react-native-gesture-handler';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -25,6 +26,15 @@ import AdminService from '../services/AdminService';
 import SecureAIService from '../services/SecureAIService';
 import FirebaseService from '../services/FirebaseService';
 
+// ✅ FIXED: Import PromoService for analytics
+let PromoService = null;
+try {
+  PromoService = require('../services/PromoService').default;
+  console.log('✅ AdminScreen: PromoService loaded');
+} catch (error) {
+  console.log('⚠️ AdminScreen: PromoService not available');
+}
+
 const AdminScreen = ({ navigation }) => {
   const [stats, setStats] = useState({
     totalUsers: 0,
@@ -32,8 +42,14 @@ const AdminScreen = ({ navigation }) => {
     totalHabits: 0,
     weeklyEvents: 0
   });
+  
+  // ✅ NEW: Promo analytics state
+  const [promoStats, setPromoStats] = useState(null);
+  const [activeOffers, setActiveOffers] = useState([]);
+  
   const [showApiDialog, setShowApiDialog] = useState(false);
   const [showPromoDialog, setShowPromoDialog] = useState(false);
+  const [showPromoStatsDialog, setShowPromoStatsDialog] = useState(false); // ✅ NEW
   const [selectedProvider, setSelectedProvider] = useState('deepseek');
   const [apiKey, setApiKey] = useState('');
   const [defaultProvider, setDefaultProvider] = useState('deepseek');
@@ -140,6 +156,32 @@ const AdminScreen = ({ navigation }) => {
         setDefaultProvider('deepseek');
       }
       
+      // ✅ NEW: Load promo analytics
+      if (PromoService) {
+        try {
+          const promoStatsPromise = PromoService.getOfferStatistics();
+          const promoTimeout = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Promo stats timeout')), 5000)
+          );
+          
+          const promoAnalytics = await Promise.race([promoStatsPromise, promoTimeout]);
+          console.log('AdminScreen: Promo stats loaded:', promoAnalytics);
+          setPromoStats(promoAnalytics);
+          
+          // Load active offers
+          const offersPromise = PromoService.getAllActiveOffers();
+          const offersTimeout = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Offers timeout')), 5000)
+          );
+          
+          const offers = await Promise.race([offersPromise, offersTimeout]);
+          console.log('AdminScreen: Active offers loaded:', offers.length);
+          setActiveOffers(offers);
+        } catch (promoError) {
+          console.warn('AdminScreen: Promo analytics loading failed:', promoError.message);
+        }
+      }
+      
       console.log('AdminScreen: Data loaded successfully');
       
     } catch (error) {
@@ -209,12 +251,24 @@ const AdminScreen = ({ navigation }) => {
       setPromoDescription('');
       setPromoDiscount('');
       setPromoValidDays('7');
+      
+      // ✅ Reload data after creating offer
+      await loadAdminDataSafely();
     } catch (error) {
       console.error('Promo creation error:', error);
       Alert.alert('Error', 'Failed to create promotional offer: ' + error.message);
     } finally {
       setLoading(false);
     }
+  };
+
+  // ✅ NEW: Handle viewing promo analytics
+  const handleViewPromoAnalytics = () => {
+    if (!PromoService) {
+      Alert.alert('Info', 'Promo analytics not available');
+      return;
+    }
+    setShowPromoStatsDialog(true);
   };
 
   const renderStats = () => {
@@ -252,6 +306,65 @@ const AdminScreen = ({ navigation }) => {
           </LinearGradient>
         </Card>
       </View>
+    );
+  };
+
+  // ✅ NEW: Render promo analytics section
+  const renderPromoAnalyticsCard = () => {
+    if (!PromoService || !promoStats) {
+      return null;
+    }
+
+    return (
+      <Card style={styles.card}>
+        <List.Subheader>📊 Promotional Offers Analytics</List.Subheader>
+        
+        <View style={styles.promoStatsGrid}>
+          <View style={styles.promoStatItem}>
+            <Text style={styles.promoStatValue}>{promoStats.totalOffers || 0}</Text>
+            <Text style={styles.promoStatLabel}>Total Offers</Text>
+          </View>
+          
+          <View style={styles.promoStatItem}>
+            <Text style={[styles.promoStatValue, { color: '#10b981' }]}>
+              {promoStats.activeOffers || 0}
+            </Text>
+            <Text style={styles.promoStatLabel}>Active Offers</Text>
+          </View>
+          
+          <View style={styles.promoStatItem}>
+            <Text style={styles.promoStatValue}>{promoStats.totalImpressions || 0}</Text>
+            <Text style={styles.promoStatLabel}>Impressions</Text>
+          </View>
+          
+          <View style={styles.promoStatItem}>
+            <Text style={styles.promoStatValue}>{promoStats.totalClicks || 0}</Text>
+            <Text style={styles.promoStatLabel}>Clicks</Text>
+          </View>
+          
+          <View style={styles.promoStatItem}>
+            <Text style={[styles.promoStatValue, { color: '#f59e0b' }]}>
+              {promoStats.totalConversions || 0}
+            </Text>
+            <Text style={styles.promoStatLabel}>Conversions</Text>
+          </View>
+          
+          <View style={styles.promoStatItem}>
+            <Text style={[styles.promoStatValue, { color: '#4f46e5' }]}>
+              {promoStats.conversionRate || 0}%
+            </Text>
+            <Text style={styles.promoStatLabel}>Conv. Rate</Text>
+          </View>
+        </View>
+
+        <List.Item
+          title="View Detailed Analytics"
+          description="Click to see full promotional offer statistics"
+          left={(props) => <List.Icon {...props} icon="chart-box" color="#4f46e5" />}
+          right={(props) => <List.Icon {...props} icon="chevron-right" />}
+          onPress={handleViewPromoAnalytics}
+        />
+      </Card>
     );
   };
 
@@ -301,8 +414,11 @@ const AdminScreen = ({ navigation }) => {
         <Text style={styles.sectionTitle}>App Statistics</Text>
         {renderStats()}
 
+        {/* ✅ NEW: Promo Analytics Section */}
+        {renderPromoAnalyticsCard()}
+
         <Card style={styles.card}>
-          <List.Subheader>🔐 AI Configuration (Admin Only)</List.Subheader>
+          <List.Subheader>🤖 AI Configuration (Admin Only)</List.Subheader>
           
           <List.Item
             title="Configure API Keys"
@@ -334,7 +450,7 @@ const AdminScreen = ({ navigation }) => {
         </Card>
 
         <Card style={styles.card}>
-          <List.Subheader>📊 Marketing Tools</List.Subheader>
+          <List.Subheader>📣 Marketing Tools</List.Subheader>
           
           <List.Item
             title="Create Promotional Offer"
@@ -371,9 +487,10 @@ const AdminScreen = ({ navigation }) => {
         </Card>
       </ScrollView>
 
+      {/* API Configuration Dialog */}
       <Portal>
         <Dialog visible={showApiDialog} onDismiss={() => setShowApiDialog(false)}>
-          <Dialog.Title>🔐 Configure API Key (Admin Only)</Dialog.Title>
+          <Dialog.Title>🔑 Configure API Key (Admin Only)</Dialog.Title>
           <Dialog.Content>
             <Text style={styles.dialogDescription}>
               Select provider and enter API key:
@@ -421,6 +538,7 @@ const AdminScreen = ({ navigation }) => {
         </Dialog>
       </Portal>
 
+      {/* Create Promo Offer Dialog */}
       <Portal>
         <Dialog visible={showPromoDialog} onDismiss={() => setShowPromoDialog(false)}>
           <Dialog.Title>Create Promotional Offer</Dialog.Title>
@@ -431,7 +549,7 @@ const AdminScreen = ({ navigation }) => {
               onChangeText={setPromoTitle}
               mode="outlined"
               style={styles.dialogInput}
-              placeholder="e.g., Limited Time: 50% Off Premium"
+              placeholder="e.g., 🔥 Limited Time: 50% Off Premium"
             />
 
             <TextInput
@@ -466,6 +584,104 @@ const AdminScreen = ({ navigation }) => {
           <Dialog.Actions>
             <Button onPress={() => setShowPromoDialog(false)}>Cancel</Button>
             <Button onPress={handleCreatePromoOffer} loading={loading}>Create</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
+
+      {/* ✅ NEW: Promo Analytics Dialog */}
+      <Portal>
+        <Dialog 
+          visible={showPromoStatsDialog} 
+          onDismiss={() => setShowPromoStatsDialog(false)}
+          style={styles.wideDialog}
+        >
+          <Dialog.Title>📊 Promotional Offers Analytics</Dialog.Title>
+          <Dialog.ScrollArea>
+            <ScrollView>
+              {promoStats && (
+                <View style={styles.analyticsContainer}>
+                  <View style={styles.analyticsRow}>
+                    <View style={styles.analyticsItem}>
+                      <Text style={styles.analyticsLabel}>Total Offers</Text>
+                      <Text style={styles.analyticsValue}>{promoStats.totalOffers}</Text>
+                    </View>
+                    <View style={styles.analyticsItem}>
+                      <Text style={styles.analyticsLabel}>Active</Text>
+                      <Text style={[styles.analyticsValue, { color: '#10b981' }]}>
+                        {promoStats.activeOffers}
+                      </Text>
+                    </View>
+                    <View style={styles.analyticsItem}>
+                      <Text style={styles.analyticsLabel}>Expired</Text>
+                      <Text style={[styles.analyticsValue, { color: '#ef4444' }]}>
+                        {promoStats.expiredOffers}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.divider} />
+
+                  <View style={styles.analyticsRow}>
+                    <View style={styles.analyticsItem}>
+                      <Text style={styles.analyticsLabel}>Impressions</Text>
+                      <Text style={styles.analyticsValue}>{promoStats.totalImpressions}</Text>
+                    </View>
+                    <View style={styles.analyticsItem}>
+                      <Text style={styles.analyticsLabel}>Clicks</Text>
+                      <Text style={styles.analyticsValue}>{promoStats.totalClicks}</Text>
+                    </View>
+                    <View style={styles.analyticsItem}>
+                      <Text style={styles.analyticsLabel}>Conversions</Text>
+                      <Text style={[styles.analyticsValue, { color: '#f59e0b' }]}>
+                        {promoStats.totalConversions}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.divider} />
+
+                  <View style={styles.conversionRateCard}>
+                    <Text style={styles.conversionRateLabel}>Conversion Rate</Text>
+                    <Text style={styles.conversionRateValue}>
+                      {promoStats.conversionRate}%
+                    </Text>
+                    <Text style={styles.conversionRateDescription}>
+                      {promoStats.totalClicks > 0 
+                        ? `${promoStats.totalConversions} conversions from ${promoStats.totalClicks} clicks`
+                        : 'No clicks yet'
+                      }
+                    </Text>
+                  </View>
+
+                  {activeOffers.length > 0 && (
+                    <>
+                      <View style={styles.divider} />
+                      <Text style={styles.activeOffersTitle}>Active Offers</Text>
+                      {activeOffers.map((offer, index) => (
+                        <View key={offer.id} style={styles.offerCard}>
+                          <Text style={styles.offerTitle}>{offer.title}</Text>
+                          <Text style={styles.offerDiscount}>{offer.discount}</Text>
+                          <View style={styles.offerStats}>
+                            <Text style={styles.offerStatText}>
+                              👁️ {offer.impressions || 0} impressions
+                            </Text>
+                            <Text style={styles.offerStatText}>
+                              👆 {offer.clicks || 0} clicks
+                            </Text>
+                            <Text style={styles.offerStatText}>
+                              ✅ {offer.conversions || 0} conversions
+                            </Text>
+                          </View>
+                        </View>
+                      ))}
+                    </>
+                  )}
+                </View>
+              )}
+            </ScrollView>
+          </Dialog.ScrollArea>
+          <Dialog.Actions>
+            <Button onPress={() => setShowPromoStatsDialog(false)}>Close</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
@@ -611,6 +827,117 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#991b1b',
     marginLeft: 8,
+  },
+  // ✅ NEW: Promo analytics styles
+  promoStatsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    gap: 16,
+  },
+  promoStatItem: {
+    flex: 1,
+    minWidth: 100,
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  promoStatValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1f2937',
+  },
+  promoStatLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  wideDialog: {
+    maxWidth: 500,
+  },
+  analyticsContainer: {
+    padding: 16,
+  },
+  analyticsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 16,
+  },
+  analyticsItem: {
+    alignItems: 'center',
+  },
+  analyticsLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 4,
+  },
+  analyticsValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1f2937',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#e5e7eb',
+    marginVertical: 16,
+  },
+  conversionRateCard: {
+    backgroundColor: '#f0fdf4',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#10b981',
+  },
+  conversionRateLabel: {
+    fontSize: 14,
+    color: '#059669',
+    fontWeight: '600',
+  },
+  conversionRateValue: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#10b981',
+    marginVertical: 8,
+  },
+  conversionRateDescription: {
+    fontSize: 12,
+    color: '#047857',
+  },
+  activeOffersTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginBottom: 12,
+  },
+  offerCard: {
+    backgroundColor: '#fef3c7',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#f59e0b',
+  },
+  offerTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#92400e',
+    marginBottom: 4,
+  },
+  offerDiscount: {
+    fontSize: 12,
+    color: '#d97706',
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  offerStats: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  offerStatText: {
+    fontSize: 11,
+    color: '#78350f',
   },
 });
 

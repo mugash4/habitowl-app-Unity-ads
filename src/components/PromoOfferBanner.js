@@ -125,16 +125,16 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
   }, [visible, offer]);
 
   /**
-   * ✅ FIXED: Optimized offer loading with better timeout
+   * ✅ FIXED: Optimized offer loading with better timeout - NOW 5 SECONDS
    */
   const loadActiveOfferOptimized = async () => {
     try {
       console.log('🔄 PromoOfferBanner: Loading offer...');
       setLoading(true);
       
-      // ✅ FIXED: Increased timeout to 3 seconds
+      // ✅ FIXED: Increased timeout to 5 seconds for better reliability
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Load timeout after 3s')), 3000)
+        setTimeout(() => reject(new Error('Load timeout after 5s')), 5000)
       );
 
       const loadPromise = (async () => {
@@ -143,7 +143,7 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
         try {
           const statsPromise = FirebaseService.getUserStats();
           const statsTimeout = new Promise((resolve) => 
-            setTimeout(() => resolve(null), 800)
+            setTimeout(() => resolve(null), 1000)
           );
           userStats = await Promise.race([statsPromise, statsTimeout]);
         } catch (err) {
@@ -166,7 +166,8 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
         if (FirebaseService && FirebaseService.trackEvent) {
           FirebaseService.trackEvent('promo_offer_shown', {
             offer_id: activeOffer.id,
-            offer_title: activeOffer.title
+            offer_title: activeOffer.title,
+            screen: 'settings'
           }).catch(() => {});
         }
       } else {
@@ -294,18 +295,9 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
     }
   };
 
-  // ✅ FIXED: Show loading skeleton while loading
+  // ✅ FIXED: Don't show loading skeleton - just return null silently
   if (loading) {
-    return (
-      <View style={[styles.container, style]}>
-        <Card style={styles.card}>
-          <View style={styles.loadingContainer}>
-            <Icon name="loading" size={24} color="#d97706" />
-            <Text style={styles.loadingText}>Loading special offer...</Text>
-          </View>
-        </Card>
-      </View>
-    );
+    return null; // Silent loading - don't block the UI
   }
 
   // Don't show if no offer or not visible
@@ -403,17 +395,6 @@ const styles = StyleSheet.create({
     elevation: 8,
     borderRadius: 16,
     overflow: 'hidden',
-  },
-  loadingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  loadingText: {
-    marginLeft: 12,
-    fontSize: 14,
-    color: '#6b7280',
   },
   gradient: {
     padding: 16,

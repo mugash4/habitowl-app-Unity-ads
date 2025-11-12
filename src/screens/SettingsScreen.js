@@ -447,11 +447,23 @@ const SettingsScreen = ({ navigation }) => {
       >
         {renderUserInfo()}
 
-        {!isPremium && !isAdmin && PromoOfferBanner && (
+        {/* FIXED: Promo Banner - Always render for free users */}
+        {!isPremium && !isAdmin && (
           <View style={styles.promoContainer}>
-            <PromoOfferBanner onUpgradePress={handlePremiumUpgrade} />
-          </View>
+            {PromoOfferBanner ? (
+              <PromoOfferBanner onUpgradePress={handlePremiumUpgrade} />
+            ) : (
+              <Card style={styles.card}>
+                <Card.Content>
+                  <Text style={{ textAlign: 'center', color: '#6b7280' }}>
+                    Special offers loading...
+                  </Text>
+              </Card.Content>
+          </Card>
         )}
+      </View>
+    )}
+
 
         {!isPremium && !isAdmin && (
           <Card style={styles.card}>
