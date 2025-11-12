@@ -62,8 +62,21 @@ const CreateHabitScreen = ({ navigation, route }) => {
     loadAISuggestions();
   }, []);
 
-  // ✅ ADDED: Ad tracking function
+  // ✅ FIX: Only show ads for FREE users
   const trackInteractionAndShowAd = async (actionName) => {
+    // ✅ Check current premium status
+    try {
+      const userStats = await FirebaseService.getUserStats();
+      const isPremiumUser = userStats?.isPremium || false;
+      
+      if (isPremiumUser) {
+        console.log(`[CreateHabit] 👑 Premium/Admin user - no ads for ${actionName}`);
+        return;
+      }
+    } catch (error) {
+      console.log('[CreateHabit] Error checking premium status:', error);
+    }
+
     const newCount = interactionCount + 1;
     setInteractionCount(newCount);
     
@@ -80,6 +93,7 @@ const CreateHabitScreen = ({ navigation, route }) => {
       }, 500);
     }
   };
+
 
   const loadAISuggestions = async () => {
     try {

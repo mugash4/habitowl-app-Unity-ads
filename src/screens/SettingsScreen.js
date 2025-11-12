@@ -157,8 +157,14 @@ const SettingsScreen = ({ navigation }) => {
     }
   };
 
-  // ✅ FIX 3: Show interstitial ad after certain interactions
+  // ✅ FIX: Only show ads for FREE users
   const trackInteractionAndShowAd = async (actionName) => {
+    // ✅ Check if user is premium or admin
+    if (isPremium || isAdmin) {
+      console.log(`[Settings] 👑 Premium/Admin user - no ads for ${actionName}`);
+      return;
+    }
+
     const newCount = interactionCount + 1;
     setInteractionCount(newCount);
     

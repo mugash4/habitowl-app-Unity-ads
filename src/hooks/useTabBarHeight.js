@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Platform } from 'react-native';
+import { Platform } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AdMobService from '../services/AdMobService';
 
@@ -8,7 +8,7 @@ const BANNER_HEIGHT = 50; // Standard AdMob banner
 
 /**
  * ✅ FIXED: Custom hook to calculate dynamic tab bar height
- * Tab bar includes banner ad space for free users
+ * Tab bar includes banner ad space ONLY when banner will actually render
  * Tab bar shrinks (no banner) for admin/premium users
  */
 export const useTabBarHeight = () => {
@@ -18,35 +18,39 @@ export const useTabBarHeight = () => {
   useEffect(() => {
     console.log('[useTabBarHeight] 🎬 Initializing hook');
     
-    // ✅ Subscribe to status changes
-    const unsubscribe = AdMobService.onStatusChange((status) => {
-      console.log('[useTabBarHeight] 📢 Status update:', status);
+    const evaluateBannerDisplay = () => {
+      if (Platform.OS === 'web') {
+        setShowBanner(false);
+        return;
+      }
       
-      // Show banner only when all conditions are met
+      const status = AdMobService.getStatus();
+      console.log('[useTabBarHeight] 📊 Status check:', status);
+      
+      // ✅ CRITICAL: All conditions must be true for banner to show
       const shouldShow = status.shouldShowAds && 
                         status.isInitialized && 
                         !status.isPremium && 
                         !status.isAdmin &&
-                        status.premiumStatusLoaded &&
-                        Platform.OS !== 'web';
+                        status.premiumStatusLoaded;
       
       console.log(`[useTabBarHeight] Setting showBanner = ${shouldShow}`);
       setShowBanner(shouldShow);
+    };
+    
+    // Initial check
+    evaluateBannerDisplay();
+    
+    // ✅ Subscribe to status changes
+    const unsubscribe = AdMobService.onStatusChange((status) => {
+      console.log('[useTabBarHeight] 📢 Status update:', status);
+      evaluateBannerDisplay();
     });
 
-    // Initial check with retries
-    const checkInitial = () => {
-      const shouldShow = AdMobService.shouldShowAds() && Platform.OS !== 'web';
-      console.log(`[useTabBarHeight] Initial check: ${shouldShow}`);
-      setShowBanner(shouldShow);
-    };
-
-    checkInitial();
-    
     // Retry checks to catch late initialization
-    const timeout1 = setTimeout(checkInitial, 500);
-    const timeout2 = setTimeout(checkInitial, 1500);
-    const timeout3 = setTimeout(checkInitial, 3000);
+    const timeout1 = setTimeout(evaluateBannerDisplay, 300);
+    const timeout2 = setTimeout(evaluateBannerDisplay, 1000);
+    const timeout3 = setTimeout(evaluateBannerDisplay, 2000);
 
     return () => {
       console.log('[useTabBarHeight] 🚪 Cleaning up');
@@ -61,7 +65,7 @@ export const useTabBarHeight = () => {
   const bannerSpace = showBanner ? BANNER_HEIGHT : 0;
   const totalHeight = TAB_ICONS_HEIGHT + bannerSpace + systemNavHeight;
 
-  console.log(`[useTabBarHeight] 📐 Calculated - Total: ${totalHeight}px, Banner: ${bannerSpace}px, System: ${systemNavHeight}px`);
+  console.log(`[useTabBarHeight] 📐 Calculated - Total: ${totalHeight}px, Banner: ${bannerSpace}px, System: ${systemNavHeight}px, Show: ${showBanner}`);
 
   return {
     totalHeight,              // Total space: tabs + banner (if showing) + system nav

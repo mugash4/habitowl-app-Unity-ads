@@ -1,7 +1,6 @@
 /**
- * AdMob Banner Component - COMPLETE FIX
- * ✅ Returns null when ads should NOT display (proper auto-hide)
- * ✅ Only shows for free users (not premium/admin)
+ * AdMob Banner Component - ADMIN FIX
+ * ✅ Returns null for premium/admin users (proper auto-hide)
  */
 
 import React, { useEffect, useState, useRef } from 'react';
@@ -24,9 +23,7 @@ try {
 const AdMobBanner = ({ style = {} }) => {
   const [shouldDisplay, setShouldDisplay] = useState(false);
   const [adConfig, setAdConfig] = useState(null);
-  const [adLoaded, setAdLoaded] = useState(false);
   const isMounted = useRef(true);
-  const checkCounter = useRef(0);
 
   useEffect(() => {
     console.log('[Banner] 🎬 Component mounted');
@@ -51,13 +48,12 @@ const AdMobBanner = ({ style = {} }) => {
     const unsubscribe = adMobService.onStatusChange((status) => {
       if (!isMounted.current) return;
       
-      checkCounter.current++;
-      console.log('[Banner] 📢 Status update #' + checkCounter.current);
+      console.log('[Banner] 📢 Status update');
       evaluateDisplayConditions(status);
     });
 
     // ✅ Delayed checks for late initialization
-    const delays = [200, 500, 1000, 2000, 3000];
+    const delays = [200, 500, 1000, 2000];
     const timeoutIds = delays.map((delay) =>
       setTimeout(() => {
         if (isMounted.current) {
@@ -79,21 +75,21 @@ const AdMobBanner = ({ style = {} }) => {
   const evaluateDisplayConditions = (status) => {
     if (!isMounted.current) return;
 
-    // Check #1: Platform
+    // ✅ FIX: Check #1 - Premium/Admin users (HIGHEST PRIORITY)
+    if (status.isPremium || status.isAdmin) {
+      console.log(`[Banner] 👑 ${status.isPremium ? 'Premium' : 'Admin'} user - HIDING ADS`);
+      setShouldDisplay(false);
+      return;
+    }
+
+    // Check #2: Platform
     if (Platform.OS === 'web') {
       setShouldDisplay(false);
       return;
     }
 
-    // Check #2: SDK availability
+    // Check #3: SDK availability
     if (!BannerAd || !BannerAdSize) {
-      setShouldDisplay(false);
-      return;
-    }
-
-    // Check #3: Premium/Admin users (should NOT show ads)
-    if (status.isPremium || status.isAdmin) {
-      console.log(`[Banner] 👑 ${status.isPremium ? 'Premium' : 'Admin'} user - hiding ads`);
       setShouldDisplay(false);
       return;
     }
@@ -108,7 +104,7 @@ const AdMobBanner = ({ style = {} }) => {
 
     // Check #5: All conditions met?
     if (status.shouldShowAds && status.isInitialized && status.premiumStatusLoaded) {
-      console.log('[Banner] ✅✅✅ DISPLAYING BANNER AD ✅✅✅');
+      console.log('[Banner] ✅ FREE USER - DISPLAYING BANNER AD');
       console.log('[Banner] 📱 Ad Unit ID:', config.adUnitId);
       setAdConfig(config);
       setShouldDisplay(true);
@@ -117,8 +113,7 @@ const AdMobBanner = ({ style = {} }) => {
     }
   };
 
-  // ✅ FIXED: Return null when ads should NOT display
-  // This allows the tab bar to shrink properly
+  // ✅ FIX: Return null when ads should NOT display
   if (Platform.OS === 'web') {
     return null;
   }
@@ -128,8 +123,6 @@ const AdMobBanner = ({ style = {} }) => {
   }
 
   if (!shouldDisplay) {
-    // ✅ CRITICAL FIX: Return null instead of placeholder
-    // This tells parent containers there's NO content
     return null;
   }
 
@@ -143,17 +136,11 @@ const AdMobBanner = ({ style = {} }) => {
           requestNonPersonalizedAdsOnly: false,
         }}
         onAdLoaded={() => {
-          console.log('[Banner] ✅✅✅ AD LOADED SUCCESSFULLY! ✅✅✅');
-          if (isMounted.current) {
-            setAdLoaded(true);
-          }
+          console.log('[Banner] ✅ AD LOADED SUCCESSFULLY');
           adMobService.trackAdImpression('banner', 'loaded');
         }}
         onAdFailedToLoad={(error) => {
           console.log('[Banner] ❌ Ad load failed:', error.message);
-          if (isMounted.current) {
-            setAdLoaded(false);
-          }
         }}
         onAdOpened={() => {
           console.log('[Banner] 👁️ Ad clicked by user');
@@ -169,7 +156,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
-    height: 50, // Standard banner height
+    height: 50,
     backgroundColor: '#f9fafb',
     overflow: 'hidden',
   },

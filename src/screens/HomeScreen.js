@@ -203,13 +203,18 @@ const HomeScreen = ({ navigation, route }) => {
           await NotificationService.scheduleStreakCelebration(habit, newStreak);
         }
         
-        setTimeout(async () => {
-          try {
-            await adMobService.showInterstitialAd('habit_completion');
-          } catch (error) {
-            console.log('Ad not shown:', error);
-          }
-        }, 1000);
+        // ✅ FIX: Only show ads for FREE users
+        if (!isPremium) {
+          setTimeout(async () => {
+            try {
+              await adMobService.showInterstitialAd('habit_completion');
+            } catch (error) {
+              console.log('Ad not shown:', error);
+            }
+          }, 1000);
+        } else {
+          console.log('[Home] 👑 Premium/Admin user - no ads after habit completion');
+        }
       } else {
         newCompletions.delete(habit.id);
       }
@@ -225,6 +230,7 @@ const HomeScreen = ({ navigation, route }) => {
       await loadHabits(true);
     }
   };
+
 
   const handleCreateHabit = async () => {
     const FREE_HABIT_LIMIT = 5;

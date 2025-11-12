@@ -49,18 +49,62 @@ const TAB_ICONS_HEIGHT = 60;
 const BANNER_AD_HEIGHT = 50;
 
 /**
- * ✅ COMPLETELY FIXED: Custom Tab Bar with proper auto-hide
- * - When shouldShowAds = false, NO banner space is allocated
- * - Banner container only renders when AdMobBanner will show content
+ * ✅ COMPLETELY FIXED: Custom Tab Bar with proper banner rendering
+ * - Banner container only renders when banner ad will actually display
+ * - Eliminates empty gray box for premium/admin users
  */
 const CustomTabBar = ({ state, descriptors, navigation, insets, shouldShowAds }) => {
+  const [bannerWillRender, setBannerWillRender] = useState(false);
+  
+  useEffect(() => {
+    // Check if banner will actually render content
+    const checkBannerStatus = () => {
+      if (Platform.OS === 'web') {
+        setBannerWillRender(false);
+        return;
+      }
+      
+      if (!shouldShowAds) {
+        setBannerWillRender(false);
+        return;
+      }
+      
+      // Get full status from AdMobService
+      const status = AdMobService.getStatus();
+      const willRender = status.shouldShowAds && 
+                        status.isInitialized && 
+                        !status.isPremium && 
+                        !status.isAdmin &&
+                        status.premiumStatusLoaded;
+      
+      setBannerWillRender(willRender);
+    };
+    
+    checkBannerStatus();
+    
+    // Subscribe to status changes
+    const unsubscribe = AdMobService.onStatusChange(() => {
+      checkBannerStatus();
+    });
+    
+    // Delayed checks
+    const timeout1 = setTimeout(checkBannerStatus, 300);
+    const timeout2 = setTimeout(checkBannerStatus, 1000);
+    
+    return () => {
+      unsubscribe();
+      clearTimeout(timeout1);
+      clearTimeout(timeout2);
+    };
+  }, [shouldShowAds]);
+  
   const systemNavHeight = insets.bottom || 0;
   
-  // ✅ CRITICAL FIX: Only allocate banner space when shouldShowAds is TRUE
-  const bannerHeight = (shouldShowAds && Platform.OS !== 'web') ? BANNER_AD_HEIGHT : 0;
+  // ✅ CRITICAL FIX: Only allocate banner space when banner WILL actually render
+  const bannerHeight = bannerWillRender ? BANNER_AD_HEIGHT : 0;
   const totalHeight = TAB_ICONS_HEIGHT + bannerHeight + systemNavHeight;
 
-  console.log('[CustomTabBar] Rendering - shouldShowAds:', shouldShowAds, 'bannerHeight:', bannerHeight, 'totalHeight:', totalHeight);
+  console.log('[CustomTabBar] Rendering - shouldShowAds:', shouldShowAds, 'bannerWillRender:', bannerWillRender, 'bannerHeight:', bannerHeight, 'totalHeight:', totalHeight);
 
   return (
     <View style={{
@@ -141,8 +185,8 @@ const CustomTabBar = ({ state, descriptors, navigation, insets, shouldShowAds })
         })}
       </View>
 
-      {/* ✅ CRITICAL FIX: Only render banner container when shouldShowAds is TRUE */}
-      {shouldShowAds && Platform.OS !== 'web' && (
+      {/* ✅ CRITICAL FIX: Only render banner container when banner WILL display */}
+      {bannerWillRender && (
         <View style={{
           height: BANNER_AD_HEIGHT,
           width: '100%',
@@ -152,7 +196,6 @@ const CustomTabBar = ({ state, descriptors, navigation, insets, shouldShowAds })
           borderTopWidth: 1,
           borderTopColor: '#e5e7eb',
         }}>
-          {/* AdMobBanner will return null if ads should not show */}
           <AdMobBanner />
         </View>
       )}
