@@ -49,16 +49,18 @@ const TAB_ICONS_HEIGHT = 60;
 const BANNER_AD_HEIGHT = 50;
 
 /**
- * ✅ COMPLETELY FIXED: Custom Tab Bar with proper banner display and auto-hide
+ * ✅ COMPLETELY FIXED: Custom Tab Bar with proper auto-hide
+ * - When shouldShowAds = false, NO banner space is allocated
+ * - Banner container only renders when AdMobBanner will show content
  */
 const CustomTabBar = ({ state, descriptors, navigation, insets, shouldShowAds }) => {
   const systemNavHeight = insets.bottom || 0;
   
-  // ✅ FIX: Only allocate banner space when shouldShowAds is true AND on mobile
+  // ✅ CRITICAL FIX: Only allocate banner space when shouldShowAds is TRUE
   const bannerHeight = (shouldShowAds && Platform.OS !== 'web') ? BANNER_AD_HEIGHT : 0;
   const totalHeight = TAB_ICONS_HEIGHT + bannerHeight + systemNavHeight;
 
-  console.log('[CustomTabBar] Rendering - shouldShowAds:', shouldShowAds, 'bannerHeight:', bannerHeight);
+  console.log('[CustomTabBar] Rendering - shouldShowAds:', shouldShowAds, 'bannerHeight:', bannerHeight, 'totalHeight:', totalHeight);
 
   return (
     <View style={{
@@ -139,7 +141,7 @@ const CustomTabBar = ({ state, descriptors, navigation, insets, shouldShowAds })
         })}
       </View>
 
-      {/* ✅ FIXED: Banner Ad Container - Only rendered when shouldShowAds is true */}
+      {/* ✅ CRITICAL FIX: Only render banner container when shouldShowAds is TRUE */}
       {shouldShowAds && Platform.OS !== 'web' && (
         <View style={{
           height: BANNER_AD_HEIGHT,
@@ -150,7 +152,7 @@ const CustomTabBar = ({ state, descriptors, navigation, insets, shouldShowAds })
           borderTopWidth: 1,
           borderTopColor: '#e5e7eb',
         }}>
-          {/* The AdMobBanner component will always return visible content */}
+          {/* AdMobBanner will return null if ads should not show */}
           <AdMobBanner />
         </View>
       )}
@@ -165,12 +167,12 @@ const CustomTabBar = ({ state, descriptors, navigation, insets, shouldShowAds })
 
 
 /**
- * ✅ FIXED: Main Tab Navigator with immediate rendering
+ * ✅ FIXED: Main Tab Navigator with proper state management
  */
 const MainTabNavigator = () => {
   const insets = useSafeAreaInsets();
   const [shouldShowAds, setShouldShowAds] = useState(false);
-  const [isReady, setIsReady] = useState(true); // ✅ FIXED: Start ready immediately
+  const [isReady, setIsReady] = useState(true);
 
   useEffect(() => {
     console.log('[MainTab] Initializing...');

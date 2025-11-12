@@ -1,11 +1,11 @@
 /**
  * AdMob Banner Component - COMPLETE FIX
- * ✅ Always displays content when container expects it
- * ✅ Properly auto-hides for admin/premium users
+ * ✅ Returns null when ads should NOT display (proper auto-hide)
+ * ✅ Only shows for free users (not premium/admin)
  */
 
 import React, { useEffect, useState, useRef } from 'react';
-import { View, StyleSheet, Platform, Text } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
 import adMobService from '../services/AdMobService';
 
 // Import AdMob components
@@ -117,27 +117,20 @@ const AdMobBanner = ({ style = {} }) => {
     }
   };
 
-  // ✅ FIX: Always return a visible component when expected to display
+  // ✅ FIXED: Return null when ads should NOT display
+  // This allows the tab bar to shrink properly
   if (Platform.OS === 'web') {
     return null;
   }
 
   if (!BannerAd || !BannerAdSize) {
-    // ✅ FIX: Return visible placeholder instead of null
-    return (
-      <View style={[styles.container, style]}>
-        <Text style={styles.placeholderText}>Loading...</Text>
-      </View>
-    );
+    return null;
   }
 
   if (!shouldDisplay) {
-    // ✅ FIX: Return visible loading state instead of null
-    return (
-      <View style={[styles.container, style]}>
-        <Text style={styles.placeholderText}>Loading ad...</Text>
-      </View>
-    );
+    // ✅ CRITICAL FIX: Return null instead of placeholder
+    // This tells parent containers there's NO content
+    return null;
   }
 
   // ✅ Display the actual banner ad
@@ -167,12 +160,6 @@ const AdMobBanner = ({ style = {} }) => {
           adMobService.trackAdImpression('banner', 'click');
         }}
       />
-      {/* Loading indicator while ad loads */}
-      {!adLoaded && (
-        <View style={styles.loadingOverlay}>
-          <Text style={styles.loadingText}>Loading...</Text>
-        </View>
-      )}
     </View>
   );
 };
@@ -185,26 +172,6 @@ const styles = StyleSheet.create({
     height: 50, // Standard banner height
     backgroundColor: '#f9fafb',
     overflow: 'hidden',
-  },
-  placeholderText: {
-    fontSize: 12,
-    color: '#9ca3af',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-  },
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(249, 250, 251, 0.9)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingText: {
-    fontSize: 12,
-    color: '#6b7280',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
 });
 

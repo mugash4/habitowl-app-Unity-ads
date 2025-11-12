@@ -28,9 +28,9 @@ import {
 import { db, auth } from '../config/firebase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
-let adMobService = null;
 
-let adMobService = null; // ✅ ADD THIS LINE
+// ✅ FIXED: Single declaration (removed duplicate)
+let adMobService = null;
 
 // ✅ ADD THIS FUNCTION after imports
 function getAdMobService() {
