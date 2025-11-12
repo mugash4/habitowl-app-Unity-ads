@@ -50,34 +50,39 @@ const BANNER_AD_HEIGHT = 50;
 
 /**
  * ✅ COMPLETELY FIXED: Custom Tab Bar with proper banner rendering
- * - Banner container only renders when banner ad will actually display
+ * - Banner container ONLY renders when user is FREE (not premium/admin)
  * - Eliminates empty gray box for premium/admin users
  */
-const CustomTabBar = ({ state, descriptors, navigation, insets, shouldShowAds }) => {
-  const [bannerWillRender, setBannerWillRender] = useState(false);
+const CustomTabBar = ({ state, descriptors, navigation, insets }) => {
+  const [shouldShowBanner, setShouldShowBanner] = useState(false);
   
   useEffect(() => {
-    // Check if banner will actually render content
+    // Check if banner should display
     const checkBannerStatus = () => {
       if (Platform.OS === 'web') {
-        setBannerWillRender(false);
-        return;
-      }
-      
-      if (!shouldShowAds) {
-        setBannerWillRender(false);
+        setShouldShowBanner(false);
         return;
       }
       
       // Get full status from AdMobService
       const status = AdMobService.getStatus();
-      const willRender = status.shouldShowAds && 
-                        status.isInitialized && 
-                        !status.isPremium && 
-                        !status.isAdmin &&
-                        status.premiumStatusLoaded;
       
-      setBannerWillRender(willRender);
+      // ✅ CRITICAL: Banner shows ONLY when ALL conditions are true
+      const willShowBanner = status.shouldShowAds && 
+                            status.isInitialized && 
+                            !status.isPremium && 
+                            !status.isAdmin &&
+                            status.premiumStatusLoaded;
+      
+      console.log('[CustomTabBar] Banner will show:', willShowBanner, 'Status:', {
+        shouldShowAds: status.shouldShowAds,
+        isInitialized: status.isInitialized,
+        isPremium: status.isPremium,
+        isAdmin: status.isAdmin,
+        premiumStatusLoaded: status.premiumStatusLoaded
+      });
+      
+      setShouldShowBanner(willShowBanner);
     };
     
     checkBannerStatus();
@@ -87,24 +92,26 @@ const CustomTabBar = ({ state, descriptors, navigation, insets, shouldShowAds })
       checkBannerStatus();
     });
     
-    // Delayed checks
+    // Delayed checks for late initialization
     const timeout1 = setTimeout(checkBannerStatus, 300);
     const timeout2 = setTimeout(checkBannerStatus, 1000);
+    const timeout3 = setTimeout(checkBannerStatus, 2000);
     
     return () => {
       unsubscribe();
       clearTimeout(timeout1);
       clearTimeout(timeout2);
+      clearTimeout(timeout3);
     };
-  }, [shouldShowAds]);
+  }, []);
   
   const systemNavHeight = insets.bottom || 0;
   
   // ✅ CRITICAL FIX: Only allocate banner space when banner WILL actually render
-  const bannerHeight = bannerWillRender ? BANNER_AD_HEIGHT : 0;
+  const bannerHeight = shouldShowBanner ? BANNER_AD_HEIGHT : 0;
   const totalHeight = TAB_ICONS_HEIGHT + bannerHeight + systemNavHeight;
 
-  console.log('[CustomTabBar] Rendering - shouldShowAds:', shouldShowAds, 'bannerWillRender:', bannerWillRender, 'bannerHeight:', bannerHeight, 'totalHeight:', totalHeight);
+  console.log('[CustomTabBar] Rendering - shouldShowBanner:', shouldShowBanner, 'bannerHeight:', bannerHeight, 'totalHeight:', totalHeight);
 
   return (
     <View style={{
@@ -185,8 +192,8 @@ const CustomTabBar = ({ state, descriptors, navigation, insets, shouldShowAds })
         })}
       </View>
 
-      {/* ✅ CRITICAL FIX: Only render banner container when banner WILL display */}
-      {bannerWillRender && (
+      {/* ✅ CRITICAL FIX: Only render banner container when banner WILL display (FREE users only) */}
+      {shouldShowBanner && (
         <View style={{
           height: BANNER_AD_HEIGHT,
           width: '100%',
@@ -214,66 +221,12 @@ const CustomTabBar = ({ state, descriptors, navigation, insets, shouldShowAds })
  */
 const MainTabNavigator = () => {
   const insets = useSafeAreaInsets();
-  const [shouldShowAds, setShouldShowAds] = useState(false);
-  const [isReady, setIsReady] = useState(true);
 
-  useEffect(() => {
-    console.log('[MainTab] Initializing...');
-    
-    // ✅ IMMEDIATE: Check initial status
-    const initialCheck = () => {
-      const status = AdMobService.getStatus();
-      const canShowAds = status.shouldShowAds && 
-                        status.isInitialized && 
-                        !status.isPremium && 
-                        !status.isAdmin &&
-                        status.premiumStatusLoaded;
-      
-      console.log('[MainTab] Initial check - canShowAds:', canShowAds);
-      setShouldShowAds(canShowAds);
-    };
-    
-    initialCheck();
-    
-    // ✅ Subscribe to AdMob status changes
-    const unsubscribe = AdMobService.onStatusChange((status) => {
-      const canShowAds = status.shouldShowAds && 
-                        status.isInitialized && 
-                        !status.isPremium && 
-                        !status.isAdmin &&
-                        status.premiumStatusLoaded;
-      
-      console.log('[MainTab] Status update - canShowAds:', canShowAds);
-      setShouldShowAds(canShowAds);
-    });
-    
-    // ✅ Delayed checks (non-blocking)
-    const delays = [300, 800, 1500, 2500];
-    const timeouts = delays.map(delay => 
-      setTimeout(() => {
-        const status = AdMobService.getStatus();
-        const canShowAds = status.shouldShowAds && 
-                          status.isInitialized && 
-                          !status.isPremium && 
-                          !status.isAdmin &&
-                          status.premiumStatusLoaded;
-        console.log(`[MainTab] Delayed check (${delay}ms) - canShowAds:`, canShowAds);
-        setShouldShowAds(canShowAds);
-      }, delay)
-    );
-    
-    return () => {
-      unsubscribe();
-      timeouts.forEach(clearTimeout);
-    };
-  }, []);
-
-  // ✅ Render immediately - no loading screen
   return (
     <View style={{ flex: 1 }}>
       <Tab.Navigator
         tabBar={(props) => (
-          <CustomTabBar {...props} insets={insets} shouldShowAds={shouldShowAds} />
+          <CustomTabBar {...props} insets={insets} />
         )}
         screenOptions={{
           headerShown: false,
