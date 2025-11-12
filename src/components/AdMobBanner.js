@@ -1,6 +1,6 @@
 /**
- * AdMob Banner Component - ADMIN FIX
- * ✅ Returns null for premium/admin users (proper auto-hide)
+ * AdMob Banner Component - COMPLETE FIX
+ * ✅ Returns null for premium/admin users (no container, no gray box)
  */
 
 import React, { useEffect, useState, useRef } from 'react';
@@ -48,7 +48,7 @@ const AdMobBanner = ({ style = {} }) => {
     const unsubscribe = adMobService.onStatusChange((status) => {
       if (!isMounted.current) return;
       
-      console.log('[Banner] 📢 Status update');
+      console.log('[Banner] 📢 Status update received');
       evaluateDisplayConditions(status);
     });
 
@@ -77,19 +77,21 @@ const AdMobBanner = ({ style = {} }) => {
 
     // ✅ FIX: Check #1 - Premium/Admin users (HIGHEST PRIORITY)
     if (status.isPremium || status.isAdmin) {
-      console.log(`[Banner] 👑 ${status.isPremium ? 'Premium' : 'Admin'} user - HIDING ADS`);
+      console.log(`[Banner] 👑 ${status.isPremium ? 'Premium' : 'Admin'} user detected - HIDING BANNER (will return null)`);
       setShouldDisplay(false);
       return;
     }
 
     // Check #2: Platform
     if (Platform.OS === 'web') {
+      console.log('[Banner] 🌐 Web platform - ads not supported');
       setShouldDisplay(false);
       return;
     }
 
     // Check #3: SDK availability
     if (!BannerAd || !BannerAdSize) {
+      console.log('[Banner] ⚠️ AdMob SDK not available');
       setShouldDisplay(false);
       return;
     }
@@ -104,16 +106,21 @@ const AdMobBanner = ({ style = {} }) => {
 
     // Check #5: All conditions met?
     if (status.shouldShowAds && status.isInitialized && status.premiumStatusLoaded) {
-      console.log('[Banner] ✅ FREE USER - DISPLAYING BANNER AD');
+      console.log('[Banner] ✅ FREE USER CONFIRMED - DISPLAYING BANNER AD');
       console.log('[Banner] 📱 Ad Unit ID:', config.adUnitId);
       setAdConfig(config);
       setShouldDisplay(true);
     } else {
+      console.log('[Banner] ❌ Conditions not met for display:', {
+        shouldShowAds: status.shouldShowAds,
+        isInitialized: status.isInitialized,
+        premiumStatusLoaded: status.premiumStatusLoaded
+      });
       setShouldDisplay(false);
     }
   };
 
-  // ✅ FIX: Return null when ads should NOT display
+  // ✅ FIX: Return null immediately when ads should NOT display (no container at all)
   if (Platform.OS === 'web') {
     return null;
   }
@@ -123,10 +130,11 @@ const AdMobBanner = ({ style = {} }) => {
   }
 
   if (!shouldDisplay) {
+    console.log('[Banner] 🚫 shouldDisplay is false - returning null (no gray box)');
     return null;
   }
 
-  // ✅ Display the actual banner ad
+  // ✅ Only render container when we actually have an ad to display
   return (
     <View style={[styles.container, style]}>
       <BannerAd

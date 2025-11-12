@@ -197,40 +197,48 @@ const HomeScreen = ({ navigation, route }) => {
       const newCompletions = new Set(todayCompletions);
       if (isNowCompleted) {
         newCompletions.add(habit.id);
-        
+      
         const newStreak = (habit.currentStreak || 0) + 1;
         if ([3, 7, 14, 30, 60, 100].includes(newStreak)) {
           await NotificationService.scheduleStreakCelebration(habit, newStreak);
         }
-        
-        // ✅ FIX: Only show ads for FREE users
+      
+        // ✅ FIX: Check premium/admin status before showing ads
+        console.log('[Home] Checking ad eligibility - isPremium:', isPremium);
+      
         if (!isPremium) {
-          setTimeout(async () => {
-            try {
-              await adMobService.showInterstitialAd('habit_completion');
-            } catch (error) {
-              console.log('Ad not shown:', error);
-            }
-          }, 1000);
+          // Double-check with AdMobService
+          const status = adMobService.getStatus();
+          if (!status.isPremium && !status.isAdmin) {
+            console.log('[Home] FREE user confirmed - will show ad after habit completion');
+            setTimeout(async () => {
+              try {
+                await adMobService.showInterstitialAd('habit_completion');
+              } catch (error) {
+                console.log('[Home] Ad not shown:', error);
+              }
+            }, 1000);
+          } else {
+            console.log('[Home] 👑 Premium/Admin status detected by AdMobService - no ads');
+          }
         } else {
-          console.log('[Home] 👑 Premium/Admin user - no ads after habit completion');
+          console.log('[Home] 👑 Premium user - no ads after habit completion');
         }
       } else {
         newCompletions.delete(habit.id);
       }
-      
+    
       setTodayCompletions(newCompletions);
-      
+    
       setScreenKey(prev => prev + 1);
       await loadHabits(true);
-      
+    
     } catch (error) {
       Alert.alert('Error', error.message);
       setScreenKey(prev => prev + 1);
       await loadHabits(true);
     }
   };
-
 
   const handleCreateHabit = async () => {
     const FREE_HABIT_LIMIT = 5;
