@@ -1,7 +1,6 @@
 /**
- * Google AdMob Service - COMPLETE FIX
- * ✅ Ensures premium/admin users NEVER see ads or banner space
- * ✅ Immediate status loading before any UI renders
+ * Google AdMob Service - FIXED FOR BANNER DISPLAY
+ * ✅ Ensures banner displays for free users immediately
  */
 
 import { Platform } from 'react-native';
@@ -63,23 +62,22 @@ class AdMobService {
     this.statusChangeListeners = [];
     this.premiumStatusListeners = [];
     
-    // ✅ CRITICAL FIX: Load premium status SYNCHRONOUSLY in constructor
-    this.loadPremiumStatusImmediately();
+    // ✅ CRITICAL FIX: Load premium status IMMEDIATELY
+    this.loadPremiumStatusSync();
   }
 
   /**
-   * ✅ CRITICAL FIX: Immediate synchronous premium status loading
-   * This runs BEFORE any component mounts
+   * ✅ CRITICAL FIX: Synchronous premium status loading
    */
-  loadPremiumStatusImmediately() {
-    // Try synchronous read first (AsyncStorage cache)
+  loadPremiumStatusSync() {
+    // Start loading immediately
     AsyncStorage.multiGet(['user_premium_status', 'user_admin_status'])
       .then(([[, premium], [, adminStatus]]) => {
         this.isPremium = premium === 'true';
         this.isAdmin = adminStatus === 'true';
         this.premiumStatusLoaded = true;
         
-        console.log('[AdMob] ⚡ IMMEDIATE status loaded:');
+        console.log('[AdMob] ⚡ Status loaded:');
         console.log('[AdMob]    - Premium:', this.isPremium);
         console.log('[AdMob]    - Admin:', this.isAdmin);
         console.log('[AdMob]    - Will show ads:', !this.isPremium && !this.isAdmin);
@@ -105,7 +103,7 @@ class AdMobService {
     
     this.statusChangeListeners.push(callback);
     
-    // ✅ Call immediately with current state (even if not fully loaded)
+    // ✅ Call immediately with current state
     setTimeout(() => {
       callback({
         isInitialized: this.isInitialized,
@@ -145,7 +143,7 @@ class AdMobService {
   }
 
   /**
-   * ✅ Pre-load premium/admin status (can be called multiple times safely)
+   * ✅ Pre-load premium/admin status
    */
   async preloadPremiumStatus() {
     try {
@@ -164,7 +162,6 @@ class AdMobService {
       console.log('[AdMob]    - Premium:', this.isPremium);
       console.log('[AdMob]    - Admin:', this.isAdmin);
       
-      // ✅ Notify listeners
       this.notifyStatusChange();
       this.notifyPremiumStatusChange(this.isPremium || this.isAdmin);
       
@@ -211,7 +208,7 @@ class AdMobService {
   }
 
   /**
-   * ✅ Initialize AdMob SDK (only for free users)
+   * ✅ Initialize AdMob SDK
    */
   async initialize() {
     try {
@@ -246,16 +243,8 @@ class AdMobService {
       
       console.log('[AdMob] 👤 User type:', this.isPremium || this.isAdmin ? 'PREMIUM/ADMIN (NO ADS)' : 'FREE (WILL SHOW ADS)');
 
-      // ✅ CRITICAL: Don't initialize SDK for premium/admin users
-      if (this.isPremium || this.isAdmin) {
-        console.log('[AdMob] 👑 Premium/Admin user - SKIPPING AdMob initialization');
-        this.isInitialized = false;
-        this.notifyStatusChange();
-        return false;
-      }
-
-      // Initialize SDK only for free users
-      console.log('[AdMob] 📡 Initializing AdMob SDK for FREE user...');
+      // ✅ Initialize SDK for all users (but only show ads to free users)
+      console.log('[AdMob] 📡 Initializing AdMob SDK...');
       await mobileAds().initialize();
       
       console.log('[AdMob] ✅✅✅ ADMOB INITIALIZED SUCCESSFULLY! ✅✅✅');
@@ -265,8 +254,8 @@ class AdMobService {
       // ✅ Notify all listeners
       this.notifyStatusChange();
       
-      // Load ads for free users
-      if (ADMOB_CONFIG.AUTO_LOAD_ADS) {
+      // Load ads only for free users
+      if (!this.isPremium && !this.isAdmin && ADMOB_CONFIG.AUTO_LOAD_ADS) {
         console.log('[AdMob] 🎯 Loading ads for FREE user...');
         setTimeout(() => this.createAndLoadAds(), 500);
       }
@@ -286,7 +275,6 @@ class AdMobService {
    * Create and load ads (only for free users)
    */
   createAndLoadAds() {
-    // ✅ Double-check before creating ads
     if (this.isPremium || this.isAdmin) {
       console.log('[AdMob] ⚠️ Prevented ad creation for premium/admin user');
       return;
@@ -340,10 +328,9 @@ class AdMobService {
   }
 
   /**
-   * Show interstitial ad (with premium/admin check)
+   * Show interstitial ad
    */
   async showInterstitialAd(placementName = null) {
-    // ✅ Always check premium/admin status first
     if (this.isPremium || this.isAdmin) {
       console.log('[AdMob] 👑 Premium/Admin user - ads disabled');
       return false;
@@ -449,14 +436,15 @@ class AdMobService {
   }
 
   /**
-   * Get banner config (only for free users)
+   * ✅ Get banner config - Returns config for FREE users even before full init
    */
   getBannerConfig() {
     if (!BannerAdSize || Platform.OS === 'web') {
       return null;
     }
 
-    // ✅ Don't return config for premium/admin users
+    // ✅ FIX: Only check premium status, not initialization status
+    // This allows banner to show while AdMob is still initializing
     if (this.isPremium || this.isAdmin) {
       return null;
     }
@@ -488,7 +476,6 @@ class AdMobService {
       
       const newStatus = isPremium || isAdmin;
       if (oldStatus !== newStatus) {
-        // ✅ Notify all listeners
         this.notifyStatusChange();
         this.notifyPremiumStatusChange(newStatus);
         

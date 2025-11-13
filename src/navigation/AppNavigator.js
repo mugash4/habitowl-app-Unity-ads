@@ -136,7 +136,7 @@ const FreeUserTabBar = ({ state, descriptors, navigation, insets }) => {
         })}
       </View>
 
-      {/* Banner Ad Container - ALWAYS present for free users */}
+      {/* ✅ Banner Ad Container - ALWAYS present for free users */}
       <View style={{
         height: BANNER_AD_HEIGHT,
         width: '100%',
@@ -256,104 +256,6 @@ const PremiumUserTabBar = ({ state, descriptors, navigation, insets }) => {
 };
 
 /**
- * ✅ ADMIN USER TAB BAR - NO BANNER AD SPACE
- */
-const AdminUserTabBar = ({ state, descriptors, navigation, insets }) => {
-  const systemNavHeight = insets.bottom || 0;
-  const totalHeight = TAB_ICONS_HEIGHT + systemNavHeight;
-
-  console.log('[AdminUserTabBar] Rendering WITHOUT banner ad space');
-
-  return (
-    <View style={{
-      position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
-      height: totalHeight,
-      backgroundColor: '#ffffff',
-      borderTopWidth: 1,
-      borderTopColor: '#e5e7eb',
-      elevation: 8,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: -2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 3,
-      flexDirection: 'column',
-    }}>
-      {/* Tab Icons Row */}
-      <View style={{
-        height: TAB_ICONS_HEIGHT,
-        flexDirection: 'row',
-        paddingTop: 8,
-        paddingBottom: 4,
-        backgroundColor: '#ffffff',
-      }}>
-        {state.routes.map((route, index) => {
-          const { options } = descriptors[route.key];
-          const label = options.tabBarLabel || options.title || route.name;
-          const isFocused = state.index === index;
-
-          let iconName;
-          if (route.name === 'Home') {
-            iconName = isFocused ? 'home' : 'home-outline';
-          } else if (route.name === 'Statistics') {
-            iconName = isFocused ? 'chart-line' : 'chart-line';
-          } else if (route.name === 'Settings') {
-            iconName = isFocused ? 'cog' : 'cog-outline';
-          }
-
-          const onPress = () => {
-            const event = navigation.emit({
-              type: 'tabPress',
-              target: route.key,
-              canPreventDefault: true,
-            });
-
-            if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(route.name);
-            }
-          };
-
-          return (
-            <View
-              key={route.key}
-              style={{
-                flex: 1,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-              onTouchEnd={onPress}
-            >
-              <Icon
-                name={iconName}
-                size={24}
-                color={isFocused ? '#4f46e5' : '#6b7280'}
-              />
-              <View style={{ height: 4 }} />
-              <Text style={{
-                fontSize: 12,
-                fontWeight: '500',
-                color: isFocused ? '#4f46e5' : '#6b7280',
-              }}>
-                {label}
-              </Text>
-            </View>
-          );
-        })}
-      </View>
-
-      {/* NO BANNER AD CONTAINER - Admin users don't see ads */}
-
-      {/* System Navigation Spacer */}
-      {systemNavHeight > 0 && (
-        <View style={{ height: systemNavHeight, backgroundColor: '#ffffff' }} />
-      )}
-    </View>
-  );
-};
-
-/**
  * ✅ Main Tab Navigator - Chooses correct tab bar based on user type
  */
 const MainTabNavigator = () => {
@@ -365,10 +267,10 @@ const MainTabNavigator = () => {
 
     const determineUserType = async () => {
       try {
-        console.log('[MainTabNavigator] Determining user type...');
+        console.log('[MainTabNavigator] 🔍 Determining user type...');
 
         // Wait a bit for services to initialize
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 200));
 
         // Check admin status first
         const currentUser = FirebaseService.currentUser;
@@ -379,6 +281,8 @@ const MainTabNavigator = () => {
           if (isAdmin) {
             console.log('[MainTabNavigator] ✅ User is ADMIN');
             if (isMounted) setUserType('admin');
+            // Update AdMob service
+            await AdMobService.setPremiumStatus(false, true);
             return;
           }
         }
@@ -388,12 +292,16 @@ const MainTabNavigator = () => {
         if (userStats && userStats.isPremium) {
           console.log('[MainTabNavigator] ✅ User is PREMIUM');
           if (isMounted) setUserType('premium');
+          // Update AdMob service
+          await AdMobService.setPremiumStatus(true, false);
           return;
         }
 
         // Default to free user
-        console.log('[MainTabNavigator] ✅ User is FREE');
+        console.log('[MainTabNavigator] ✅ User is FREE - will show ads');
         if (isMounted) setUserType('free');
+        // Update AdMob service
+        await AdMobService.setPremiumStatus(false, false);
       } catch (error) {
         console.error('[MainTabNavigator] Error determining user type:', error);
         // Default to free on error
@@ -429,16 +337,14 @@ const MainTabNavigator = () => {
 
   // Choose the appropriate tab bar based on user type
   const getTabBar = (props) => {
-    if (userType === 'admin') {
-      return <AdminUserTabBar {...props} insets={insets} />;
-    } else if (userType === 'premium') {
+    if (userType === 'admin' || userType === 'premium') {
       return <PremiumUserTabBar {...props} insets={insets} />;
     } else {
       return <FreeUserTabBar {...props} insets={insets} />;
     }
   };
 
-  console.log('[MainTabNavigator] Rendering with user type:', userType);
+  console.log('[MainTabNavigator] ✅ Rendering with user type:', userType);
 
   return (
     <View style={{ flex: 1 }}>
@@ -469,7 +375,7 @@ const MainTabNavigator = () => {
 };
 
 /**
- * ✅ Main App Navigator
+ * ✅ FIXED: Main App Navigator with proper AdMob initialization
  */
 const AppNavigator = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(null);
@@ -483,11 +389,18 @@ const AppNavigator = () => {
     try {
       console.log('[AppNav] 🚀 Initializing app...');
       
-      // ✅ Initialize services in background
-      AdMobService.initialize().catch(error => {
-        console.log('[AppNav] AdMob init error (non-critical):', error.message);
-      });
+      // ✅ CRITICAL: Initialize AdMob early and wait for it
+      if (Platform.OS !== 'web') {
+        console.log('[AppNav] 📱 Initializing AdMob...');
+        try {
+          await AdMobService.initialize();
+          console.log('[AppNav] ✅ AdMob initialized');
+        } catch (error) {
+          console.log('[AppNav] ⚠️ AdMob init error (non-critical):', error.message);
+        }
+      }
       
+      // Initialize notifications in background
       NotificationService.initialize().catch(error => {
         console.log('[AppNav] Notification init error (non-critical):', error.message);
       });
@@ -498,10 +411,13 @@ const AppNavigator = () => {
         
         if (user) {
           console.log('[AppNav] 👤 User logged in, preloading premium status...');
-          // Preload premium status in background
-          AdMobService.preloadPremiumStatus().catch(error => {
+          // Preload premium status
+          try {
+            await AdMobService.preloadPremiumStatus();
+            console.log('[AppNav] ✅ Premium status loaded');
+          } catch (error) {
             console.log('[AppNav] Premium status load error (non-critical):', error);
-          });
+          }
         }
         
         setIsAuthenticated(!!user);

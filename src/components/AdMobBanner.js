@@ -1,10 +1,10 @@
 /**
- * ✅ COMPLETELY FIXED: AdMob Banner Component
- * Returns null (nothing) for premium/admin users - NO gray box, NO container
+ * ✅ FIXED: AdMob Banner Component
+ * Now properly displays for free users
  */
 
 import React, { useEffect, useState, useRef } from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet, Platform, Text } from 'react-native';
 import adMobService from '../services/AdMobService';
 
 // Import AdMob components
@@ -23,7 +23,9 @@ try {
 const AdMobBanner = ({ style = {} }) => {
   const [shouldDisplay, setShouldDisplay] = useState(false);
   const [adConfig, setAdConfig] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
   const isMounted = useRef(true);
+  const checkCount = useRef(0);
 
   useEffect(() => {
     console.log('[Banner] 🎬 Component mounted');
@@ -32,12 +34,14 @@ const AdMobBanner = ({ style = {} }) => {
     const evaluateDisplayConditions = (status) => {
       if (!isMounted.current) return;
 
-      console.log('[Banner] 📊 Evaluating display conditions:', status);
+      checkCount.current++;
+      console.log('[Banner] 📊 Check #' + checkCount.current, 'Evaluating:', status);
 
-      // ✅ FIX #1: Premium/Admin users - HIGHEST PRIORITY
+      // Check #1: Premium/Admin users - NO ADS
       if (status.isPremium || status.isAdmin) {
-        console.log('[Banner] 👑 Premium/Admin user - RETURNING NULL (no banner, no container)');
+        console.log('[Banner] 👑 Premium/Admin - RETURNING NULL');
         setShouldDisplay(false);
+        setIsLoading(false);
         return;
       }
 
@@ -45,6 +49,7 @@ const AdMobBanner = ({ style = {} }) => {
       if (Platform.OS === 'web') {
         console.log('[Banner] 🌐 Web platform - ads not supported');
         setShouldDisplay(false);
+        setIsLoading(false);
         return;
       }
 
@@ -52,6 +57,7 @@ const AdMobBanner = ({ style = {} }) => {
       if (!BannerAd || !BannerAdSize) {
         console.log('[Banner] ⚠️ AdMob SDK not available');
         setShouldDisplay(false);
+        setIsLoading(false);
         return;
       }
 
@@ -60,26 +66,27 @@ const AdMobBanner = ({ style = {} }) => {
       if (!config || !config.adUnitId) {
         console.log('[Banner] ⚠️ Ad configuration unavailable');
         setShouldDisplay(false);
+        setIsLoading(false);
         return;
       }
 
-      // Check #5: All conditions met for FREE users
-      if (status.shouldShowAds && status.isInitialized && status.premiumStatusLoaded) {
-        console.log('[Banner] ✅ FREE USER - DISPLAYING BANNER AD');
-        setAdConfig(config);
-        setShouldDisplay(true);
-      } else {
-        console.log('[Banner] ❌ Conditions not met:', {
-          shouldShowAds: status.shouldShowAds,
-          isInitialized: status.isInitialized,
-          premiumStatusLoaded: status.premiumStatusLoaded
-        });
-        setShouldDisplay(false);
+      // Check #5: Premium status must be loaded
+      if (!status.premiumStatusLoaded) {
+        console.log('[Banner] ⏳ Waiting for premium status to load...');
+        setIsLoading(true);
+        return;
       }
+
+      // ✅ FREE USER - SHOW BANNER
+      console.log('[Banner] ✅✅✅ FREE USER - DISPLAYING BANNER AD ✅✅✅');
+      setAdConfig(config);
+      setShouldDisplay(true);
+      setIsLoading(false);
     };
     
     // Immediate check
     const immediateStatus = adMobService.getStatus();
+    console.log('[Banner] 🚀 Initial status:', immediateStatus);
     evaluateDisplayConditions(immediateStatus);
     
     // Subscribe to status changes
@@ -91,11 +98,11 @@ const AdMobBanner = ({ style = {} }) => {
     });
 
     // Multiple delayed checks to catch late initialization
-    const timeouts = [100, 300, 500, 1000, 2000, 3000].map((delay) =>
+    const timeouts = [100, 300, 500, 1000, 2000, 3000, 5000].map((delay) =>
       setTimeout(() => {
         if (isMounted.current) {
           const currentStatus = adMobService.getStatus();
-          console.log(`[Banner] ⏰ Delayed check (${delay}ms)`);
+          console.log(`[Banner] ⏰ Delayed check at ${delay}ms`);
           evaluateDisplayConditions(currentStatus);
         }
       }, delay)
@@ -109,23 +116,36 @@ const AdMobBanner = ({ style = {} }) => {
     };
   }, []);
 
-  // ✅ CRITICAL FIX: Return NULL immediately when ads should NOT display
-  // This means NO CONTAINER, NO GRAY BOX - absolutely nothing rendered
+  // Return null for web platform
   if (Platform.OS === 'web') {
+    console.log('[Banner] 🌐 Web - returning null');
     return null;
   }
 
+  // Return null if SDK not available
   if (!BannerAd || !BannerAdSize) {
+    console.log('[Banner] ⚠️ SDK not available - returning null');
     return null;
   }
 
+  // Show loading placeholder while determining status
+  if (isLoading) {
+    console.log('[Banner] ⏳ Loading status...');
+    return (
+      <View style={[styles.container, style]}>
+        <Text style={styles.loadingText}>Loading ad...</Text>
+      </View>
+    );
+  }
+
+  // Return null if shouldn't display
   if (!shouldDisplay) {
-    console.log('[Banner] 🚫 Returning NULL - no banner, no container');
+    console.log('[Banner] 🚫 Should not display - returning null');
     return null;
   }
 
-  // Only render when we have a FREE user with ad to display
-  console.log('[Banner] ✅ Rendering banner container for FREE user');
+  // Render banner for FREE users
+  console.log('[Banner] ✅ Rendering banner with Ad Unit ID:', adConfig?.adUnitId);
   return (
     <View style={[styles.container, style]}>
       <BannerAd
@@ -135,11 +155,12 @@ const AdMobBanner = ({ style = {} }) => {
           requestNonPersonalizedAdsOnly: false,
         }}
         onAdLoaded={() => {
-          console.log('[Banner] ✅ AD LOADED SUCCESSFULLY');
+          console.log('[Banner] ✅✅✅ AD LOADED AND DISPLAYED SUCCESSFULLY ✅✅✅');
           adMobService.trackAdImpression('banner', 'loaded');
         }}
         onAdFailedToLoad={(error) => {
           console.log('[Banner] ❌ Ad load failed:', error.message);
+          console.log('[Banner] Error details:', JSON.stringify(error));
         }}
         onAdOpened={() => {
           console.log('[Banner] 👁️ Ad clicked by user');
@@ -158,6 +179,10 @@ const styles = StyleSheet.create({
     height: 50,
     backgroundColor: '#f9fafb',
     overflow: 'hidden',
+  },
+  loadingText: {
+    fontSize: 12,
+    color: '#9ca3af',
   },
 });
 
