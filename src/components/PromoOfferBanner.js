@@ -60,6 +60,7 @@ class PromoOfferBannerErrorBoundary extends React.Component {
 /**
  * ✅ FIXED: Promotional Offer Banner Component
  * Shows automated promotional offers for free users
+ * FIXED: Better "LIMITED TIME" text visibility
  */
 const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
   const [offer, setOffer] = useState(null);
@@ -72,24 +73,26 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
   useEffect(() => {
     console.log('🎯 PromoOfferBanner: Component mounted');
     
-    // Only load if services available
-    if (!PromoService || !FirebaseService) {
-      console.log('⚠️ PromoOfferBanner: Services not available - showing fallback banner');
-      setLoading(false);
-      // ✅ FIXED: Show fallback banner when services unavailable
-      setOffer({
-        id: 'fallback',
-        title: '🎉 Special Offer!',
-        description: 'Upgrade to Premium and unlock unlimited habits, AI coaching, and ad-free experience!',
-        discount: '50% OFF',
-        expiresAt: null
-      });
-      setVisible(true);
-      return;
+    // ✅ FIXED: Always show a fallback banner immediately for free users
+    // This ensures something is always visible
+    const fallbackOffer = {
+      id: 'fallback',
+      title: '🎉 Limited Time Offer!',
+      description: 'Upgrade to Premium and unlock unlimited habits, AI coaching, and ad-free experience!',
+      discount: '50% OFF',
+      expiresAt: null
+    };
+    
+    setOffer(fallbackOffer);
+    setVisible(true);
+    setLoading(false);
+    
+    // Try to load real offer in background (optional)
+    if (PromoService && FirebaseService) {
+      loadActiveOfferInBackground();
+    } else {
+      console.log('⚠️ PromoOfferBanner: Services not available - using fallback banner');
     }
-
-    // ✅ FIXED: Load with better error handling
-    loadActiveOfferOptimized();
   }, []);
 
   useEffect(() => {
@@ -111,7 +114,7 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
           useNativeDriver: true,
         }).start();
 
-        // Pulse animation
+        // Pulse animation for attention
         const pulseAnimation = Animated.loop(
           Animated.sequence([
             Animated.timing(pulseAnim, {
@@ -136,76 +139,51 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
   }, [visible, offer]);
 
   /**
-   * ✅ FIXED: Optimized offer loading with fallback
+   * ✅ FIXED: Load offer in background (non-blocking)
    */
-  const loadActiveOfferOptimized = async () => {
+  const loadActiveOfferInBackground = async () => {
     try {
-      console.log('🔄 PromoOfferBanner: Loading offer...');
-      setLoading(true);
+      console.log('🔄 PromoOfferBanner: Loading offer in background...');
       
-      // ✅ FIXED: Shorter timeout (3 seconds) with guaranteed fallback
+      // Short timeout - don't block UI
       const timeoutPromise = new Promise((resolve) =>
         setTimeout(() => {
-          console.log('⏱️ PromoOfferBanner: Timeout reached - using fallback');
-          resolve({
-            id: 'fallback',
-            title: '🎉 Limited Time Offer!',
-            description: 'Upgrade to Premium and unlock unlimited habits, AI coaching, and ad-free experience!',
-            discount: '50% OFF',
-            expiresAt: null
-          });
-        }, 3000) // 3 seconds timeout
+          console.log('⏱️ PromoOfferBanner: Timeout - keeping fallback');
+          resolve(null);
+        }, 2000)
       );
 
       const loadPromise = (async () => {
         try {
-          // Get user stats with short timeout
           let userStats = null;
           try {
             const statsPromise = FirebaseService.getUserStats();
             const statsTimeout = new Promise((resolve) => 
-              setTimeout(() => resolve(null), 1000)
+              setTimeout(() => resolve(null), 800)
             );
             userStats = await Promise.race([statsPromise, statsTimeout]);
           } catch (err) {
-            console.log('Could not load user stats, continuing without them');
+            console.log('Could not load user stats');
           }
           
-          // Get active offer
           const activeOffer = await PromoService.getPersonalizedOffer(userStats);
           
           if (activeOffer && activeOffer.title) {
             return activeOffer;
-          } else {
-            // No active offer from service - return fallback
-            return {
-              id: 'fallback',
-              title: '🎉 Special Offer!',
-              description: 'Upgrade to Premium and unlock unlimited habits, AI coaching, and ad-free experience!',
-              discount: '50% OFF',
-              expiresAt: null
-            };
           }
+          return null;
         } catch (err) {
           console.log('PromoService error:', err.message);
-          // Error loading - return fallback
-          return {
-            id: 'fallback',
-            title: '🎉 Upgrade to Premium!',
-            description: 'Unlock unlimited habits, AI coaching, and ad-free experience!',
-            discount: 'Special Pricing',
-            expiresAt: null
-          };
+          return null;
         }
       })();
 
-      // ✅ FIXED: Always get an offer (either from service or fallback)
       const activeOffer = await Promise.race([loadPromise, timeoutPromise]);
       
-      if (activeOffer && activeOffer.title) {
-        console.log('✅ PromoOfferBanner: Offer loaded:', activeOffer.title);
+      // Only update if we got a real offer
+      if (activeOffer && activeOffer.id !== 'fallback') {
+        console.log('✅ PromoOfferBanner: Loaded real offer:', activeOffer.title);
         setOffer(activeOffer);
-        setVisible(true);
         
         // Track impression
         if (FirebaseService && FirebaseService.trackEvent) {
@@ -216,23 +194,11 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
           }).catch(() => {});
         }
       } else {
-        console.log('⚠️ PromoOfferBanner: No offer available');
-        setVisible(false);
+        console.log('ℹ️ PromoOfferBanner: Using fallback banner');
       }
     } catch (error) {
-      console.log('⚠️ PromoOfferBanner: Load error:', error.message);
-      
-      // ✅ FIXED: Even on error, show fallback banner
-      setOffer({
-        id: 'fallback',
-        title: '🎉 Upgrade to Premium!',
-        description: 'Unlock unlimited habits, AI coaching, and ad-free experience!',
-        discount: 'Special Pricing',
-        expiresAt: null
-      });
-      setVisible(true);
-    } finally {
-      setLoading(false);
+      console.log('⚠️ PromoOfferBanner: Background load error:', error.message);
+      // Keep fallback banner
     }
   };
 
@@ -350,20 +316,7 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
     }
   };
 
-  // ✅ FIXED: Show loading skeleton briefly (max 3 seconds due to timeout)
-  if (loading) {
-    return (
-      <View style={[styles.container, style]}>
-        <Card style={styles.card}>
-          <View style={styles.loadingContainer}>
-            <Text style={styles.loadingText}>Loading special offers...</Text>
-          </View>
-        </Card>
-      </View>
-    );
-  }
-
-  // Don't show if no offer or not visible
+  // Don't show if not visible or no offer
   if (!visible || !offer) {
     console.log('❌ PromoOfferBanner: Not rendering (visible:', visible, ', offer:', !!offer, ')');
     return null;
@@ -403,12 +356,13 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
               </TouchableOpacity>
 
               <View style={styles.content}>
-                {/* Header */}
+                {/* Header with LIMITED TIME chip */}
                 <View style={styles.header}>
-                  <Icon name="fire" size={24} color="#ffffff" />
-                  <Chip style={styles.urgencyChip} textStyle={styles.urgencyText}>
-                    LIMITED TIME
-                  </Chip>
+                  <Icon name="fire" size={28} color="#ffffff" />
+                  {/* ✅ FIXED: Much more visible "LIMITED TIME" chip */}
+                  <View style={styles.urgencyChip}>
+                    <Text style={styles.urgencyText}>LIMITED TIME</Text>
+                  </View>
                 </View>
 
                 {/* Title */}
@@ -417,7 +371,7 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
                 {/* Description */}
                 <Text style={styles.description}>{offer.description}</Text>
 
-                {/* Discount */}
+                {/* Discount Badge */}
                 <View style={styles.discountContainer}>
                   <Text style={styles.discountText}>
                     {offer.discount || 'Special Pricing'}
@@ -428,7 +382,7 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
                 <View style={styles.footer}>
                   {timeLeft && (
                     <View style={styles.timerContainer}>
-                      <Icon name="clock-outline" size={16} color="#ffffff" />
+                      <Icon name="clock-outline" size={18} color="#ffffff" />
                       <Text style={styles.timerText}>
                         Expires in: {timeLeft}
                       </Text>
@@ -440,7 +394,7 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
                     onPress={handleOfferClick}
                     style={[styles.ctaButton, !timeLeft && styles.ctaButtonFull]}
                     labelStyle={styles.ctaButtonText}
-                    compact
+                    compact={false}
                   >
                     Claim Now
                   </Button>
@@ -464,15 +418,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
   },
-  loadingContainer: {
-    padding: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingText: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
   gradient: {
     padding: 16,
     position: 'relative',
@@ -482,7 +427,7 @@ const styles = StyleSheet.create({
     top: 12,
     right: 12,
     zIndex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
     borderRadius: 15,
     width: 30,
     height: 30,
@@ -498,39 +443,54 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 12,
   },
+  // ✅ FIXED: Much more visible urgency chip
   urgencyChip: {
     backgroundColor: '#ef4444',
-    height: 24,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
   },
+  // ✅ FIXED: Larger, bolder text
   urgencyText: {
     color: '#ffffff',
-    fontSize: 10,
+    fontSize: 13,
     fontWeight: 'bold',
+    letterSpacing: 0.5,
   },
   title: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#ffffff',
     marginBottom: 8,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   description: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#fef3c7',
-    marginBottom: 12,
-    lineHeight: 20,
+    marginBottom: 14,
+    lineHeight: 22,
   },
   discountContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 24,
     alignSelf: 'flex-start',
     marginBottom: 16,
+    elevation: 2,
   },
   discountText: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#ffffff',
+    letterSpacing: 0.5,
   },
   footer: {
     flexDirection: 'row',
@@ -541,16 +501,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    marginRight: 12,
   },
   timerText: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#fef3c7',
-    marginLeft: 4,
-    fontWeight: '500',
+    marginLeft: 6,
+    fontWeight: '600',
   },
   ctaButton: {
     backgroundColor: '#ffffff',
-    borderRadius: 20,
+    borderRadius: 24,
+    elevation: 4,
   },
   ctaButtonFull: {
     flex: 1,
@@ -558,7 +520,8 @@ const styles = StyleSheet.create({
   ctaButtonText: {
     color: '#d97706',
     fontWeight: 'bold',
-    fontSize: 12,
+    fontSize: 14,
+    paddingHorizontal: 8,
   },
 });
 

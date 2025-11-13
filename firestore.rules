@@ -44,10 +44,13 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Promo offers (read-only for users)
+    // ✅ FIXED: Promo offers - Allow system to auto-create offers
+    // Read for all signed-in users, write for admins OR auto-system
     match /promo_offers/{offerId} {
       allow read: if isSignedIn();
-      allow write: if isAdmin();
+      // Allow writes from admins OR if the document is being created by system (createdBy = 'auto_system')
+      allow create: if isSignedIn() && (isAdmin() || request.resource.data.createdBy == 'auto_system');
+      allow update, delete: if isAdmin();
     }
 
     // ✅ FIXED: Analytics - Allow admins to read

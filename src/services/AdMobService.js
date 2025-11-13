@@ -2,6 +2,7 @@
  * Google AdMob Service - FIXED: Banner displays immediately
  * ✅ Proper initialization sequence
  * ✅ No race conditions
+ * ✅ Always notifies listeners after initial load
  */
 
 import { Platform } from 'react-native';
@@ -63,8 +64,8 @@ class AdMobService {
     this.statusChangeListeners = [];
     this.premiumStatusListeners = [];
     
-    // ✅ FIX: Load premium status SYNCHRONOUSLY first (blocking)
-    this.loadPremiumStatusSync();
+    // ✅ FIX: Load premium status properly with notification
+    this.loadPremiumStatusAsync();
     
     // Then initialize SDK asynchronously
     if (Platform.OS !== 'web' && sdkAvailable && mobileAds) {
@@ -76,49 +77,40 @@ class AdMobService {
   }
 
   /**
-   * ✅ NEW: Synchronous premium status load (blocking but fast)
+   * ✅ FIXED: Async premium status load with guaranteed notification
    */
-  loadPremiumStatusSync() {
+  async loadPremiumStatusAsync() {
     try {
-      console.log('[AdMob] 🔄 Loading premium status synchronously...');
+      console.log('[AdMob] 🔄 Loading premium status...');
       
-      // This is a workaround - we'll load async but mark as loaded immediately
-      // with default values, then update if needed
-      AsyncStorage.multiGet(['user_premium_status', 'user_admin_status'])
-        .then(([[, premium], [, adminStatus]]) => {
-          const wasPremium = this.isPremium;
-          const wasAdmin = this.isAdmin;
-          
-          this.isPremium = premium === 'true';
-          this.isAdmin = adminStatus === 'true';
-          this.premiumStatusLoaded = true;
-          
-          console.log('[AdMob] ✅ Status loaded:', {
-            premium: this.isPremium,
-            admin: this.isAdmin
-          });
-          
-          // If status changed, notify
-          if (wasPremium !== this.isPremium || wasAdmin !== this.isAdmin) {
-            this.notifyStatusChange();
-            this.notifyPremiumStatusChange(this.isPremium || this.isAdmin);
-          }
-        })
-        .catch(error => {
-          console.log('[AdMob] ⚠️ Failed to load from storage, using defaults');
-          this.isPremium = false;
-          this.isAdmin = false;
-          this.premiumStatusLoaded = true;
-        });
+      const [[, premium], [, adminStatus]] = await AsyncStorage.multiGet([
+        'user_premium_status', 
+        'user_admin_status'
+      ]);
       
-      // Mark as loaded immediately with defaults
+      this.isPremium = premium === 'true';
+      this.isAdmin = adminStatus === 'true';
       this.premiumStatusLoaded = true;
       
+      console.log('[AdMob] ✅ Status loaded:', {
+        premium: this.isPremium,
+        admin: this.isAdmin
+      });
+      
+      // ✅ CRITICAL FIX: ALWAYS notify listeners after initial load
+      // This ensures banner component receives the status even for free users
+      this.notifyStatusChange();
+      this.notifyPremiumStatusChange(this.isPremium || this.isAdmin);
+      
     } catch (error) {
-      console.log('[AdMob] ⚠️ Sync load error, using defaults');
+      console.log('[AdMob] ⚠️ Failed to load from storage, using defaults');
       this.isPremium = false;
       this.isAdmin = false;
       this.premiumStatusLoaded = true;
+      
+      // Still notify with defaults
+      this.notifyStatusChange();
+      this.notifyPremiumStatusChange(false);
     }
   }
 
@@ -129,8 +121,12 @@ class AdMobService {
     try {
       console.log('[AdMob] 🚀 Initializing SDK...');
       
-      // Wait a bit for AsyncStorage to complete
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Wait for premium status to load first
+      let attempts = 0;
+      while (!this.premiumStatusLoaded && attempts < 20) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        attempts++;
+      }
       
       // Initialize SDK
       await mobileAds().initialize();
@@ -164,8 +160,8 @@ class AdMobService {
     }
     // Also ensure premium status is loaded
     let attempts = 0;
-    while (!this.premiumStatusLoaded && attempts < 10) {
-      await new Promise(resolve => setTimeout(resolve, 50));
+    while (!this.premiumStatusLoaded && attempts < 20) {
+      await new Promise(resolve => setTimeout(resolve, 100));
       attempts++;
     }
     return this.premiumStatusLoaded;
@@ -179,8 +175,9 @@ class AdMobService {
     
     this.statusChangeListeners.push(callback);
     
-    // Call immediately if loaded, otherwise wait
+    // ✅ FIX: Call immediately if loaded, wait if not
     if (this.premiumStatusLoaded) {
+      // Status already loaded, call immediately
       setTimeout(() => {
         try {
           callback(this.getStatus());
@@ -188,17 +185,8 @@ class AdMobService {
           console.log('[AdMob] Error in callback:', error);
         }
       }, 0);
-    } else {
-      this.waitForInitialization().then(() => {
-        if (this.statusChangeListeners.includes(callback)) {
-          try {
-            callback(this.getStatus());
-          } catch (error) {
-            console.log('[AdMob] Error in callback:', error);
-          }
-        }
-      });
     }
+    // If not loaded yet, the loadPremiumStatusAsync will notify all listeners when done
     
     return () => {
       this.statusChangeListeners = this.statusChangeListeners.filter(cb => cb !== callback);
@@ -210,7 +198,7 @@ class AdMobService {
    */
   notifyStatusChange() {
     const status = this.getStatus();
-    console.log('[AdMob] 📢 Notifying listeners, status:', {
+    console.log('[AdMob] 📢 Notifying', this.statusChangeListeners.length, 'listeners, status:', {
       premium: status.isPremium,
       admin: status.isAdmin,
       loaded: status.premiumStatusLoaded
@@ -242,16 +230,6 @@ class AdMobService {
           console.log('[AdMob] Error in premium callback:', error);
         }
       }, 0);
-    } else {
-      this.waitForInitialization().then(() => {
-        if (this.premiumStatusListeners.includes(callback)) {
-          try {
-            callback(this.isPremium || this.isAdmin);
-          } catch (error) {
-            console.log('[AdMob] Error in premium callback:', error);
-          }
-        }
-      });
     }
     
     return () => {
@@ -263,7 +241,7 @@ class AdMobService {
    * Notify premium status change
    */
   notifyPremiumStatusChange(isPremiumOrAdmin) {
-    console.log('[AdMob] 📢 Notifying premium listeners:', isPremiumOrAdmin);
+    console.log('[AdMob] 📢 Notifying', this.premiumStatusListeners.length, 'premium listeners:', isPremiumOrAdmin);
     this.premiumStatusListeners.forEach(listener => {
       try {
         listener(isPremiumOrAdmin);

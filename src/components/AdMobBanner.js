@@ -1,5 +1,6 @@
 /**
  * ✅ FIXED: AdMob Banner Component - Now displays correctly
+ * Fixed race condition with status loading
  */
 
 import React, { useEffect, useState, useRef } from 'react';
@@ -23,7 +24,7 @@ const AdMobBanner = ({ style = {} }) => {
   const [shouldShowBanner, setShouldShowBanner] = useState(false);
   const [adUnitId, setAdUnitId] = useState(null);
   const [isReady, setIsReady] = useState(false);
-  const [debugInfo, setDebugInfo] = useState('');
+  const [debugInfo, setDebugInfo] = useState('Initializing...');
   const isMounted = useRef(true);
   const initAttempted = useRef(false);
 
@@ -38,7 +39,7 @@ const AdMobBanner = ({ style = {} }) => {
       return;
     }
 
-    // ✅ FIX: Immediate status check + subscription
+    // ✅ FIX: Proper initialization with status subscription
     const initBanner = async () => {
       if (initAttempted.current) return;
       initAttempted.current = true;
@@ -46,33 +47,34 @@ const AdMobBanner = ({ style = {} }) => {
       try {
         console.log('[Banner] 🔄 Initializing banner...');
         
-        // Wait for AdMobService to be ready
+        // Wait for AdMobService to load status
         await adMobService.waitForInitialization();
         
         if (!isMounted.current) return;
 
-        // Get initial status
-        const status = adMobService.getStatus();
-        
-        console.log('[Banner] 📊 Initial status:', {
-          loaded: status.premiumStatusLoaded,
-          premium: status.isPremium,
-          admin: status.isAdmin,
-          sdkAvailable: status.sdkAvailable,
-          initialized: status.isInitialized
-        });
-        
-        const shouldShow = status.premiumStatusLoaded && 
-                          !status.isPremium && 
-                          !status.isAdmin &&
-                          status.sdkAvailable;
-        
-        console.log('[Banner] 🎯 Initial decision:', shouldShow ? 'SHOW' : 'HIDE');
-        
-        if (isMounted.current) {
+        // Subscribe to status changes
+        // ✅ This will be called immediately if status is already loaded
+        const unsubscribe = adMobService.onStatusChange((status) => {
+          if (!isMounted.current) return;
+          
+          console.log('[Banner] 📢 Status received:', {
+            loaded: status.premiumStatusLoaded,
+            premium: status.isPremium,
+            admin: status.isAdmin,
+            sdkAvailable: status.sdkAvailable,
+            initialized: status.isInitialized
+          });
+          
+          const shouldShow = status.premiumStatusLoaded && 
+                            !status.isPremium && 
+                            !status.isAdmin &&
+                            status.sdkAvailable;
+          
+          console.log('[Banner] 🎯 Decision:', shouldShow ? 'SHOW BANNER' : 'HIDE BANNER');
+          
           setShouldShowBanner(shouldShow);
           setIsReady(true);
-          setDebugInfo(`Status: ${shouldShow ? 'SHOW' : 'HIDE'}, Premium: ${status.isPremium}, Admin: ${status.isAdmin}`);
+          setDebugInfo(`${shouldShow ? 'SHOW' : 'HIDE'}, P:${status.isPremium}, A:${status.isAdmin}`);
           
           if (shouldShow) {
             const config = adMobService.getBannerConfig();
@@ -82,31 +84,6 @@ const AdMobBanner = ({ style = {} }) => {
             } else {
               console.log('[Banner] ⚠️ No banner config returned');
             }
-          }
-        }
-
-        // Subscribe to future status changes
-        const unsubscribe = adMobService.onStatusChange((newStatus) => {
-          if (!isMounted.current) return;
-          
-          console.log('[Banner] 📢 Status update:', {
-            loaded: newStatus.premiumStatusLoaded,
-            premium: newStatus.isPremium,
-            admin: newStatus.isAdmin
-          });
-          
-          const shouldShow = newStatus.premiumStatusLoaded && 
-                            !newStatus.isPremium && 
-                            !newStatus.isAdmin;
-          
-          console.log('[Banner] 🎯 Update decision:', shouldShow ? 'SHOW' : 'HIDE');
-          setShouldShowBanner(shouldShow);
-          setIsReady(true);
-          setDebugInfo(`Updated: ${shouldShow ? 'SHOW' : 'HIDE'}, Premium: ${newStatus.isPremium}, Admin: ${newStatus.isAdmin}`);
-          
-          if (shouldShow) {
-            const config = adMobService.getBannerConfig();
-            if (config) setAdUnitId(config.adUnitId);
           }
         });
 
@@ -152,7 +129,7 @@ const AdMobBanner = ({ style = {} }) => {
 
   // Premium/Admin user - NO BANNER
   if (!shouldShowBanner) {
-    console.log('[Banner] 👑 Premium/Admin - no banner');
+    console.log('[Banner] 👑 Premium/Admin or no SDK - no banner');
     return null;
   }
 
