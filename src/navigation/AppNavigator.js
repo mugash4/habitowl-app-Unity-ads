@@ -1,3 +1,8 @@
+/**
+ * HabitOwl App Navigator
+ * ✅ Premium status loads ONCE before navigation renders
+ */
+
 import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -253,42 +258,50 @@ const PremiumUserTabBar = ({ state, descriptors, navigation, insets }) => {
  */
 const MainTabNavigator = () => {
   const insets = useSafeAreaInsets();
-  const [userType, setUserType] = useState('loading');
+  
+  // ✅ Instant evaluation - status is already loaded
+  const [userType, setUserType] = useState(() => {
+    const status = AdMobService.getStatus();
+    if (!status.premiumStatusLoaded) {
+      return 'loading';
+    }
+    
+    if (status.isAdmin) return 'admin';
+    if (status.isPremium) return 'premium';
+    return 'free';
+  });
 
   useEffect(() => {
     let isMounted = true;
 
     const determineUserType = async () => {
       try {
-        console.log('[MainTab] 🔍 Determining user type...');
-
-        // Wait for AdMob service to finish loading
-        await new Promise(resolve => setTimeout(resolve, 300));
-
         const currentUser = FirebaseService.currentUser;
         if (currentUser && currentUser.email) {
           const AdminService = require('../services/AdminService').default;
           const isAdmin = await AdminService.checkAdminStatus(currentUser.email);
           
-          if (isAdmin) {
-            console.log('[MainTab] ✅ User is ADMIN');
-            if (isMounted) setUserType('admin');
+          if (isAdmin && isMounted) {
+            console.log('[MainTab] User is ADMIN');
+            setUserType('admin');
             await AdMobService.setPremiumStatus(false, true);
             return;
           }
         }
 
         const userStats = await FirebaseService.getUserStats();
-        if (userStats && userStats.isPremium) {
-          console.log('[MainTab] ✅ User is PREMIUM');
-          if (isMounted) setUserType('premium');
+        if (userStats && userStats.isPremium && isMounted) {
+          console.log('[MainTab] User is PREMIUM');
+          setUserType('premium');
           await AdMobService.setPremiumStatus(true, false);
           return;
         }
 
-        console.log('[MainTab] ✅ User is FREE - will show ads');
-        if (isMounted) setUserType('free');
-        await AdMobService.setPremiumStatus(false, false);
+        if (isMounted) {
+          console.log('[MainTab] User is FREE');
+          setUserType('free');
+          await AdMobService.setPremiumStatus(false, false);
+        }
       } catch (error) {
         console.error('[MainTab] Error:', error);
         if (isMounted) setUserType('free');
@@ -351,7 +364,7 @@ const MainTabNavigator = () => {
 };
 
 /**
- * ✅ FIXED: Main App Navigator
+ * Main App Navigator
  */
 const AppNavigator = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(null);
@@ -365,9 +378,8 @@ const AppNavigator = () => {
     try {
       console.log('[AppNav] 🚀 Initializing app...');
       
-      // ✅ AdMob is now auto-initialized in its constructor
-      // Just wait a moment to ensure it's ready
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Wait briefly for AdMob to finish initialization
+      await new Promise(resolve => setTimeout(resolve, 100));
       console.log('[AppNav] ✅ AdMob ready');
       
       // Initialize notifications (non-blocking)
@@ -380,7 +392,7 @@ const AppNavigator = () => {
         console.log('[AppNav] 🔐 Auth state:', user ? 'Logged in' : 'Logged out');
         
         if (user) {
-          console.log('[AppNav] 👤 User logged in, reloading premium status...');
+          console.log('[AppNav] 📊 Reloading premium status...');
           try {
             await AdMobService.preloadPremiumStatus();
             console.log('[AppNav] ✅ Premium status reloaded');
