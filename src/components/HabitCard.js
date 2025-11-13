@@ -275,14 +275,20 @@ const HabitCard = ({
               </Text>
             </View>
 
-            {/* ✅ FIX: Proper spacing and visibility for category and time */}
+            {/* ✅ FIXED: Proper background color and text visibility for chips */}
             <View style={styles.tagsRow}>
               <View style={styles.chipWrapper}>
                 <Chip 
-                  mode="outlined" 
+                  mode="flat"
                   compact
-                  textStyle={[styles.chipText, isCompleted && styles.completedText]}
-                  style={[styles.chip, isCompleted && styles.completedChip]}
+                  textStyle={[
+                    styles.chipText,
+                    isCompleted ? styles.chipTextCompleted : styles.chipTextNormal
+                  ]}
+                  style={[
+                    styles.chip,
+                    isCompleted ? styles.chipCompleted : styles.chipNormal
+                  ]}
                 >
                   {habit.category}
                 </Chip>
@@ -290,10 +296,16 @@ const HabitCard = ({
               
               <View style={styles.chipWrapper}>
                 <Chip 
-                  mode="outlined" 
+                  mode="flat"
                   compact
-                  textStyle={[styles.chipText, isCompleted && styles.completedText]}
-                  style={[styles.chip, isCompleted && styles.completedChip]}
+                  textStyle={[
+                    styles.chipText,
+                    isCompleted ? styles.chipTextCompleted : styles.chipTextNormal
+                  ]}
+                  style={[
+                    styles.chip,
+                    isCompleted ? styles.chipCompleted : styles.chipNormal
+                  ]}
                 >
                   {habit.estimatedTime || '5 min'}
                 </Chip>
@@ -448,36 +460,51 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     marginTop: 2,
   },
-  // ✅ FIX: Proper spacing to prevent cut-off
+  // ✅ FIXED: Proper spacing and visibility
   tagsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16, // Increased from 12 to 16
+    marginBottom: 16,
     flexWrap: 'wrap',
-    minHeight: 36, // Ensures minimum height for chips
+    minHeight: 36,
   },
   chipWrapper: {
     marginRight: 8,
-    marginBottom: 6, // Increased from 4 to 6 for better spacing
-    paddingVertical: 2, // Added to prevent vertical clipping
+    marginBottom: 6,
+    paddingVertical: 2,
   },
   chip: {
     height: 28,
     marginVertical: 0,
   },
-  completedChip: {
-    borderColor: '#ffffff',
+  // ✅ FIXED: Chip styling for normal state (not completed)
+  chipNormal: {
+    backgroundColor: '#f3f4f6', // Light gray background
+  },
+  chipTextNormal: {
+    fontSize: 11,
+    color: '#374151', // Dark gray text - VISIBLE
+    lineHeight: 16,
+  },
+  // ✅ FIXED: Chip styling for completed state
+  chipCompleted: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)', // Semi-transparent white background
+  },
+  chipTextCompleted: {
+    fontSize: 11,
+    color: '#ffffff', // White text - VISIBLE on semi-transparent background
+    lineHeight: 16,
+    fontWeight: '600', // Slightly bolder for better visibility
   },
   chipText: {
     fontSize: 11,
-    color: '#6b7280',
-    lineHeight: 16, // Added for better text rendering
+    lineHeight: 16,
   },
   difficultyContainer: {
     flexDirection: 'row',
     marginLeft: 'auto',
-    marginBottom: 6, // Increased from 4 to 6
-    paddingVertical: 2, // Added for alignment
+    marginBottom: 6,
+    paddingVertical: 2,
   },
   actionsRow: {
     flexDirection: 'row',
