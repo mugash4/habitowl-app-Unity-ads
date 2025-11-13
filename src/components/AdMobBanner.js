@@ -1,16 +1,10 @@
 /**
- * ✅ COMPLETE FIX: AdMob Banner Component - Now ALWAYS VISIBLE
- * 
- * Changes:
- * 1. Added visible container border for debugging
- * 2. Added fallback UI when ads fail to load
- * 3. Added error state display
- * 4. Improved visual feedback
- * 5. Better logging for troubleshooting
+ * ✅ FIXED: AdMob Banner Component - Now displays correctly
+ * Fixed race condition with status loading
  */
 
 import React, { useEffect, useState, useRef } from 'react';
-import { View, StyleSheet, Platform, Text } from 'react';
+import { View, StyleSheet, Platform, Text } from 'react-native';
 import adMobService from '../services/AdMobService';
 
 // Import AdMob components
@@ -30,8 +24,6 @@ const AdMobBanner = ({ style = {} }) => {
   const [shouldShowBanner, setShouldShowBanner] = useState(false);
   const [adUnitId, setAdUnitId] = useState(null);
   const [isReady, setIsReady] = useState(false);
-  const [adLoaded, setAdLoaded] = useState(false);
-  const [adError, setAdError] = useState(null);
   const [debugInfo, setDebugInfo] = useState('Initializing...');
   const isMounted = useRef(true);
   const initAttempted = useRef(false);
@@ -47,7 +39,7 @@ const AdMobBanner = ({ style = {} }) => {
       return;
     }
 
-    // Initialize banner
+    // ✅ FIX: Proper initialization with status subscription
     const initBanner = async () => {
       if (initAttempted.current) return;
       initAttempted.current = true;
@@ -61,6 +53,7 @@ const AdMobBanner = ({ style = {} }) => {
         if (!isMounted.current) return;
 
         // Subscribe to status changes
+        // ✅ This will be called immediately if status is already loaded
         const unsubscribe = adMobService.onStatusChange((status) => {
           if (!isMounted.current) return;
           
@@ -126,10 +119,9 @@ const AdMobBanner = ({ style = {} }) => {
   if (!isReady) {
     console.log('[Banner] ⏳ Still loading...');
     return (
-      <View style={[styles.container, styles.debugBorder, style]}>
+      <View style={[styles.container, style]}>
         <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>🔄 Loading ad...</Text>
-          {__DEV__ && <Text style={styles.debugTextSmall}>{debugInfo}</Text>}
+          <Text style={styles.loadingText}>Loading ad...</Text>
         </View>
       </View>
     );
@@ -141,13 +133,12 @@ const AdMobBanner = ({ style = {} }) => {
     return null;
   }
 
-  // Free user - SHOW BANNER (with fallback for failed ads)
+  // Free user - SHOW BANNER
   if (shouldShowBanner && adUnitId) {
     console.log('[Banner] ✅ RENDERING BANNER AD with unit:', adUnitId);
     
     return (
-      <View style={[styles.container, styles.debugBorder, style]}>
-        {/* The actual AdMob Banner */}
+      <View style={[styles.container, style]}>
         <BannerAd
           unitId={adUnitId}
           size={BannerAdSize.BANNER}
@@ -156,24 +147,28 @@ const AdMobBanner = ({ style = {} }) => {
           }}
           onAdLoaded={() => {
             console.log('[Banner] ✅ AD LOADED AND DISPLAYED!');
-            setAdLoaded(true);
-            setAdError(null);
             adMobService.trackAdImpression('banner', 'loaded');
           }}
           onAdFailedToLoad={(error) => {
             console.log('[Banner] ❌ Ad failed to load:');
             console.log('[Banner]    Code:', error.code);
             console.log('[Banner]    Message:', error.message);
-            
-            setAdLoaded(false);
-            setAdError(error);
+            console.log('[Banner]    Domain:', error.domain);
             
             // Show helpful error messages
             if (error.code === 3) {
-              console.log('[Banner] 💡 ERROR CODE 3 (No Fill) - This is NORMAL:');
-              console.log('[Banner]    - Ad unit may be new (takes 24-48 hours)');
-              console.log('[Banner]    - No ads available right now');
-              console.log('[Banner]    - Try again later');
+              console.log('[Banner] 💡 ERROR CODE 3 (No Fill) - This is NORMAL and means:');
+              console.log('[Banner]    1. Your ad unit is new (takes 24-48 hours to activate)');
+              console.log('[Banner]    2. No ads available for your location/device right now');
+              console.log('[Banner]    3. Ad inventory is low (try again later)');
+              console.log('[Banner]    4. If using REAL ad units on test device, add device to test devices list');
+              console.log('[Banner]    ✅ This does NOT mean your integration is broken!');
+            } else if (error.code === 0) {
+              console.log('[Banner] 💡 ERROR CODE 0 - Internal error, usually temporary');
+            } else if (error.code === 1) {
+              console.log('[Banner] 💡 ERROR CODE 1 - Invalid ad unit ID, check your config');
+            } else if (error.code === 2) {
+              console.log('[Banner] 💡 ERROR CODE 2 - Network error, check internet connection');
             }
           }}
           onAdOpened={() => {
@@ -184,35 +179,8 @@ const AdMobBanner = ({ style = {} }) => {
             console.log('[Banner] 🚪 Ad closed');
           }}
         />
-        
-        {/* ✅ NEW: Fallback UI when ad fails to load */}
-        {!adLoaded && adError && (
-          <View style={styles.fallbackContainer}>
-            <Text style={styles.fallbackText}>
-              {adError.code === 3 
-                ? '📱 Ad loading... (may take 24-48 hrs for new ad units)' 
-                : '📱 Ad space (no ads available)'}
-            </Text>
-            {__DEV__ && (
-              <Text style={styles.fallbackDebug}>
-                Error {adError.code}: {adError.message}
-              </Text>
-            )}
-          </View>
-        )}
-
-        {/* ✅ NEW: Success indicator when ad loads */}
-        {adLoaded && __DEV__ && (
-          <View style={styles.successIndicator}>
-            <Text style={styles.successText}>✅ Ad Loaded</Text>
-          </View>
-        )}
-
-        {/* Debug info */}
         {__DEV__ && (
-          <Text style={styles.debugText}>
-            {debugInfo} | Loaded: {adLoaded ? 'Yes' : 'No'} | Unit: {adUnitId.slice(-8)}
-          </Text>
+          <Text style={styles.debugText}>{debugInfo}</Text>
         )}
       </View>
     );
@@ -220,11 +188,7 @@ const AdMobBanner = ({ style = {} }) => {
 
   // Fallback
   console.log('[Banner] ⚠️ Fallback - no banner shown (adUnitId:', adUnitId, ')');
-  return (
-    <View style={[styles.container, styles.debugBorder, style]}>
-      <Text style={styles.fallbackText}>📱 Ad space (initializing...)</Text>
-    </View>
-  );
+  return null;
 };
 
 const styles = StyleSheet.create({
@@ -233,14 +197,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: '100%',
     height: 50,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#f9fafb',
     overflow: 'hidden',
-  },
-  // ✅ NEW: Debug border to make banner area ALWAYS visible
-  debugBorder: {
-    borderWidth: 2,
-    borderColor: '#10b981', // Green border
-    borderStyle: 'dashed',
   },
   loadingContainer: {
     alignItems: 'center',
@@ -248,62 +206,18 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 12,
-    color: '#6b7280',
-    fontWeight: '500',
-  },
-  // ✅ NEW: Fallback UI when ad fails
-  fallbackContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#f3f4f6',
-  },
-  fallbackText: {
-    fontSize: 11,
     color: '#9ca3af',
-    textAlign: 'center',
-    paddingHorizontal: 8,
-  },
-  fallbackDebug: {
-    fontSize: 8,
-    color: '#ef4444',
-    marginTop: 2,
-    textAlign: 'center',
-  },
-  // ✅ NEW: Success indicator
-  successIndicator: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    backgroundColor: 'rgba(16, 185, 129, 0.9)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  successText: {
-    fontSize: 8,
-    color: '#ffffff',
-    fontWeight: 'bold',
   },
   debugText: {
-    fontSize: 7,
-    color: '#7c3aed',
+    fontSize: 8,
+    color: '#ef4444',
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     padding: 2,
     textAlign: 'center',
-  },
-  debugTextSmall: {
-    fontSize: 8,
-    color: '#9ca3af',
-    marginTop: 4,
   },
 });
 

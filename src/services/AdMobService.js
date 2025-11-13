@@ -1,8 +1,7 @@
 /**
- * Google AdMob Service - FIXED: Banner displays immediately
+ * Google AdMob Service - FIXED: Working version
  * ✅ Proper initialization sequence
  * ✅ No race conditions
- * ✅ Always notifies listeners after initial load
  */
 
 import { Platform } from 'react-native';
@@ -64,7 +63,7 @@ class AdMobService {
     this.statusChangeListeners = [];
     this.premiumStatusListeners = [];
     
-    // ✅ FIX: Load premium status properly with notification
+    // Load premium status first
     this.loadPremiumStatusAsync();
     
     // Then initialize SDK asynchronously
@@ -98,7 +97,6 @@ class AdMobService {
       });
       
       // ✅ CRITICAL FIX: ALWAYS notify listeners after initial load
-      // This ensures banner component receives the status even for free users
       this.notifyStatusChange();
       this.notifyPremiumStatusChange(this.isPremium || this.isAdmin);
       
@@ -175,9 +173,8 @@ class AdMobService {
     
     this.statusChangeListeners.push(callback);
     
-    // ✅ FIX: Call immediately if loaded, wait if not
+    // Call immediately if loaded
     if (this.premiumStatusLoaded) {
-      // Status already loaded, call immediately
       setTimeout(() => {
         try {
           callback(this.getStatus());
@@ -186,7 +183,6 @@ class AdMobService {
         }
       }, 0);
     }
-    // If not loaded yet, the loadPremiumStatusAsync will notify all listeners when done
     
     return () => {
       this.statusChangeListeners = this.statusChangeListeners.filter(cb => cb !== callback);
@@ -198,11 +194,7 @@ class AdMobService {
    */
   notifyStatusChange() {
     const status = this.getStatus();
-    console.log('[AdMob] 📢 Notifying', this.statusChangeListeners.length, 'listeners, status:', {
-      premium: status.isPremium,
-      admin: status.isAdmin,
-      loaded: status.premiumStatusLoaded
-    });
+    console.log('[AdMob] 📢 Notifying', this.statusChangeListeners.length, 'listeners');
     
     this.statusChangeListeners.forEach((listener) => {
       try {
@@ -241,7 +233,7 @@ class AdMobService {
    * Notify premium status change
    */
   notifyPremiumStatusChange(isPremiumOrAdmin) {
-    console.log('[AdMob] 📢 Notifying', this.premiumStatusListeners.length, 'premium listeners:', isPremiumOrAdmin);
+    console.log('[AdMob] 📢 Notifying', this.premiumStatusListeners.length, 'premium listeners');
     this.premiumStatusListeners.forEach(listener => {
       try {
         listener(isPremiumOrAdmin);
@@ -515,14 +507,6 @@ class AdMobService {
            Platform.OS !== 'web' && 
            sdkAvailable &&
            this.premiumStatusLoaded;
-    
-    console.log('[AdMob] 🤔 Should show ads:', should, {
-      initialized: this.isInitialized,
-      premium: this.isPremium,
-      admin: this.isAdmin,
-      sdk: sdkAvailable,
-      loaded: this.premiumStatusLoaded
-    });
     
     return should;
   }
