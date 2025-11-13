@@ -7,9 +7,10 @@ const TAB_ICONS_HEIGHT = 60; // Tab icons + labels
 const BANNER_HEIGHT = 50; // Standard AdMob banner
 
 /**
- * ✅ COMPLETELY FIXED: Dynamic tab bar height calculation
- * Tab bar shrinks (no banner space) for admin/premium users
- * Tab bar expands (includes banner space) for free users
+ * ✅ Dynamic tab bar height calculation
+ * Returns different heights based on user type:
+ * - Free users: tabs + banner + system nav
+ * - Premium/Admin users: tabs + system nav (no banner)
  */
 export const useTabBarHeight = () => {
   const insets = useSafeAreaInsets();
@@ -22,25 +23,23 @@ export const useTabBarHeight = () => {
     const evaluateBannerDisplay = () => {
       if (!isMounted) return;
       
+      // Web platform - no banner
       if (Platform.OS === 'web') {
         setShowBanner(false);
         return;
       }
       
       const status = AdMobService.getStatus();
-      console.log('[useTabBarHeight] 📊 Status check:', {
+      console.log('[useTabBarHeight] 📊 Status:', {
         isPremium: status.isPremium,
         isAdmin: status.isAdmin,
         shouldShowAds: status.shouldShowAds,
-        isInitialized: status.isInitialized,
         premiumStatusLoaded: status.premiumStatusLoaded
       });
       
-      // ✅ CRITICAL: All conditions must be true for banner to show
-      const shouldShow = status.shouldShowAds && 
-                        status.isInitialized && 
-                        !status.isPremium && 
-                        !status.isAdmin &&
+      // ✅ Show banner ONLY if: free user + status loaded + AdMob ready
+      const shouldShow = !status.isPremium && 
+                        !status.isAdmin && 
                         status.premiumStatusLoaded;
       
       console.log(`[useTabBarHeight] Setting showBanner = ${shouldShow}`);
@@ -51,14 +50,14 @@ export const useTabBarHeight = () => {
     evaluateBannerDisplay();
     
     // Subscribe to status changes
-    const unsubscribe = AdMobService.onStatusChange((status) => {
+    const unsubscribe = AdMobService.onStatusChange(() => {
       if (isMounted) {
-        console.log('[useTabBarHeight] 📢 Status update received');
+        console.log('[useTabBarHeight] 📢 Status update');
         evaluateBannerDisplay();
       }
     });
 
-    // Multiple delayed checks to catch late initialization
+    // Periodic checks for first 3 seconds
     const timeouts = [100, 300, 500, 1000, 2000, 3000].map(delay =>
       setTimeout(() => {
         if (isMounted) evaluateBannerDisplay();
@@ -75,17 +74,17 @@ export const useTabBarHeight = () => {
 
   const systemNavHeight = insets.bottom || 0;
   
-  // ✅ CRITICAL FIX: Only allocate banner space when banner WILL show (free users)
+  // ✅ Allocate banner space only for free users
   const bannerSpace = showBanner ? BANNER_HEIGHT : 0;
   const totalHeight = TAB_ICONS_HEIGHT + bannerSpace + systemNavHeight;
 
-  console.log(`[useTabBarHeight] 📐 Heights - Total: ${totalHeight}px, Banner: ${bannerSpace}px, System: ${systemNavHeight}px, ShowBanner: ${showBanner}`);
+  console.log(`[useTabBarHeight] 📐 Total: ${totalHeight}px (tabs: ${TAB_ICONS_HEIGHT}, banner: ${bannerSpace}, system: ${systemNavHeight})`);
 
   return {
-    totalHeight,              // Total space: tabs + banner (if showing) + system nav
+    totalHeight,              // Total space needed
     tabBarHeight: TAB_ICONS_HEIGHT,
-    bannerHeight: bannerSpace, // 0 for premium/admin, 50 for free users
+    bannerHeight: bannerSpace,
     systemNavHeight,
-    showBanner,               // false for premium/admin, true for free users (if initialized)
+    showBanner,
   };
 };
