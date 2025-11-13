@@ -1,7 +1,6 @@
 /**
- * ✅ INSTANT DISPLAY FIX: AdMob Banner Component
- * Banner displays IMMEDIATELY - no loading state needed
- * Premium status is always ready before this renders
+ * ✅ FIXED: AdMob Banner Component with proper state updates
+ * Banner displays correctly after login
  */
 
 import React, { useEffect, useState, useRef } from 'react';
@@ -22,27 +21,11 @@ try {
 }
 
 const AdMobBanner = ({ style = {} }) => {
-  const [shouldShowBanner, setShouldShowBanner] = useState(() => {
-    // ✅ INSTANT EVALUATION - status is already loaded
-    if (Platform.OS === 'web' || !BannerAd || !BannerAdSize) {
-      return false;
-    }
-    
-    const status = adMobService.getStatus();
-    const shouldShow = status.premiumStatusLoaded && 
-                      !status.isPremium && 
-                      !status.isAdmin;
-    
-    console.log('[Banner] 🎬 Initial state:', shouldShow ? 'SHOW' : 'HIDE');
-    return shouldShow;
-  });
-  
-  const [adUnitId, setAdUnitId] = useState(() => {
-    const config = adMobService.getBannerConfig();
-    return config ? config.adUnitId : null;
-  });
-  
+  // ✅ FIX: Start with loading state, then update based on actual status
+  const [shouldShowBanner, setShouldShowBanner] = useState(false);
+  const [adUnitId, setAdUnitId] = useState(null);
   const isMounted = useRef(true);
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     console.log('[Banner] 🎬 Component mounted');
@@ -53,16 +36,52 @@ const AdMobBanner = ({ style = {} }) => {
       return;
     }
 
-    // Subscribe to status changes (for upgrades/downgrades)
+    // ✅ FIX: Wait for status to be loaded, then decide
+    const checkStatusAndShow = () => {
+      const status = adMobService.getStatus();
+      
+      console.log('[Banner] 📊 Status check:', {
+        loaded: status.premiumStatusLoaded,
+        premium: status.isPremium,
+        admin: status.isAdmin
+      });
+      
+      if (status.premiumStatusLoaded) {
+        const shouldShow = !status.isPremium && !status.isAdmin;
+        console.log('[Banner] 🎯 Decision:', shouldShow ? 'SHOW' : 'HIDE');
+        
+        if (isMounted.current) {
+          setShouldShowBanner(shouldShow);
+          setIsReady(true);
+          
+          if (shouldShow) {
+            const config = adMobService.getBannerConfig();
+            if (config) setAdUnitId(config.adUnitId);
+          }
+        }
+      }
+    };
+
+    // Check immediately
+    checkStatusAndShow();
+
+    // Subscribe to status changes
     const unsubscribe = adMobService.onStatusChange((status) => {
       if (!isMounted.current) return;
+      
+      console.log('[Banner] 📢 Status update received:', {
+        loaded: status.premiumStatusLoaded,
+        premium: status.isPremium,
+        admin: status.isAdmin
+      });
       
       const shouldShow = status.premiumStatusLoaded && 
                         !status.isPremium && 
                         !status.isAdmin;
       
-      console.log('[Banner] 📢 Status update:', shouldShow ? 'SHOW' : 'HIDE');
+      console.log('[Banner] 🎯 Update decision:', shouldShow ? 'SHOW' : 'HIDE');
       setShouldShowBanner(shouldShow);
+      setIsReady(true);
       
       if (shouldShow) {
         const config = adMobService.getBannerConfig();
@@ -80,6 +99,15 @@ const AdMobBanner = ({ style = {} }) => {
   // Web or SDK unavailable
   if (Platform.OS === 'web' || !BannerAd || !BannerAdSize) {
     return null;
+  }
+
+  // Still loading status
+  if (!isReady) {
+    return (
+      <View style={[styles.container, style]}>
+        {/* Empty placeholder while loading */}
+      </View>
+    );
   }
 
   // Premium/Admin user

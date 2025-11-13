@@ -620,14 +620,13 @@ class FirebaseService {
           premiumUpdatedAt: new Date().toISOString()
         });
     
-        console.log(`Premium status updated to: ${isPremium}`);
+        console.log(`✅ Firebase premium status updated to: ${isPremium}`);
       
-        // ✅ FIX: Also update AdMobService
+        // ✅ FIX: Always update AdMobService after Firebase
         const adMob = getAdMobService();
         if (adMob) {
-          // Check if user is admin
-          const userData = userDoc.data();
           const isAdmin = await this.checkIfUserIsAdmin(this.currentUser.email);
+          console.log(`✅ Updating AdMobService: premium=${isPremium}, admin=${isAdmin}`);
           await adMob.setPremiumStatus(isPremium, isAdmin);
         }
       

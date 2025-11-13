@@ -1,6 +1,6 @@
 /**
  * HabitOwl App Navigator
- * ✅ Premium status loads ONCE before navigation renders
+ * ✅ FIXED: Proper initialization sequence
  */
 
 import React, { useEffect, useState } from 'react';
@@ -258,60 +258,65 @@ const PremiumUserTabBar = ({ state, descriptors, navigation, insets }) => {
  */
 const MainTabNavigator = () => {
   const insets = useSafeAreaInsets();
-  
-  // ✅ Instant evaluation - status is already loaded
-  const [userType, setUserType] = useState(() => {
-    const status = AdMobService.getStatus();
-    if (!status.premiumStatusLoaded) {
-      return 'loading';
-    }
-    
-    if (status.isAdmin) return 'admin';
-    if (status.isPremium) return 'premium';
-    return 'free';
-  });
+  const [userType, setUserType] = useState('loading');
 
   useEffect(() => {
     let isMounted = true;
 
     const determineUserType = async () => {
       try {
+        // ✅ FIX: Wait for Firebase user first
         const currentUser = FirebaseService.currentUser;
-        if (currentUser && currentUser.email) {
+        if (!currentUser) {
+          if (isMounted) setUserType('free');
+          return;
+        }
+
+        // Check admin status
+        if (currentUser.email) {
           const AdminService = require('../services/AdminService').default;
           const isAdmin = await AdminService.checkAdminStatus(currentUser.email);
           
           if (isAdmin && isMounted) {
-            console.log('[MainTab] User is ADMIN');
+            console.log('[MainTab] 👑 User is ADMIN');
             setUserType('admin');
             await AdMobService.setPremiumStatus(false, true);
             return;
           }
         }
 
+        // Check premium status from Firestore
         const userStats = await FirebaseService.getUserStats();
         if (userStats && userStats.isPremium && isMounted) {
-          console.log('[MainTab] User is PREMIUM');
+          console.log('[MainTab] 👑 User is PREMIUM');
           setUserType('premium');
           await AdMobService.setPremiumStatus(true, false);
           return;
         }
 
+        // Free user
         if (isMounted) {
-          console.log('[MainTab] User is FREE');
+          console.log('[MainTab] 💰 User is FREE');
           setUserType('free');
           await AdMobService.setPremiumStatus(false, false);
         }
       } catch (error) {
         console.error('[MainTab] Error:', error);
-        if (isMounted) setUserType('free');
+        if (isMounted) {
+          setUserType('free');
+          await AdMobService.setPremiumStatus(false, false);
+        }
       }
     };
 
     determineUserType();
 
+    // Listen for premium status changes
     const unsubscribe = AdMobService.onPremiumStatusChange(() => {
-      if (isMounted) determineUserType();
+      if (isMounted) {
+        // Re-determine user type when premium status changes
+        determineUserType();
+      }
     });
 
     return () => {
@@ -378,8 +383,8 @@ const AppNavigator = () => {
     try {
       console.log('[AppNav] 🚀 Initializing app...');
       
-      // Wait briefly for AdMob to finish initialization
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // ✅ FIX: Wait for AdMob to finish async initialization
+      await new Promise(resolve => setTimeout(resolve, 500));
       console.log('[AppNav] ✅ AdMob ready');
       
       // Initialize notifications (non-blocking)
@@ -392,13 +397,12 @@ const AppNavigator = () => {
         console.log('[AppNav] 🔐 Auth state:', user ? 'Logged in' : 'Logged out');
         
         if (user) {
-          console.log('[AppNav] 📊 Reloading premium status...');
-          try {
-            await AdMobService.preloadPremiumStatus();
-            console.log('[AppNav] ✅ Premium status reloaded');
-          } catch (error) {
-            console.log('[AppNav] Premium status error (non-critical):', error);
-          }
+          console.log('[AppNav] 👤 User logged in:', user.email);
+          // Premium status will be loaded by MainTabNavigator
+        } else {
+          console.log('[AppNav] 👤 User logged out');
+          // Reset premium status
+          await AdMobService.setPremiumStatus(false, false);
         }
         
         setIsAuthenticated(!!user);
