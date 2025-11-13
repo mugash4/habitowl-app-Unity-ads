@@ -1,6 +1,5 @@
 /**
- * ✅ FIXED: AdMob Banner Component with proper state updates
- * Banner displays correctly after login
+ * ✅ FIXED: AdMob Banner Component - Displays correctly for free users
  */
 
 import React, { useEffect, useState, useRef } from 'react';
@@ -21,11 +20,10 @@ try {
 }
 
 const AdMobBanner = ({ style = {} }) => {
-  // ✅ FIX: Start with loading state, then update based on actual status
   const [shouldShowBanner, setShouldShowBanner] = useState(false);
   const [adUnitId, setAdUnitId] = useState(null);
-  const isMounted = useRef(true);
   const [isReady, setIsReady] = useState(false);
+  const isMounted = useRef(true);
 
   useEffect(() => {
     console.log('[Banner] 🎬 Component mounted');
@@ -33,20 +31,27 @@ const AdMobBanner = ({ style = {} }) => {
 
     // Early exit for web or no SDK
     if (Platform.OS === 'web' || !BannerAd || !BannerAdSize) {
+      console.log('[Banner] ℹ️ Skipping banner (web or no SDK)');
       return;
     }
 
-    // ✅ FIX: Wait for status to be loaded, then decide
-    const checkStatusAndShow = () => {
-      const status = adMobService.getStatus();
-      
-      console.log('[Banner] 📊 Status check:', {
-        loaded: status.premiumStatusLoaded,
-        premium: status.isPremium,
-        admin: status.isAdmin
-      });
-      
-      if (status.premiumStatusLoaded) {
+    // ✅ FIX: Wait for initialization, THEN decide to show banner
+    const initAndSubscribe = async () => {
+      try {
+        // Wait for AdMobService to fully initialize
+        await adMobService.waitForInitialization();
+        
+        if (!isMounted.current) return;
+
+        // Now get the status (it's guaranteed to be loaded)
+        const status = adMobService.getStatus();
+        
+        console.log('[Banner] 📊 Status after init:', {
+          loaded: status.premiumStatusLoaded,
+          premium: status.isPremium,
+          admin: status.isAdmin
+        });
+        
         const shouldShow = !status.isPremium && !status.isAdmin;
         console.log('[Banner] 🎯 Decision:', shouldShow ? 'SHOW' : 'HIDE');
         
@@ -56,43 +61,55 @@ const AdMobBanner = ({ style = {} }) => {
           
           if (shouldShow) {
             const config = adMobService.getBannerConfig();
+            if (config) {
+              setAdUnitId(config.adUnitId);
+              console.log('[Banner] ✅ Banner configured with ad unit:', config.adUnitId);
+            }
+          }
+        }
+
+        // Subscribe to future status changes
+        const unsubscribe = adMobService.onStatusChange((newStatus) => {
+          if (!isMounted.current) return;
+          
+          console.log('[Banner] 📢 Status update:', {
+            loaded: newStatus.premiumStatusLoaded,
+            premium: newStatus.isPremium,
+            admin: newStatus.isAdmin
+          });
+          
+          const shouldShow = newStatus.premiumStatusLoaded && 
+                            !newStatus.isPremium && 
+                            !newStatus.isAdmin;
+          
+          console.log('[Banner] 🎯 Update decision:', shouldShow ? 'SHOW' : 'HIDE');
+          setShouldShowBanner(shouldShow);
+          setIsReady(true);
+          
+          if (shouldShow) {
+            const config = adMobService.getBannerConfig();
             if (config) setAdUnitId(config.adUnitId);
           }
+        });
+
+        return unsubscribe;
+      } catch (error) {
+        console.log('[Banner] ❌ Error during init:', error);
+        if (isMounted.current) {
+          setIsReady(true);
+          setShouldShowBanner(false);
         }
       }
     };
 
-    // Check immediately
-    checkStatusAndShow();
-
-    // Subscribe to status changes
-    const unsubscribe = adMobService.onStatusChange((status) => {
-      if (!isMounted.current) return;
-      
-      console.log('[Banner] 📢 Status update received:', {
-        loaded: status.premiumStatusLoaded,
-        premium: status.isPremium,
-        admin: status.isAdmin
-      });
-      
-      const shouldShow = status.premiumStatusLoaded && 
-                        !status.isPremium && 
-                        !status.isAdmin;
-      
-      console.log('[Banner] 🎯 Update decision:', shouldShow ? 'SHOW' : 'HIDE');
-      setShouldShowBanner(shouldShow);
-      setIsReady(true);
-      
-      if (shouldShow) {
-        const config = adMobService.getBannerConfig();
-        if (config) setAdUnitId(config.adUnitId);
-      }
-    });
+    const unsubscribePromise = initAndSubscribe();
 
     return () => {
       console.log('[Banner] 🚪 Component unmounting');
       isMounted.current = false;
-      unsubscribe();
+      unsubscribePromise.then(unsub => {
+        if (unsub) unsub();
+      });
     };
   }, []);
 
@@ -103,6 +120,7 @@ const AdMobBanner = ({ style = {} }) => {
 
   // Still loading status
   if (!isReady) {
+    console.log('[Banner] ⏳ Still loading...');
     return (
       <View style={[styles.container, style]}>
         {/* Empty placeholder while loading */}
@@ -110,14 +128,15 @@ const AdMobBanner = ({ style = {} }) => {
     );
   }
 
-  // Premium/Admin user
+  // Premium/Admin user - NO BANNER
   if (!shouldShowBanner) {
+    console.log('[Banner] 👑 Premium/Admin - no banner');
     return null;
   }
 
   // Free user - SHOW BANNER
   if (shouldShowBanner && adUnitId) {
-    console.log('[Banner] ✅ RENDERING BANNER AD');
+    console.log('[Banner] ✅ RENDERING BANNER AD with unit:', adUnitId);
     
     return (
       <View style={[styles.container, style]}>
@@ -128,7 +147,7 @@ const AdMobBanner = ({ style = {} }) => {
             requestNonPersonalizedAdsOnly: false,
           }}
           onAdLoaded={() => {
-            console.log('[Banner] ✅ AD LOADED!');
+            console.log('[Banner] ✅ AD LOADED AND DISPLAYED!');
             adMobService.trackAdImpression('banner', 'loaded');
           }}
           onAdFailedToLoad={(error) => {
@@ -144,6 +163,7 @@ const AdMobBanner = ({ style = {} }) => {
   }
 
   // Fallback
+  console.log('[Banner] ⚠️ Fallback - no banner shown');
   return null;
 };
 
