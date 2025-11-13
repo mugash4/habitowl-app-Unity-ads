@@ -44,18 +44,15 @@ const theme = {
   },
 };
 
-// ✅ Layout constants
 const TAB_ICONS_HEIGHT = 60;
 const BANNER_AD_HEIGHT = 50;
 
 /**
- * ✅ FREE USER TAB BAR - WITH BANNER AD SPACE
+ * FREE USER TAB BAR - WITH BANNER AD
  */
 const FreeUserTabBar = ({ state, descriptors, navigation, insets }) => {
   const systemNavHeight = insets.bottom || 0;
   const totalHeight = TAB_ICONS_HEIGHT + BANNER_AD_HEIGHT + systemNavHeight;
-
-  console.log('[FreeUserTabBar] Rendering with banner ad space');
 
   return (
     <View style={{
@@ -74,7 +71,7 @@ const FreeUserTabBar = ({ state, descriptors, navigation, insets }) => {
       shadowRadius: 3,
       flexDirection: 'column',
     }}>
-      {/* Tab Icons Row */}
+      {/* Tab Icons */}
       <View style={{
         height: TAB_ICONS_HEIGHT,
         flexDirection: 'row',
@@ -136,7 +133,7 @@ const FreeUserTabBar = ({ state, descriptors, navigation, insets }) => {
         })}
       </View>
 
-      {/* ✅ Banner Ad Container - ALWAYS present for free users */}
+      {/* Banner Ad Container */}
       <View style={{
         height: BANNER_AD_HEIGHT,
         width: '100%',
@@ -158,13 +155,11 @@ const FreeUserTabBar = ({ state, descriptors, navigation, insets }) => {
 };
 
 /**
- * ✅ PREMIUM USER TAB BAR - NO BANNER AD SPACE
+ * PREMIUM USER TAB BAR - NO BANNER AD
  */
 const PremiumUserTabBar = ({ state, descriptors, navigation, insets }) => {
   const systemNavHeight = insets.bottom || 0;
   const totalHeight = TAB_ICONS_HEIGHT + systemNavHeight;
-
-  console.log('[PremiumUserTabBar] Rendering WITHOUT banner ad space');
 
   return (
     <View style={{
@@ -183,7 +178,7 @@ const PremiumUserTabBar = ({ state, descriptors, navigation, insets }) => {
       shadowRadius: 3,
       flexDirection: 'column',
     }}>
-      {/* Tab Icons Row */}
+      {/* Tab Icons */}
       <View style={{
         height: TAB_ICONS_HEIGHT,
         flexDirection: 'row',
@@ -245,8 +240,6 @@ const PremiumUserTabBar = ({ state, descriptors, navigation, insets }) => {
         })}
       </View>
 
-      {/* NO BANNER AD CONTAINER - Premium users don't see ads */}
-
       {/* System Navigation Spacer */}
       {systemNavHeight > 0 && (
         <View style={{ height: systemNavHeight, backgroundColor: '#ffffff' }} />
@@ -256,67 +249,56 @@ const PremiumUserTabBar = ({ state, descriptors, navigation, insets }) => {
 };
 
 /**
- * ✅ Main Tab Navigator - Chooses correct tab bar based on user type
+ * Main Tab Navigator
  */
 const MainTabNavigator = () => {
   const insets = useSafeAreaInsets();
-  const [userType, setUserType] = useState('loading'); // 'loading', 'free', 'premium', 'admin'
+  const [userType, setUserType] = useState('loading');
 
   useEffect(() => {
     let isMounted = true;
 
     const determineUserType = async () => {
       try {
-        console.log('[MainTabNavigator] 🔍 Determining user type...');
+        console.log('[MainTab] 🔍 Determining user type...');
 
-        // Wait a bit for services to initialize
-        await new Promise(resolve => setTimeout(resolve, 200));
+        // Wait for AdMob service to finish loading
+        await new Promise(resolve => setTimeout(resolve, 300));
 
-        // Check admin status first
         const currentUser = FirebaseService.currentUser;
         if (currentUser && currentUser.email) {
           const AdminService = require('../services/AdminService').default;
           const isAdmin = await AdminService.checkAdminStatus(currentUser.email);
           
           if (isAdmin) {
-            console.log('[MainTabNavigator] ✅ User is ADMIN');
+            console.log('[MainTab] ✅ User is ADMIN');
             if (isMounted) setUserType('admin');
-            // Update AdMob service
             await AdMobService.setPremiumStatus(false, true);
             return;
           }
         }
 
-        // Check premium status
         const userStats = await FirebaseService.getUserStats();
         if (userStats && userStats.isPremium) {
-          console.log('[MainTabNavigator] ✅ User is PREMIUM');
+          console.log('[MainTab] ✅ User is PREMIUM');
           if (isMounted) setUserType('premium');
-          // Update AdMob service
           await AdMobService.setPremiumStatus(true, false);
           return;
         }
 
-        // Default to free user
-        console.log('[MainTabNavigator] ✅ User is FREE - will show ads');
+        console.log('[MainTab] ✅ User is FREE - will show ads');
         if (isMounted) setUserType('free');
-        // Update AdMob service
         await AdMobService.setPremiumStatus(false, false);
       } catch (error) {
-        console.error('[MainTabNavigator] Error determining user type:', error);
-        // Default to free on error
+        console.error('[MainTab] Error:', error);
         if (isMounted) setUserType('free');
       }
     };
 
     determineUserType();
 
-    // Listen for premium status changes
-    const unsubscribe = AdMobService.onPremiumStatusChange((isPremiumOrAdmin) => {
-      if (isMounted) {
-        // Re-check user type when status changes
-        determineUserType();
-      }
+    const unsubscribe = AdMobService.onPremiumStatusChange(() => {
+      if (isMounted) determineUserType();
     });
 
     return () => {
@@ -325,7 +307,6 @@ const MainTabNavigator = () => {
     };
   }, []);
 
-  // Show loading state while determining user type
   if (userType === 'loading') {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc' }}>
@@ -335,7 +316,6 @@ const MainTabNavigator = () => {
     );
   }
 
-  // Choose the appropriate tab bar based on user type
   const getTabBar = (props) => {
     if (userType === 'admin' || userType === 'premium') {
       return <PremiumUserTabBar {...props} insets={insets} />;
@@ -344,15 +324,11 @@ const MainTabNavigator = () => {
     }
   };
 
-  console.log('[MainTabNavigator] ✅ Rendering with user type:', userType);
-
   return (
     <View style={{ flex: 1 }}>
       <Tab.Navigator
         tabBar={getTabBar}
-        screenOptions={{
-          headerShown: false,
-        }}
+        screenOptions={{ headerShown: false }}
       >
         <Tab.Screen 
           name="Home" 
@@ -375,7 +351,7 @@ const MainTabNavigator = () => {
 };
 
 /**
- * ✅ FIXED: Main App Navigator with proper AdMob initialization
+ * ✅ FIXED: Main App Navigator
  */
 const AppNavigator = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(null);
@@ -389,34 +365,27 @@ const AppNavigator = () => {
     try {
       console.log('[AppNav] 🚀 Initializing app...');
       
-      // ✅ CRITICAL: Initialize AdMob early and wait for it
-      if (Platform.OS !== 'web') {
-        console.log('[AppNav] 📱 Initializing AdMob...');
-        try {
-          await AdMobService.initialize();
-          console.log('[AppNav] ✅ AdMob initialized');
-        } catch (error) {
-          console.log('[AppNav] ⚠️ AdMob init error (non-critical):', error.message);
-        }
-      }
+      // ✅ AdMob is now auto-initialized in its constructor
+      // Just wait a moment to ensure it's ready
+      await new Promise(resolve => setTimeout(resolve, 500));
+      console.log('[AppNav] ✅ AdMob ready');
       
-      // Initialize notifications in background
+      // Initialize notifications (non-blocking)
       NotificationService.initialize().catch(error => {
-        console.log('[AppNav] Notification init error (non-critical):', error.message);
+        console.log('[AppNav] Notification init warning:', error.message);
       });
       
-      // Set up auth listener
+      // Auth listener
       const unsubscribe = FirebaseService.onAuthStateChanged(async (user) => {
         console.log('[AppNav] 🔐 Auth state:', user ? 'Logged in' : 'Logged out');
         
         if (user) {
-          console.log('[AppNav] 👤 User logged in, preloading premium status...');
-          // Preload premium status
+          console.log('[AppNav] 👤 User logged in, reloading premium status...');
           try {
             await AdMobService.preloadPremiumStatus();
-            console.log('[AppNav] ✅ Premium status loaded');
+            console.log('[AppNav] ✅ Premium status reloaded');
           } catch (error) {
-            console.log('[AppNav] Premium status load error (non-critical):', error);
+            console.log('[AppNav] Premium status error (non-critical):', error);
           }
         }
         
@@ -428,7 +397,7 @@ const AppNavigator = () => {
 
       return unsubscribe;
     } catch (error) {
-      console.error('[AppNav] ❌ Initialization error:', error);
+      console.error('[AppNav] ❌ Init error:', error);
       setIsInitialized(true);
     }
   };
