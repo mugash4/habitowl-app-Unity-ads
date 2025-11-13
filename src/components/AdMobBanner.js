@@ -1,10 +1,13 @@
 /**
- * ✅ FIXED: AdMob Banner Component - Now displays correctly
- * Fixed race condition with status loading
+ * ✅ FULLY FIXED: AdMob Banner Component
+ * - Shows VISIBLE error messages on your phone screen
+ * - Shows banner for FREE users only
+ * - Shows clear status for debugging
  */
 
 import React, { useEffect, useState, useRef } from 'react';
 import { View, StyleSheet, Platform, Text } from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import adMobService from '../services/AdMobService';
 
 // Import AdMob components
@@ -15,16 +18,17 @@ try {
   const admobModule = require('react-native-google-mobile-ads');
   BannerAd = admobModule.BannerAd;
   BannerAdSize = admobModule.BannerAdSize;
-  console.log('[Banner] ✅ AdMob SDK components loaded');
+  console.log('[Banner] ✅ AdMob SDK loaded');
 } catch (error) {
-  console.log('[Banner] ℹ️ AdMob SDK not available (requires EAS build)');
+  console.log('[Banner] ℹ️ AdMob SDK not available');
 }
 
 const AdMobBanner = ({ style = {} }) => {
   const [shouldShowBanner, setShouldShowBanner] = useState(false);
   const [adUnitId, setAdUnitId] = useState(null);
   const [isReady, setIsReady] = useState(false);
-  const [debugInfo, setDebugInfo] = useState('Initializing...');
+  const [adStatus, setAdStatus] = useState('initializing'); // initializing, loading, loaded, error, hidden
+  const [errorMessage, setErrorMessage] = useState('');
   const isMounted = useRef(true);
   const initAttempted = useRef(false);
 
@@ -32,37 +36,55 @@ const AdMobBanner = ({ style = {} }) => {
     console.log('[Banner] 🎬 Component mounted');
     isMounted.current = true;
 
-    // Early exit for web or no SDK
-    if (Platform.OS === 'web' || !BannerAd || !BannerAdSize) {
-      console.log('[Banner] ℹ️ Skipping banner (web or no SDK)');
-      setIsReady(true);
-      return;
-    }
+    // ✅ FIX: Don't return early - let initialization happen
+    // Even on web, we want to show status messages
 
-    // ✅ FIX: Proper initialization with status subscription
     const initBanner = async () => {
       if (initAttempted.current) return;
       initAttempted.current = true;
 
       try {
-        console.log('[Banner] 🔄 Initializing banner...');
+        console.log('[Banner] 🔄 Initializing...');
+        setAdStatus('initializing');
         
-        // Wait for AdMobService to load status
+        // Check platform first
+        if (Platform.OS === 'web') {
+          console.log('[Banner] ℹ️ Web platform - no ads');
+          if (isMounted.current) {
+            setIsReady(true);
+            setAdStatus('hidden');
+            setShouldShowBanner(false);
+          }
+          return;
+        }
+
+        // Check SDK availability
+        if (!BannerAd || !BannerAdSize) {
+          console.log('[Banner] ⚠️ SDK not available');
+          if (isMounted.current) {
+            setIsReady(true);
+            setAdStatus('error');
+            setErrorMessage('AdMob SDK unavailable (needs EAS build)');
+            setShouldShowBanner(false);
+          }
+          return;
+        }
+
+        // Wait for AdMobService initialization
         await adMobService.waitForInitialization();
         
         if (!isMounted.current) return;
 
         // Subscribe to status changes
-        // ✅ This will be called immediately if status is already loaded
         const unsubscribe = adMobService.onStatusChange((status) => {
           if (!isMounted.current) return;
           
-          console.log('[Banner] 📢 Status received:', {
+          console.log('[Banner] 📢 Status:', {
             loaded: status.premiumStatusLoaded,
             premium: status.isPremium,
             admin: status.isAdmin,
-            sdkAvailable: status.sdkAvailable,
-            initialized: status.isInitialized
+            sdk: status.sdkAvailable,
+            init: status.isInitialized
           });
           
           const shouldShow = status.premiumStatusLoaded && 
@@ -70,30 +92,41 @@ const AdMobBanner = ({ style = {} }) => {
                             !status.isAdmin &&
                             status.sdkAvailable;
           
-          console.log('[Banner] 🎯 Decision:', shouldShow ? 'SHOW BANNER' : 'HIDE BANNER');
+          console.log('[Banner] 🎯', shouldShow ? 'SHOW BANNER' : 'HIDE BANNER');
           
           setShouldShowBanner(shouldShow);
           setIsReady(true);
-          setDebugInfo(`${shouldShow ? 'SHOW' : 'HIDE'}, P:${status.isPremium}, A:${status.isAdmin}`);
           
           if (shouldShow) {
+            setAdStatus('loading');
             const config = adMobService.getBannerConfig();
             if (config) {
               setAdUnitId(config.adUnitId);
-              console.log('[Banner] ✅ Banner configured with ad unit:', config.adUnitId);
+              console.log('[Banner] ✅ Banner configured:', config.adUnitId);
             } else {
-              console.log('[Banner] ⚠️ No banner config returned');
+              console.log('[Banner] ⚠️ No banner config');
+              setAdStatus('error');
+              setErrorMessage('Banner config unavailable');
+            }
+          } else {
+            setAdStatus('hidden');
+            // Show why banner is hidden
+            if (status.isPremium) {
+              setErrorMessage('Premium user - no ads');
+            } else if (status.isAdmin) {
+              setErrorMessage('Admin user - no ads');
             }
           }
         });
 
         return unsubscribe;
       } catch (error) {
-        console.log('[Banner] ❌ Error during init:', error);
+        console.log('[Banner] ❌ Init error:', error);
         if (isMounted.current) {
           setIsReady(true);
           setShouldShowBanner(false);
-          setDebugInfo(`Error: ${error.message}`);
+          setAdStatus('error');
+          setErrorMessage(`Init failed: ${error.message}`);
         }
       }
     };
@@ -101,7 +134,7 @@ const AdMobBanner = ({ style = {} }) => {
     const unsubscribePromise = initBanner();
 
     return () => {
-      console.log('[Banner] 🚪 Component unmounting');
+      console.log('[Banner] 🚪 Unmounting');
       isMounted.current = false;
       initAttempted.current = false;
       unsubscribePromise.then(unsub => {
@@ -110,35 +143,70 @@ const AdMobBanner = ({ style = {} }) => {
     };
   }, []);
 
-  // Web or SDK unavailable
-  if (Platform.OS === 'web' || !BannerAd || !BannerAdSize) {
-    return null;
-  }
+  // ✅ FIX: Always render something - never return null silently
+  // This way user can see what's happening on their phone
 
   // Still loading status
   if (!isReady) {
-    console.log('[Banner] ⏳ Still loading...');
     return (
       <View style={[styles.container, style]}>
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Loading ad...</Text>
+        <View style={styles.statusContainer}>
+          <Icon name="loading" size={16} color="#9ca3af" />
+          <Text style={styles.statusText}>Checking ad status...</Text>
         </View>
       </View>
     );
   }
 
-  // Premium/Admin user - NO BANNER
-  if (!shouldShowBanner) {
-    console.log('[Banner] 👑 Premium/Admin or no SDK - no banner');
-    return null;
+  // Hidden for Premium/Admin users
+  if (adStatus === 'hidden') {
+    // Premium/Admin users - show NOTHING (return null)
+    // But in development, show a message
+    if (__DEV__) {
+      return (
+        <View style={[styles.container, styles.hiddenContainer, style]}>
+          <Text style={styles.hiddenText}>
+            🚫 Banner Hidden: {errorMessage}
+          </Text>
+        </View>
+      );
+    }
+    return null; // Production - no banner for premium
   }
 
-  // Free user - SHOW BANNER
+  // Error state - SHOW VISIBLE ERROR
+  if (adStatus === 'error') {
+    return (
+      <View style={[styles.container, styles.errorContainer, style]}>
+        <Icon name="alert-circle" size={18} color="#ef4444" />
+        <Text style={styles.errorText}>{errorMessage || 'Ad error'}</Text>
+      </View>
+    );
+  }
+
+  // Free user - SHOW BANNER OR LOADING
   if (shouldShowBanner && adUnitId) {
-    console.log('[Banner] ✅ RENDERING BANNER AD with unit:', adUnitId);
+    console.log('[Banner] ✅ RENDERING BANNER:', adUnitId);
     
     return (
       <View style={[styles.container, style]}>
+        {/* Show loading overlay until ad loads */}
+        {adStatus === 'loading' && (
+          <View style={styles.loadingOverlay}>
+            <Icon name="loading" size={16} color="#6b7280" />
+            <Text style={styles.loadingText}>Loading ad...</Text>
+          </View>
+        )}
+        
+        {/* Show error if ad failed */}
+        {adStatus === 'error' && errorMessage && (
+          <View style={styles.adErrorContainer}>
+            <Icon name="alert-circle" size={14} color="#f59e0b" />
+            <Text style={styles.adErrorText}>{errorMessage}</Text>
+          </View>
+        )}
+        
+        {/* The actual banner ad */}
         <BannerAd
           unitId={adUnitId}
           size={BannerAdSize.BANNER}
@@ -146,49 +214,61 @@ const AdMobBanner = ({ style = {} }) => {
             requestNonPersonalizedAdsOnly: false,
           }}
           onAdLoaded={() => {
-            console.log('[Banner] ✅ AD LOADED AND DISPLAYED!');
+            console.log('[Banner] ✅ AD LOADED!');
+            if (isMounted.current) {
+              setAdStatus('loaded');
+              setErrorMessage('');
+            }
             adMobService.trackAdImpression('banner', 'loaded');
           }}
           onAdFailedToLoad={(error) => {
-            console.log('[Banner] ❌ Ad failed to load:');
-            console.log('[Banner]    Code:', error.code);
-            console.log('[Banner]    Message:', error.message);
-            console.log('[Banner]    Domain:', error.domain);
+            console.log('[Banner] ❌ Ad failed:', error.code, error.message);
             
-            // Show helpful error messages
+            let userMessage = '';
+            
+            // ✅ SHOW USER-FRIENDLY ERROR MESSAGES
             if (error.code === 3) {
-              console.log('[Banner] 💡 ERROR CODE 3 (No Fill) - This is NORMAL and means:');
-              console.log('[Banner]    1. Your ad unit is new (takes 24-48 hours to activate)');
-              console.log('[Banner]    2. No ads available for your location/device right now');
-              console.log('[Banner]    3. Ad inventory is low (try again later)');
-              console.log('[Banner]    4. If using REAL ad units on test device, add device to test devices list');
-              console.log('[Banner]    ✅ This does NOT mean your integration is broken!');
+              userMessage = '📭 No ads available right now';
+              console.log('[Banner] 💡 ERROR CODE 3 (No Fill) - NORMAL');
+              console.log('[Banner]    - New ad unit (24-48h activation)');
+              console.log('[Banner]    - No ads for your location');
+              console.log('[Banner]    - Low inventory (try later)');
+              console.log('[Banner]    ✅ Integration is OK!');
             } else if (error.code === 0) {
-              console.log('[Banner] 💡 ERROR CODE 0 - Internal error, usually temporary');
+              userMessage = '⚠️ Ad error (internal)';
             } else if (error.code === 1) {
-              console.log('[Banner] 💡 ERROR CODE 1 - Invalid ad unit ID, check your config');
+              userMessage = '❌ Invalid ad unit ID';
             } else if (error.code === 2) {
-              console.log('[Banner] 💡 ERROR CODE 2 - Network error, check internet connection');
+              userMessage = '🌐 Network error';
+            } else {
+              userMessage = `⚠️ Ad error (code ${error.code})`;
+            }
+            
+            if (isMounted.current) {
+              setAdStatus('error');
+              setErrorMessage(userMessage);
             }
           }}
           onAdOpened={() => {
-            console.log('[Banner] 👆 Ad clicked/opened');
+            console.log('[Banner] 👆 Ad clicked');
             adMobService.trackAdImpression('banner', 'click');
           }}
           onAdClosed={() => {
             console.log('[Banner] 🚪 Ad closed');
           }}
         />
-        {__DEV__ && (
-          <Text style={styles.debugText}>{debugInfo}</Text>
-        )}
       </View>
     );
   }
 
-  // Fallback
-  console.log('[Banner] ⚠️ Fallback - no banner shown (adUnitId:', adUnitId, ')');
-  return null;
+  // Fallback - show error
+  console.log('[Banner] ⚠️ Fallback state');
+  return (
+    <View style={[styles.container, styles.errorContainer, style]}>
+      <Icon name="information" size={16} color="#9ca3af" />
+      <Text style={styles.infoText}>Ad not configured</Text>
+    </View>
+  );
 };
 
 const styles = StyleSheet.create({
@@ -200,24 +280,83 @@ const styles = StyleSheet.create({
     backgroundColor: '#f9fafb',
     overflow: 'hidden',
   },
-  loadingContainer: {
+  statusContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+  },
+  statusText: {
+    fontSize: 12,
+    color: '#9ca3af',
+    fontWeight: '500',
+  },
+  hiddenContainer: {
+    backgroundColor: '#f3f4f6',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderStyle: 'dashed',
+  },
+  hiddenText: {
+    fontSize: 11,
+    color: '#9ca3af',
+    fontStyle: 'italic',
+  },
+  errorContainer: {
+    backgroundColor: '#fef2f2',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+  },
+  errorText: {
+    fontSize: 12,
+    color: '#ef4444',
+    fontWeight: '600',
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(249, 250, 251, 0.95)',
+    zIndex: 10,
+    gap: 8,
   },
   loadingText: {
     fontSize: 12,
-    color: '#9ca3af',
+    color: '#6b7280',
+    fontWeight: '500',
   },
-  debugText: {
-    fontSize: 8,
-    color: '#ef4444',
+  adErrorContainer: {
     position: 'absolute',
-    bottom: 0,
+    top: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    padding: 2,
+    bottom: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fffbeb',
+    zIndex: 10,
+    gap: 6,
+    paddingHorizontal: 12,
+  },
+  adErrorText: {
+    fontSize: 11,
+    color: '#f59e0b',
+    fontWeight: '600',
     textAlign: 'center',
+  },
+  infoText: {
+    fontSize: 11,
+    color: '#9ca3af',
   },
 });
 
