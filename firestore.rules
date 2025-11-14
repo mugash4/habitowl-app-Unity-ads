@@ -19,56 +19,61 @@ service cloud.firestore {
         get(/databases/$(database)/documents/admin_config/settings)
         .data.admin_emails.hasAny([request.auth.token.email]);
     }
+    
+    // ✅ NEW: Helper function to check if offer is system-created
+    function isSystemCreatedOffer() {
+      return request.resource.data.createdBy == 'auto_system';
+    }
 
-    // ✅ NEW: User consents - users can only read/write their own
+    // ✅ User consents - users can only read/write their own
     match /user_consents/{document} {
       allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
       allow write: if isSignedIn() && request.resource.data.userId == request.auth.uid;
     }
     
-    // ✅ NEW: Crash reports - authenticated users can write, admins can read
+    // ✅ Crash reports - authenticated users can write, admins can read
     match /crash_reports/{document} {
       allow write: if isSignedIn();
       allow read: if isSignedIn(); // Admins check done in app
     }
     
-    // ✅ NEW: Deletion requests - users can read/write their own
+    // ✅ Deletion requests - users can read/write their own
     match /deletion_requests/{document} {
       allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
       allow write: if isSignedIn() && request.resource.data.userId == request.auth.uid;
     }
     
-    // ✅ NEW: Data exports log - users can read their own
+    // ✅ Data exports log - users can read their own
     match /data_exports/{document} {
       allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
       allow write: if isSignedIn() && request.resource.data.userId == request.auth.uid;
     }
     
-    // ✅ NEW: Deleted users archive - admin only
+    // ✅ Deleted users archive - admin only
     match /deleted_users_archive/{document} {
       allow read, write: if isSignedIn(); // Admin check done in app
     }
     
-    // ✅ NEW: Admin actions log - admin only
+    // ✅ Admin actions log - admin only
     match /admin_actions/{document} {
       allow read, write: if isSignedIn(); // Admin check done in app
     }
 
-    // Existing rules - Users collection
+    // Users collection
     match /users/{userId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update: if isSignedIn() && (isOwner(resource.data.uid) || request.resource.data.uid == request.auth.uid || isAdmin());
     }
 
-    // Existing rules - Habits collection
+    // Habits collection
     match /habits/{habitId} {
       allow read: if isSignedIn() && (isOwner(resource.data.userId) || isAdmin());
       allow create: if isSignedIn();
       allow update, delete: if isSignedIn() && (isOwner(resource.data.userId) || isAdmin());
     }
 
-    // Existing rules - Admin config
+    // Admin config
     match /admin_config/settings {
       allow read: if isSignedIn();
       allow write: if isAdmin();
@@ -79,42 +84,45 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-     // ✅ COMPLETE FIX: Promo offers with proper statistics tracking
+    // ✅ ✅ ✅ FIXED: Promo offers - Admin OR automated system can create
     match /promo_offers/{offerId} {
-      // Anyone authenticated can read active offers
+      // ✅ Anyone authenticated can read active offers
       allow read: if isSignedIn();
       
-      // ✅ CRITICAL: Allow incremental updates for statistics tracking
-      // This allows impressions, clicks, conversions to increment atomically
+      // ✅ Allow tracking metric updates for any user OR admin full control
       allow update: if isSignedIn() && (
-        // Allow tracking metric updates
+        // Regular users can ONLY update tracking metrics
         request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['impressions', 'clicks', 'conversions', 'lastImpressionAt', 'lastClickAt', 'lastConversionAt'])
         ||
-        // Allow admin to update offer details
+        // Admins can update any field
         isAdmin()
       );
       
-      // System and admins can create new offers
-      allow create: if isSignedIn();
+      // ✅ ✅ ✅ PERFECT FIX: Admins OR automated system can create
+      // Automated system identifies itself with createdBy: 'auto_system'
+      allow create: if isSignedIn() && (
+        isAdmin() || 
+        isSystemCreatedOffer()
+      );
       
-      // Only admins can delete offers
+      // ✅ Only admins can delete offers
       allow delete: if isAdmin();
     }
   
-    // Existing rules - Analytics
+    // Analytics
     match /analytics/{analyticsId} {
       allow read: if isAdmin();
       allow create: if isSignedIn();
     }
 
-    // Existing rules - Referrals
+    // Referrals
     match /referrals/{referralId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
     }
 
-    // Existing rules - Support Tickets
+    // Support Tickets
     match /support_tickets/{ticketId} {
       allow create: if isSignedIn();
       allow read: if isSignedIn() && 
