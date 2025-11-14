@@ -1,11 +1,6 @@
 /**
  * Google AdMob Configuration
- * 
- * 🔧 SETUP INSTRUCTIONS:
- * 1. Go to: https://apps.admob.com/
- * 2. Create an app for your platform (Android/iOS)
- * 3. Create ad units for: Banner, Interstitial, Rewarded
- * 4. Replace the TEST IDs below with your REAL Ad Unit IDs
+ * ✅ Production-ready configuration
  */
 
 import { Platform } from 'react-native';
@@ -14,7 +9,6 @@ export const ADMOB_CONFIG = {
   // ==========================================
   // AD UNIT IDs
   // ==========================================
-  // 🔧 REPLACE THESE WITH YOUR REAL AD UNIT IDs FROM ADMOB DASHBOARD
   AD_UNIT_IDS: {
     // ANDROID Ad Unit IDs
     ANDROID: {
@@ -40,8 +34,8 @@ export const ADMOB_CONFIG = {
   // Max interstitials per session
   MAX_INTERSTITIALS_PER_SESSION: 5,
   
-  // Enable verbose logging (helpful for debugging)
-  DEBUG_MODE: true,
+  // ✅ PRODUCTION: Set to false to hide console logs
+  DEBUG_MODE: __DEV__, // Automatically false in production builds
   
   // Auto-load ads after initialization
   AUTO_LOAD_ADS: true,
@@ -50,7 +44,7 @@ export const ADMOB_CONFIG = {
   // REQUEST CONFIGURATION
   // ==========================================
   
-  // Ad request configuration (for GDPR, targeting, etc.)
+  // Ad request configuration
   getRequestOptions: () => ({
     requestNonPersonalizedAdsOnly: false,
   }),
