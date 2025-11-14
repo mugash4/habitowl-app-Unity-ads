@@ -3,7 +3,6 @@ import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
-import FCM_CONFIG from '../config/fcm-config';
 
 // Configure notification behavior
 Notifications.setNotificationHandler({
@@ -117,6 +116,7 @@ class NotificationService {
       console.log('✅ Notification permission granted');
 
       // Step 5: Get Expo Push Token (for remote notifications)
+      // ✅ UPDATED: Expo now uses FCM V1 automatically via EAS credentials
       try {
         const projectId =
           Constants?.expoConfig?.extra?.eas?.projectId ?? 
@@ -133,6 +133,7 @@ class NotificationService {
         
         token = tokenData.data;
         console.log('✅ Expo Push Token obtained:', token);
+        console.log('🔒 Using FCM V1 API via Expo Push Service');
         
         // Save token to AsyncStorage for later use
         await AsyncStorage.setItem('expoPushToken', token);
@@ -292,8 +293,8 @@ class NotificationService {
   }
 
   /**
-   * ✅ NEW: Send push notification using FCM
-   * This works even when app is closed
+   * ✅ UPDATED: Send push notification via Expo Push Service (FCM V1)
+   * Expo handles FCM V1 authentication automatically via EAS credentials
    */
   async sendPushNotification(userId, title, body, data = {}) {
     try {
@@ -315,7 +316,8 @@ class NotificationService {
         channelId: data.type || 'habit-reminders',
       };
 
-      const response = await fetch(FCM_CONFIG.EXPO_PUSH_API, {
+      // ✅ UPDATED: Using Expo Push API (which now uses FCM V1 internally)
+      const response = await fetch('https://exp.host/--/api/v2/push/send', {
         method: 'POST',
         headers: {
           Accept: 'application/json',
@@ -328,7 +330,7 @@ class NotificationService {
       const result = await response.json();
       
       if (result.data && result.data[0].status === 'ok') {
-        console.log('✅ Push notification sent successfully');
+        console.log('✅ Push notification sent successfully via FCM V1');
       } else {
         console.error('❌ Push notification failed:', result);
       }

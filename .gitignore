@@ -46,3 +46,6 @@ firestore-debug.log
 # Build
 build/
 dist/
+
+# FCM Service Account (NEVER commit this!)
+fcm-service-account.json
