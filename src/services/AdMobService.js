@@ -466,21 +466,24 @@ class AdMobService {
     return this.isInitialized && this.rewardedLoaded && this.rewardedAd !== null;
   }
 
-  /**
-   * ✅ Get banner config - Only returns if SDK is ready
+    /**
+   * ✅ Get banner config - Returns config even during initialization
    */
   getBannerConfig() {
     if (!BannerAdSize || Platform.OS === 'web') {
+      console.log('[AdMob] ⚠️ BannerAdSize not available or web platform');
       return null;
     }
 
-    if (!this.isInitialized) {
-      console.log('[AdMob] ⚠️ SDK not initialized - no banner config');
-      return null;
-    }
-
+    // ✅ CRITICAL FIX: Allow banner config even if SDK is still initializing
+    // The banner component will wait for initialization itself
     if (this.isPremium || this.isAdmin) {
       console.log('[AdMob] 👑 Premium/Admin - no banner');
+      return null;
+    }
+
+    if (!this.premiumStatusLoaded) {
+      console.log('[AdMob] ⏳ Premium status not loaded yet');
       return null;
     }
 
@@ -489,7 +492,7 @@ class AdMobService {
       size: BannerAdSize.BANNER,
     };
     
-    console.log('[AdMob] ✅ Banner config:', config.adUnitId);
+    console.log('[AdMob] ✅ Banner config available:', config.adUnitId);
     return config;
   }
 

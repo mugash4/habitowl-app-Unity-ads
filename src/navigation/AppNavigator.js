@@ -138,7 +138,7 @@ const FreeUserTabBar = ({ state, descriptors, navigation, insets }) => {
         })}
       </View>
 
-      {/* Banner Ad Container */}
+      {/* Banner Ad Container - Always reserve space for smooth UX */}
       <View style={{
         height: BANNER_AD_HEIGHT,
         width: '100%',
