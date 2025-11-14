@@ -1,6 +1,7 @@
 /**
  * Privacy Compliance Service
  * Handles GDPR, COPPA, and privacy-related functionality
+ * ✅ COMPLETE VERSION with all features
  */
 
 import { 
@@ -8,6 +9,7 @@ import {
   doc,
   addDoc,
   updateDoc,
+  deleteDoc,
   getDocs,
   query,
   where,
@@ -32,10 +34,10 @@ class PrivacyComplianceService {
         agreedToPrivacy: consentData.agreedToPrivacy || false,
         agreedToDataProcessing: consentData.agreedToDataProcessing || false,
         marketingConsent: consentData.marketingConsent || false,
-        age: consentData.age || null,
-        isOver13: consentData.isOver13 !== false, // Default to true for existing users
+        dateOfBirth: consentData.dateOfBirth || null,
+        isOver13: consentData.isOver13 !== false,
         consentDate: new Date().toISOString(),
-        ipAddress: null, // You can add IP detection if needed
+        ipAddress: null,
         platform: consentData.platform || 'mobile',
         appVersion: consentData.appVersion || '2.9.0'
       };
@@ -62,7 +64,13 @@ class PrivacyComplianceService {
       );
       
       const snapshot = await getDocs(q);
-      return !snapshot.empty;
+      const hasConsent = !snapshot.empty;
+      
+      if (hasConsent) {
+        await AsyncStorage.setItem('consent_recorded', 'true');
+      }
+      
+      return hasConsent;
     } catch (error) {
       console.error('Error checking consent:', error);
       return false;
@@ -78,7 +86,6 @@ class PrivacyComplianceService {
       const age = today.getFullYear() - dob.getFullYear();
       const monthDiff = today.getMonth() - dob.getMonth();
       
-      // Adjust age if birthday hasn't occurred this year yet
       const actualAge = monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate()) 
         ? age - 1 
         : age;
@@ -161,7 +168,6 @@ class PrivacyComplianceService {
       return true;
     } catch (error) {
       console.error('❌ Error reporting crash:', error);
-      // Don't throw - we don't want crash reporting to cause more crashes
       return false;
     }
   }
@@ -172,29 +178,31 @@ class PrivacyComplianceService {
     try {
       console.log('📦 Exporting data for user:', userId);
 
-      // Fetch all user data
-      const [userData, habits, analytics, referrals] = await Promise.all([
+      const [userData, habits, analytics, referrals, consents] = await Promise.all([
         this._getUserProfile(userId),
         this._getUserHabits(userId),
         this._getUserAnalytics(userId),
-        this._getUserReferrals(userId)
+        this._getUserReferrals(userId),
+        this._getUserConsents(userId)
       ]);
 
       const exportData = {
         exportDate: new Date().toISOString(),
         exportVersion: '1.0',
+        exportType: 'GDPR_Data_Portability',
         user: userData,
         habits: habits,
         analytics: analytics,
         referrals: referrals,
+        consents: consents,
         metadata: {
           totalHabits: habits.length,
           totalAnalyticsEvents: analytics.length,
           totalReferrals: referrals.length
-        }
+        },
+        note: 'This file contains all your personal data stored in HabitOwl app as per GDPR Article 20 (Right to Data Portability)'
       };
 
-      // Log export event
       await this._logDataExport(userId);
 
       return exportData;
@@ -209,7 +217,6 @@ class PrivacyComplianceService {
       const data = await this.exportUserData(userId);
       const jsonString = JSON.stringify(data, null, 2);
       
-      // Create file in app's cache directory
       const fileName = `HabitOwl_UserData_${userId}_${Date.now()}.json`;
       const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
       
@@ -219,7 +226,6 @@ class PrivacyComplianceService {
 
       console.log('✅ Data exported to file:', fileUri);
       
-      // Share the file
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(fileUri, {
           mimeType: 'application/json',
@@ -240,10 +246,8 @@ class PrivacyComplianceService {
       
       const habits = await this._getUserHabits(userId);
       
-      // CSV Header
       let csv = 'Habit Name,Description,Goal,Frequency,Category,Current Streak,Longest Streak,Total Completions,Created Date,Last Completed\n';
       
-      // CSV Rows
       habits.forEach(habit => {
         const row = [
           this._escapeCSV(habit.name || ''),
@@ -261,7 +265,6 @@ class PrivacyComplianceService {
         csv += row + '\n';
       });
 
-      // Create file
       const fileName = `HabitOwl_Habits_${userId}_${Date.now()}.csv`;
       const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
       
@@ -271,7 +274,6 @@ class PrivacyComplianceService {
 
       console.log('✅ Habits exported to CSV:', fileUri);
       
-      // Share the file
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(fileUri, {
           mimeType: 'text/csv',
@@ -297,9 +299,10 @@ class PrivacyComplianceService {
         userEmail: auth.currentUser?.email || 'unknown',
         reason: reason || 'User requested deletion',
         requestDate: new Date().toISOString(),
-        scheduledDeletionDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days grace period
+        scheduledDeletionDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
         status: 'pending',
-        dataExported: false
+        dataExported: false,
+        gracePeriodDays: 7
       };
 
       await addDoc(collection(db, 'deletion_requests'), deletionRequest);
@@ -309,7 +312,7 @@ class PrivacyComplianceService {
       return {
         success: true,
         gracePeriodDays: 7,
-        message: 'Your account will be deleted in 7 days. You can cancel this request anytime before then.'
+        message: 'Your account will be deleted in 7 days. You can cancel this request anytime before then from Settings.'
       };
     } catch (error) {
       console.error('❌ Error requesting account deletion:', error);
@@ -345,6 +348,36 @@ class PrivacyComplianceService {
     }
   }
 
+  async checkPendingDeletion(userId) {
+    try {
+      const q = query(
+        collection(db, 'deletion_requests'),
+        where('userId', '==', userId),
+        where('status', '==', 'pending')
+      );
+      
+      const snapshot = await getDocs(q);
+      
+      if (!snapshot.empty) {
+        const deletionData = snapshot.docs[0].data();
+        const scheduledDate = new Date(deletionData.scheduledDeletionDate);
+        const daysRemaining = Math.ceil((scheduledDate - new Date()) / (1000 * 60 * 60 * 24));
+        
+        return {
+          hasPendingDeletion: true,
+          daysRemaining: daysRemaining,
+          scheduledDate: deletionData.scheduledDeletionDate,
+          requestDate: deletionData.requestDate
+        };
+      }
+      
+      return { hasPendingDeletion: false };
+    } catch (error) {
+      console.error('Error checking pending deletion:', error);
+      return { hasPendingDeletion: false };
+    }
+  }
+
   // ===== HELPER METHODS =====
   
   async _getUserProfile(userId) {
@@ -356,8 +389,7 @@ class PrivacyComplianceService {
   async _getUserHabits(userId) {
     const q = query(
       collection(db, 'habits'), 
-      where('userId', '==', userId),
-      where('isActive', '==', true)
+      where('userId', '==', userId)
     );
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -381,6 +413,15 @@ class PrivacyComplianceService {
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   }
 
+  async _getUserConsents(userId) {
+    const q = query(
+      collection(db, 'user_consents'),
+      where('userId', '==', userId)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  }
+
   async _logDataExport(userId) {
     try {
       await addDoc(collection(db, 'data_exports'), {
@@ -395,6 +436,7 @@ class PrivacyComplianceService {
   }
 
   _escapeCSV(str) {
+    if (typeof str !== 'string') return str;
     if (str.includes(',') || str.includes('"') || str.includes('\n')) {
       return `"${str.replace(/"/g, '""')}"`;
     }

@@ -1,6 +1,6 @@
 /**
  * HabitOwl App Navigator
- * ✅ FIXED: Proper initialization sequence
+ * ✅ UPDATED: Added Consent Screen Flow
  */
 
 import React, { useEffect, useState } from 'react';
@@ -14,6 +14,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 // Screens
 import AuthScreen from '../screens/AuthScreen';
+import ConsentScreen from '../components/ConsentScreen';
 import HomeScreen from '../screens/HomeScreen';
 import CreateHabitScreen from '../screens/CreateHabitScreen';
 import EditHabitScreen from '../screens/EditHabitScreen';
@@ -30,6 +31,7 @@ import AdMobBanner from '../components/AdMobBanner';
 import FirebaseService from '../services/FirebaseService';
 import AdMobService from '../services/AdMobService';
 import NotificationService from '../services/NotificationService';
+import PrivacyComplianceService from '../services/PrivacyComplianceService';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -138,7 +140,7 @@ const FreeUserTabBar = ({ state, descriptors, navigation, insets }) => {
         })}
       </View>
 
-      {/* Banner Ad Container - Always reserve space for smooth UX */}
+      {/* Banner Ad Container */}
       <View style={{
         height: BANNER_AD_HEIGHT,
         width: '100%',
@@ -183,7 +185,6 @@ const PremiumUserTabBar = ({ state, descriptors, navigation, insets }) => {
       shadowRadius: 3,
       flexDirection: 'column',
     }}>
-      {/* Tab Icons */}
       <View style={{
         height: TAB_ICONS_HEIGHT,
         flexDirection: 'row',
@@ -245,7 +246,6 @@ const PremiumUserTabBar = ({ state, descriptors, navigation, insets }) => {
         })}
       </View>
 
-      {/* System Navigation Spacer */}
       {systemNavHeight > 0 && (
         <View style={{ height: systemNavHeight, backgroundColor: '#ffffff' }} />
       )}
@@ -265,14 +265,12 @@ const MainTabNavigator = () => {
 
     const determineUserType = async () => {
       try {
-        // ✅ FIX: Wait for Firebase user first
         const currentUser = FirebaseService.currentUser;
         if (!currentUser) {
           if (isMounted) setUserType('free');
           return;
         }
 
-        // Check admin status
         if (currentUser.email) {
           const AdminService = require('../services/AdminService').default;
           const isAdmin = await AdminService.checkAdminStatus(currentUser.email);
@@ -285,7 +283,6 @@ const MainTabNavigator = () => {
           }
         }
 
-        // Check premium status from Firestore
         const userStats = await FirebaseService.getUserStats();
         if (userStats && userStats.isPremium && isMounted) {
           console.log('[MainTab] 👑 User is PREMIUM');
@@ -294,7 +291,6 @@ const MainTabNavigator = () => {
           return;
         }
 
-        // Free user
         if (isMounted) {
           console.log('[MainTab] 💰 User is FREE');
           setUserType('free');
@@ -311,10 +307,8 @@ const MainTabNavigator = () => {
 
     determineUserType();
 
-    // Listen for premium status changes
     const unsubscribe = AdMobService.onPremiumStatusChange(() => {
       if (isMounted) {
-        // Re-determine user type when premium status changes
         determineUserType();
       }
     });
@@ -370,9 +364,11 @@ const MainTabNavigator = () => {
 
 /**
  * Main App Navigator
+ * ✅ UPDATED: Added Consent Screen Flow
  */
 const AppNavigator = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(null);
+  const [needsConsent, setNeedsConsent] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
@@ -383,26 +379,28 @@ const AppNavigator = () => {
     try {
       console.log('[AppNav] 🚀 Initializing app...');
       
-      // ✅ FIX: Wait for AdMob to finish async initialization
       await new Promise(resolve => setTimeout(resolve, 500));
       console.log('[AppNav] ✅ AdMob ready');
       
-      // Initialize notifications (non-blocking)
       NotificationService.initialize().catch(error => {
         console.log('[AppNav] Notification init warning:', error.message);
       });
       
-      // Auth listener
       const unsubscribe = FirebaseService.onAuthStateChanged(async (user) => {
         console.log('[AppNav] 🔐 Auth state:', user ? 'Logged in' : 'Logged out');
         
         if (user) {
           console.log('[AppNav] 👤 User logged in:', user.email);
-          // Premium status will be loaded by MainTabNavigator
+          
+          // ✅ NEW: Check if user has given consent
+          const hasConsent = await PrivacyComplianceService.hasUserGivenConsent(user.uid);
+          console.log('[AppNav] Consent status:', hasConsent);
+          
+          setNeedsConsent(!hasConsent);
         } else {
           console.log('[AppNav] 👤 User logged out');
-          // Reset premium status
           await AdMobService.setPremiumStatus(false, false);
+          setNeedsConsent(false);
         }
         
         setIsAuthenticated(!!user);
@@ -416,6 +414,11 @@ const AppNavigator = () => {
       console.error('[AppNav] ❌ Init error:', error);
       setIsInitialized(true);
     }
+  };
+
+  const handleConsentGiven = () => {
+    console.log('[AppNav] ✅ Consent given');
+    setNeedsConsent(false);
   };
 
   if (!isInitialized) {
@@ -437,7 +440,19 @@ const AppNavigator = () => {
               cardStyle: { backgroundColor: '#f8fafc' },
             }}
           >
-            {isAuthenticated ? (
+            {!isAuthenticated ? (
+              <Stack.Screen name="Auth" component={AuthScreen} />
+            ) : needsConsent ? (
+              <Stack.Screen name="Consent">
+                {(props) => (
+                  <ConsentScreen 
+                    {...props} 
+                    onConsentGiven={handleConsentGiven}
+                    userEmail={FirebaseService.currentUser?.email}
+                  />
+                )}
+              </Stack.Screen>
+            ) : (
               <>
                 <Stack.Screen 
                   name="Main" 
@@ -470,8 +485,6 @@ const AppNavigator = () => {
                   options={{ headerShown: false, presentation: 'modal' }} 
                 />
               </>
-            ) : (
-              <Stack.Screen name="Auth" component={AuthScreen} />
             )}
           </Stack.Navigator>
         </NavigationContainer>

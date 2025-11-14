@@ -368,6 +368,52 @@ const AdminScreen = ({ navigation }) => {
     );
   };
 
+  const handleViewDeletionRequests = async () => {
+    try {
+      const requests = await AdminService.getPendingDeletionRequests();
+      
+      if (requests.length === 0) {
+        Alert.alert('No Requests', 'There are no pending deletion requests.');
+        return;
+      }
+
+      const requestList = requests.map((req, index) => 
+        `${index + 1}. User: ${req.userEmail}\n   Requested: ${new Date(req.requestDate).toLocaleDateString()}\n   Reason: ${req.reason || 'Not specified'}`
+      ).join('\n\n');
+
+      Alert.alert(
+        `Pending Deletion Requests (${requests.length})`,
+        requestList,
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      Alert.alert('Error', 'Failed to load deletion requests: ' + error.message);
+    }
+  };
+
+  const handleViewCrashReports = async () => {
+    try {
+      const crashes = await AdminService.getCrashReports(10);
+      
+      if (crashes.length === 0) {
+        Alert.alert('No Crashes', 'No unresolved crash reports found. Great!');
+        return;
+      }
+
+      const crashList = crashes.map((crash, index) => 
+        `${index + 1}. ${crash.errorName || 'Error'}\n   Screen: ${crash.screen}\n   Time: ${new Date(crash.timestamp).toLocaleString()}\n   User: ${crash.userEmail}`
+      ).join('\n\n');
+
+      Alert.alert(
+        `Crash Reports (${crashes.length})`,
+        crashList,
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      Alert.alert('Error', 'Failed to load crash reports: ' + error.message);
+    }
+  };
+
   if (isVerifyingAdmin) {
     return (
       <View style={[styles.container, styles.centerContent]}>
@@ -465,6 +511,35 @@ const AdminScreen = ({ navigation }) => {
             description="View detailed user behavior analytics"
             left={(props) => <List.Icon {...props} icon="analytics" />}
             onPress={() => Alert.alert('Coming Soon', 'Advanced analytics dashboard coming soon')}
+          />
+        </Card>
+
+        {/* ✅ NEW: User Management Section */}
+        <Card style={styles.card}>
+          <List.Subheader>👥 User Management</List.Subheader>
+          
+          <List.Item
+            title="Pending Deletion Requests"
+            description="Review and process account deletion requests"
+            left={(props) => <List.Icon {...props} icon="delete-clock" color="#f59e0b" />}
+            right={(props) => <List.Icon {...props} icon="chevron-right" />}
+            onPress={() => handleViewDeletionRequests()}
+          />
+
+          <List.Item
+            title="Crash Reports"
+            description="View and resolve app crash reports"
+            left={(props) => <List.Icon {...props} icon="bug" color="#ef4444" />}
+            right={(props) => <List.Icon {...props} icon="chevron-right" />}
+            onPress={() => handleViewCrashReports()}
+          />
+
+          <List.Item
+            title="Suspend User Account"
+            description="Temporarily or permanently suspend users"
+            left={(props) => <List.Icon {...props} icon="account-lock" color="#dc2626" />}
+            right={(props) => <List.Icon {...props} icon="chevron-right" />}
+            onPress={() => Alert.alert('Coming Soon', 'User suspension interface coming soon')}
           />
         </Card>
 

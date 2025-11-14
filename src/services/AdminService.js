@@ -460,6 +460,262 @@ class AdminService {
       throw error;
     }
   }
+
+    // ===== USER MANAGEMENT & ACCOUNT SUSPENSION =====
+
+  async getPendingDeletionRequests() {
+    try {
+      const isAdmin = await this.isCurrentUserAdmin();
+      if (!isAdmin) {
+        throw new Error('Unauthorized: Admin access required');
+      }
+
+      const q = query(
+        collection(db, 'deletion_requests'),
+        where('status', '==', 'pending')
+      );
+      
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('AdminService: Error getting deletion requests:', error);
+      throw error;
+    }
+  }
+
+  async processAccountDeletion(userId, immediate = false) {
+    try {
+      const isAdmin = await this.isCurrentUserAdmin();
+      if (!isAdmin) {
+        throw new Error('Unauthorized: Admin access required');
+      }
+
+      console.log(`AdminService: Processing deletion for user: ${userId}`);
+
+      // Get user data first for archival
+      const userQuery = query(collection(db, 'users'), where('uid', '==', userId));
+      const userSnapshot = await getDocs(userQuery);
+      
+      if (userSnapshot.empty) {
+        throw new Error('User not found');
+      }
+
+      const userData = userSnapshot.docs[0].data();
+      const userDocRef = userSnapshot.docs[0].ref;
+
+      // Archive user data (for 90-day retention)
+      if (!immediate) {
+        await addDoc(collection(db, 'deleted_users_archive'), {
+          ...userData,
+          originalUserId: userId,
+          deletedAt: new Date().toISOString(),
+          deletedBy: auth.currentUser?.email || 'admin',
+          permanentDeletionDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
+          retentionReason: 'Legal compliance - 90 day retention'
+        });
+      }
+
+      // Delete user habits
+      const habitsQuery = query(
+        collection(db, 'habits'),
+        where('userId', '==', userId)
+      );
+      const habitsSnapshot = await getDocs(habitsQuery);
+      const habitsDeletion = habitsSnapshot.docs.map(doc => deleteDoc(doc.ref));
+
+      // Delete user analytics
+      const analyticsQuery = query(
+        collection(db, 'analytics'),
+        where('userId', '==', userId)
+      );
+      const analyticsSnapshot = await getDocs(analyticsQuery);
+      const analyticsDeletion = analyticsSnapshot.docs.map(doc => deleteDoc(doc.ref));
+
+      // Delete referrals
+      const referralsQuery = query(
+        collection(db, 'referrals'),
+        where('referrerId', '==', userId)
+      );
+      const referralsSnapshot = await getDocs(referralsQuery);
+      const referralsDeletion = referralsSnapshot.docs.map(doc => deleteDoc(doc.ref));
+
+      // Execute all deletions
+      await Promise.all([
+        ...habitsDeletion,
+        ...analyticsDeletion,
+        ...referralsDeletion
+      ]);
+
+      // Delete user document
+      await deleteDoc(userDocRef);
+
+      // Update deletion request status
+      const deletionRequestQuery = query(
+        collection(db, 'deletion_requests'),
+        where('userId', '==', userId),
+        where('status', '==', 'pending')
+      );
+      const deletionSnapshot = await getDocs(deletionRequestQuery);
+      if (!deletionSnapshot.empty) {
+        await updateDoc(deletionSnapshot.docs[0].ref, {
+          status: 'completed',
+          completedAt: new Date().toISOString(),
+          completedBy: auth.currentUser?.email || 'admin'
+        });
+      }
+
+      console.log(`AdminService: User ${userId} deleted successfully`);
+      return {
+        success: true,
+        archived: !immediate,
+        deletedRecords: {
+          habits: habitsSnapshot.size,
+          analytics: analyticsSnapshot.size,
+          referrals: referralsSnapshot.size
+        }
+      };
+    } catch (error) {
+      console.error('AdminService: Error processing account deletion:', error);
+      throw error;
+    }
+  }
+
+  async suspendUserAccount(userId, reason, durationDays = null) {
+    try {
+      const isAdmin = await this.isCurrentUserAdmin();
+      if (!isAdmin) {
+        throw new Error('Unauthorized: Admin access required');
+      }
+
+      console.log(`AdminService: Suspending user: ${userId}`);
+
+      const userQuery = query(collection(db, 'users'), where('uid', '==', userId));
+      const userSnapshot = await getDocs(userQuery);
+      
+      if (userSnapshot.empty) {
+        throw new Error('User not found');
+      }
+
+      const userDocRef = userSnapshot.docs[0].ref;
+      const suspensionData = {
+        suspended: true,
+        suspensionReason: reason,
+        suspendedAt: new Date().toISOString(),
+        suspendedBy: auth.currentUser?.email || 'admin',
+        suspensionType: durationDays ? 'temporary' : 'permanent'
+      };
+
+      if (durationDays) {
+        suspensionData.suspensionEndsAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString();
+      }
+
+      await updateDoc(userDocRef, suspensionData);
+
+      // Log suspension event
+      await addDoc(collection(db, 'admin_actions'), {
+        actionType: 'account_suspension',
+        userId: userId,
+        reason: reason,
+        durationDays: durationDays,
+        performedBy: auth.currentUser?.email || 'admin',
+        performedAt: new Date().toISOString()
+      });
+
+      console.log(`AdminService: User ${userId} suspended successfully`);
+      return { success: true, suspended: true };
+    } catch (error) {
+      console.error('AdminService: Error suspending user account:', error);
+      throw error;
+    }
+  }
+
+  async unsuspendUserAccount(userId) {
+    try {
+      const isAdmin = await this.isCurrentUserAdmin();
+      if (!isAdmin) {
+        throw new Error('Unauthorized: Admin access required');
+      }
+
+      console.log(`AdminService: Unsuspending user: ${userId}`);
+
+      const userQuery = query(collection(db, 'users'), where('uid', '==', userId));
+      const userSnapshot = await getDocs(userQuery);
+      
+      if (userSnapshot.empty) {
+        throw new Error('User not found');
+      }
+
+      const userDocRef = userSnapshot.docs[0].ref;
+      await updateDoc(userDocRef, {
+        suspended: false,
+        suspensionReason: null,
+        unsuspendedAt: new Date().toISOString(),
+        unsuspendedBy: auth.currentUser?.email || 'admin'
+      });
+
+      // Log unsuspension event
+      await addDoc(collection(db, 'admin_actions'), {
+        actionType: 'account_unsuspension',
+        userId: userId,
+        performedBy: auth.currentUser?.email || 'admin',
+        performedAt: new Date().toISOString()
+      });
+
+      console.log(`AdminService: User ${userId} unsuspended successfully`);
+      return { success: true, suspended: false };
+    } catch (error) {
+      console.error('AdminService: Error unsuspending user account:', error);
+      throw error;
+    }
+  }
+
+  async getCrashReports(limit = 50) {
+    try {
+      const isAdmin = await this.isCurrentUserAdmin();
+      if (!isAdmin) {
+        throw new Error('Unauthorized: Admin access required');
+      }
+
+      const q = query(
+        collection(db, 'crash_reports'),
+        where('resolved', '==', false)
+      );
+      
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })).slice(0, limit);
+    } catch (error) {
+      console.error('AdminService: Error getting crash reports:', error);
+      return [];
+    }
+  }
+
+  async markCrashResolved(crashId) {
+    try {
+      const isAdmin = await this.isCurrentUserAdmin();
+      if (!isAdmin) {
+        throw new Error('Unauthorized: Admin access required');
+      }
+
+      const crashRef = doc(db, 'crash_reports', crashId);
+      await updateDoc(crashRef, {
+        resolved: true,
+        resolvedAt: new Date().toISOString(),
+        resolvedBy: auth.currentUser?.email || 'admin'
+      });
+
+      return { success: true };
+    } catch (error) {
+      console.error('AdminService: Error marking crash as resolved:', error);
+      throw error;
+    }
+  }
+
   
 }
 
