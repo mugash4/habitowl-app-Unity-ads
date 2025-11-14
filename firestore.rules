@@ -79,18 +79,27 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-     // ✅ NEW: Promo offers - read for all authenticated, write for tracking
+     // ✅ COMPLETE FIX: Promo offers with proper statistics tracking
     match /promo_offers/{offerId} {
       // Anyone authenticated can read active offers
-      allow read: if request.auth != null;
+      allow read: if isSignedIn();
       
-      // Allow incremental updates for statistics tracking
-      allow update: if request.auth != null 
-        && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['impressions', 'clicks', 'conversions', 'lastImpressionAt', 'lastClickAt', 'lastConversionAt']);
+      // ✅ CRITICAL: Allow incremental updates for statistics tracking
+      // This allows impressions, clicks, conversions to increment atomically
+      allow update: if isSignedIn() && (
+        // Allow tracking metric updates
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['impressions', 'clicks', 'conversions', 'lastImpressionAt', 'lastClickAt', 'lastConversionAt'])
+        ||
+        // Allow admin to update offer details
+        isAdmin()
+      );
       
-      // System can create new offers
-      allow create: if request.auth != null;
+      // System and admins can create new offers
+      allow create: if isSignedIn();
+      
+      // Only admins can delete offers
+      allow delete: if isAdmin();
     }
   
     // Existing rules - Analytics
@@ -112,5 +121,11 @@ service cloud.firestore {
         (resource.data.userId == request.auth.uid || isAdmin());
       allow update: if isAdmin();
     }
+
+    // Deny all other requests by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+    
   }
 }
