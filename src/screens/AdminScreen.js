@@ -510,8 +510,10 @@ const AdminScreen = ({ navigation }) => {
             title="User Analytics"
             description="View detailed user behavior analytics"
             left={(props) => <List.Icon {...props} icon="analytics" />}
-            onPress={() => Alert.alert('Coming Soon', 'Advanced analytics dashboard coming soon')}
+            right={(props) => <List.Icon {...props} icon="chevron-right" />}
+            onPress={() => navigation.navigate('UserAnalytics')}
           />
+
         </Card>
 
         {/* ✅ NEW: User Management Section */}
@@ -539,8 +541,9 @@ const AdminScreen = ({ navigation }) => {
             description="Temporarily or permanently suspend users"
             left={(props) => <List.Icon {...props} icon="account-lock" color="#dc2626" />}
             right={(props) => <List.Icon {...props} icon="chevron-right" />}
-            onPress={() => Alert.alert('Coming Soon', 'User suspension interface coming soon')}
+            onPress={() => navigation.navigate('SuspendUser')}
           />
+
         </Card>
 
         <Card style={styles.card}>

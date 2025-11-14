@@ -23,6 +23,9 @@ import SettingsScreen from '../screens/SettingsScreen';
 import PremiumScreen from '../screens/PremiumScreen';
 import AdminScreen from '../screens/AdminScreen';
 import AboutScreen from '../screens/AboutScreen';
+import SuspendUserScreen from '../screens/SuspendUserScreen';
+import UserAnalyticsScreen from '../screens/UserAnalyticsScreen';
+
 
 // Components
 import AdMobBanner from '../components/AdMobBanner';
@@ -483,6 +486,16 @@ const AppNavigator = () => {
                   name="About" 
                   component={AboutScreen} 
                   options={{ headerShown: false, presentation: 'modal' }} 
+                />
+                <Stack.Screen 
+                  name="SuspendUser" 
+                  component={SuspendUserScreen} 
+                  options={{ headerShown: false }}
+                />
+                <Stack.Screen 
+                  name="UserAnalytics" 
+                  component={UserAnalyticsScreen} 
+                  options={{ headerShown: false }}
                 />
               </>
             )}

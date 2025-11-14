@@ -24,6 +24,13 @@ service cloud.firestore {
     function isSystemCreatedOffer() {
       return request.resource.data.createdBy == 'auto_system';
     }
+    
+    // ✅ NEW: Helper function to check if update is ONLY tracking metrics
+    function isTrackingUpdate() {
+      let affectedKeys = request.resource.data.diff(resource.data).affectedKeys();
+      // Allow ONLY these specific fields to be updated
+      return affectedKeys.hasOnly(['impressions', 'clicks', 'conversions', 'lastImpressionAt', 'lastClickAt', 'lastConversionAt']);
+    }
 
     // ✅ User consents - users can only read/write their own
     match /user_consents/{document} {
@@ -31,16 +38,17 @@ service cloud.firestore {
       allow write: if isSignedIn() && request.resource.data.userId == request.auth.uid;
     }
     
-    // ✅ Crash reports - authenticated users can write, admins can read
+    // ✅ Crash reports - authenticated users can write, admins can read all
     match /crash_reports/{document} {
       allow write: if isSignedIn();
-      allow read: if isSignedIn(); // Admins check done in app
+      allow read: if isAdmin();
     }
     
-    // ✅ Deletion requests - users can read/write their own
+    // ✅ FIXED: Deletion requests - users can read/write their own, ADMINS can read ALL
     match /deletion_requests/{document} {
-      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
       allow write: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin();
     }
     
     // ✅ Data exports log - users can read their own
@@ -51,12 +59,12 @@ service cloud.firestore {
     
     // ✅ Deleted users archive - admin only
     match /deleted_users_archive/{document} {
-      allow read, write: if isSignedIn(); // Admin check done in app
+      allow read, write: if isAdmin();
     }
     
     // ✅ Admin actions log - admin only
     match /admin_actions/{document} {
-      allow read, write: if isSignedIn(); // Admin check done in app
+      allow read, write: if isAdmin();
     }
 
     // Users collection
@@ -84,23 +92,20 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // ✅ ✅ ✅ FIXED: Promo offers - Admin OR automated system can create
+    // ✅ ✅ ✅ CRITICAL FIX: Promo offers with better tracking update rules
     match /promo_offers/{offerId} {
       // ✅ Anyone authenticated can read active offers
       allow read: if isSignedIn();
       
-      // ✅ Allow tracking metric updates for any user OR admin full control
+      // ✅ ✅ ✅ FIXED: Better rule for tracking updates that works with increment()
       allow update: if isSignedIn() && (
-        // Regular users can ONLY update tracking metrics
-        request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['impressions', 'clicks', 'conversions', 'lastImpressionAt', 'lastClickAt', 'lastConversionAt'])
-        ||
-        // Admins can update any field
+        // Check if ONLY tracking fields are being modified
+        isTrackingUpdate() ||
+        // OR user is admin (can update anything)
         isAdmin()
       );
       
-      // ✅ ✅ ✅ PERFECT FIX: Admins OR automated system can create
-      // Automated system identifies itself with createdBy: 'auto_system'
+      // ✅ Admins OR automated system can create
       allow create: if isSignedIn() && (
         isAdmin() || 
         isSystemCreatedOffer()

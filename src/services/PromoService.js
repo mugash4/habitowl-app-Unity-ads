@@ -311,8 +311,8 @@ class PromoService {
     }
   }
 
-  /**
-   * ✅ FIXED: Track offer impression with proper Firestore increment
+    /**
+   * ✅ FIXED: Track offer impression with DETAILED ERROR LOGGING
    */
   async trackOfferImpression(offerId) {
     if (!offerId) {
@@ -325,13 +325,37 @@ class PromoService {
       
       const offerRef = doc(db, 'promo_offers', offerId);
       
+      // ✅ CRITICAL: Log current values BEFORE update
+      try {
+        const currentDoc = await getDoc(offerRef);
+        if (currentDoc.exists()) {
+          const data = currentDoc.data();
+          console.log('Current impressions BEFORE update:', data.impressions || 0);
+        }
+      } catch (err) {
+        console.log('Could not read current value:', err.message);
+      }
+      
       // ✅ CRITICAL: Use increment() for atomic updates
       await updateDoc(offerRef, {
         impressions: increment(1),
         lastImpressionAt: Timestamp.now()
       });
       
-      console.log('✅ Impression tracked successfully');
+      console.log('✅ Impression tracked successfully!');
+      console.log('   Offer ID:', offerId);
+      console.log('   Incremented impressions by 1');
+      
+      // Verify the update
+      try {
+        const updatedDoc = await getDoc(offerRef);
+        if (updatedDoc.exists()) {
+          const data = updatedDoc.data();
+          console.log('✅ VERIFIED: New impressions value:', data.impressions || 0);
+        }
+      } catch (err) {
+        console.log('Could not verify update:', err.message);
+      }
       
       // Track in analytics
       if (FirebaseService?.trackEvent) {
@@ -342,13 +366,24 @@ class PromoService {
       
       return true;
     } catch (error) {
-      console.error('❌ Track impression error:', error);
+      console.error('❌❌❌ IMPRESSION TRACKING FAILED ❌❌❌');
+      console.error('Error code:', error.code);
+      console.error('Error message:', error.message);
+      console.error('Full error:', JSON.stringify(error, null, 2));
+      
+      // Check for permission denied
+      if (error.code === 'permission-denied') {
+        console.error('🚫 PERMISSION DENIED: Firestore rules are blocking this update!');
+        console.error('   Check your firestore.rules file');
+        console.error('   Make sure isTrackingUpdate() function allows impressions field');
+      }
+      
       return false;
     }
   }
 
   /**
-   * ✅ FIXED: Track offer click with proper Firestore increment
+   * ✅ FIXED: Track offer click with DETAILED ERROR LOGGING
    */
   async trackOfferClick(offerId) {
     if (!offerId) {
@@ -361,13 +396,37 @@ class PromoService {
       
       const offerRef = doc(db, 'promo_offers', offerId);
       
+      // ✅ CRITICAL: Log current values BEFORE update
+      try {
+        const currentDoc = await getDoc(offerRef);
+        if (currentDoc.exists()) {
+          const data = currentDoc.data();
+          console.log('Current clicks BEFORE update:', data.clicks || 0);
+        }
+      } catch (err) {
+        console.log('Could not read current value:', err.message);
+      }
+      
       // ✅ CRITICAL: Use increment() for atomic updates
       await updateDoc(offerRef, {
         clicks: increment(1),
         lastClickAt: Timestamp.now()
       });
       
-      console.log('✅ Click tracked successfully');
+      console.log('✅ Click tracked successfully!');
+      console.log('   Offer ID:', offerId);
+      console.log('   Incremented clicks by 1');
+      
+      // Verify the update
+      try {
+        const updatedDoc = await getDoc(offerRef);
+        if (updatedDoc.exists()) {
+          const data = updatedDoc.data();
+          console.log('✅ VERIFIED: New clicks value:', data.clicks || 0);
+        }
+      } catch (err) {
+        console.log('Could not verify update:', err.message);
+      }
       
       // Track in analytics
       if (FirebaseService?.trackEvent) {
@@ -378,13 +437,24 @@ class PromoService {
       
       return true;
     } catch (error) {
-      console.error('❌ Track click error:', error);
+      console.error('❌❌❌ CLICK TRACKING FAILED ❌❌❌');
+      console.error('Error code:', error.code);
+      console.error('Error message:', error.message);
+      console.error('Full error:', JSON.stringify(error, null, 2));
+      
+      // Check for permission denied
+      if (error.code === 'permission-denied') {
+        console.error('🚫 PERMISSION DENIED: Firestore rules are blocking this update!');
+        console.error('   Check your firestore.rules file');
+        console.error('   Make sure isTrackingUpdate() function allows clicks field');
+      }
+      
       return false;
     }
   }
 
   /**
-   * ✅ FIXED: Track offer conversion with proper Firestore increment
+   * ✅ FIXED: Track offer conversion with DETAILED ERROR LOGGING
    */
   async trackOfferConversion(offerId) {
     if (!offerId) {
@@ -397,13 +467,37 @@ class PromoService {
       
       const offerRef = doc(db, 'promo_offers', offerId);
       
+      // ✅ CRITICAL: Log current values BEFORE update
+      try {
+        const currentDoc = await getDoc(offerRef);
+        if (currentDoc.exists()) {
+          const data = currentDoc.data();
+          console.log('Current conversions BEFORE update:', data.conversions || 0);
+        }
+      } catch (err) {
+        console.log('Could not read current value:', err.message);
+      }
+      
       // ✅ CRITICAL: Use increment() for atomic updates
       await updateDoc(offerRef, {
         conversions: increment(1),
         lastConversionAt: Timestamp.now()
       });
       
-      console.log('✅ Conversion tracked successfully');
+      console.log('✅ Conversion tracked successfully!');
+      console.log('   Offer ID:', offerId);
+      console.log('   Incremented conversions by 1');
+      
+      // Verify the update
+      try {
+        const updatedDoc = await getDoc(offerRef);
+        if (updatedDoc.exists()) {
+          const data = updatedDoc.data();
+          console.log('✅ VERIFIED: New conversions value:', data.conversions || 0);
+        }
+      } catch (err) {
+        console.log('Could not verify update:', err.message);
+      }
       
       // Track in analytics
       if (FirebaseService?.trackEvent) {
@@ -414,7 +508,18 @@ class PromoService {
       
       return true;
     } catch (error) {
-      console.error('❌ Track conversion error:', error);
+      console.error('❌❌❌ CONVERSION TRACKING FAILED ❌❌❌');
+      console.error('Error code:', error.code);
+      console.error('Error message:', error.message);
+      console.error('Full error:', JSON.stringify(error, null, 2));
+      
+      // Check for permission denied
+      if (error.code === 'permission-denied') {
+        console.error('🚫 PERMISSION DENIED: Firestore rules are blocking this update!');
+        console.error('   Check your firestore.rules file');
+        console.error('   Make sure isTrackingUpdate() function allows conversions field');
+      }
+      
       return false;
     }
   }
