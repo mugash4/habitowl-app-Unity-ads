@@ -1,7 +1,7 @@
 /**
  * PromoService - Automatic Promotional Offer Management
- * FIXED: Proper Firestore increment usage for accurate statistics tracking
- * Version: 5.0 - Statistics tracking fixed
+ * FIXED: Proper Firestore increment usage + error handling
+ * Version: 6.0 - Production Ready
  */
 
 import { 
@@ -14,7 +14,8 @@ import {
   where,
   orderBy,
   limit,
-  increment
+  increment,
+  Timestamp
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
@@ -77,9 +78,10 @@ class PromoService {
       }
     ];
     
+    // Delayed initialization to avoid blocking app startup
     setTimeout(() => {
       this.initializePromoSystemBackground();
-    }, 1000);
+    }, 2000);
   }
 
   /**
@@ -87,7 +89,6 @@ class PromoService {
    */
   async initializePromoSystemBackground() {
     if (this.isInitializing || this.isInitialized) {
-      console.log('⚠️ PromoService: Already initializing or initialized');
       return;
     }
 
@@ -97,10 +98,11 @@ class PromoService {
       console.log('🔄 PromoService: Background init starting...');
       
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Init timeout after 8s')), 8000)
+        setTimeout(() => reject(new Error('Init timeout')), 10000)
       );
 
       const initPromise = (async () => {
+        // Check if collection exists and has active offers
         const needsUpdate = await this.checkIfOffersNeedUpdate();
         
         if (needsUpdate) {
@@ -110,7 +112,10 @@ class PromoService {
           console.log('✅ PromoService: Active offers exist');
         }
         
-        this.cleanupExpiredOffers().catch(() => {});
+        // Cleanup expired offers in background
+        this.cleanupExpiredOffers().catch(err => 
+          console.log('Cleanup error (non-critical):', err.message)
+        );
         
         return true;
       })();
@@ -118,10 +123,10 @@ class PromoService {
       await Promise.race([initPromise, timeoutPromise]);
       
       this.isInitialized = true;
-      console.log('✅ PromoService: Background init complete');
+      console.log('✅ PromoService: Initialized successfully');
     } catch (error) {
-      console.log('⚠️ PromoService: Background init error (non-critical):', error.message);
-      this.isInitialized = true;
+      console.log('⚠️ PromoService: Init error (non-critical):', error.message);
+      this.isInitialized = true; // Mark as initialized even on error to prevent retries
     } finally {
       this.isInitializing = false;
     }
@@ -132,7 +137,7 @@ class PromoService {
    */
   async checkIfOffersNeedUpdate() {
     try {
-      const now = new Date().toISOString();
+      const now = Timestamp.now();
       
       const q = query(
         collection(db, 'promo_offers'),
@@ -144,10 +149,15 @@ class PromoService {
       const snapshot = await getDocs(q);
       const needsUpdate = snapshot.empty;
       
-      console.log(`PromoService: Active offers check - ${needsUpdate ? 'NEEDS UPDATE' : 'OK'}`);
+      console.log(`PromoService: Active offers - ${needsUpdate ? 'NEEDS UPDATE' : 'EXISTS'}`);
       return needsUpdate;
     } catch (error) {
-      console.log('PromoService: Check offers error:', error.message);
+      console.error('PromoService: Check offers error:', error);
+      // If collection doesn't exist, we need to create offers
+      if (error.code === 'permission-denied' || error.message.includes('index')) {
+        console.log('⚠️ Collection may not exist or missing index. Will create offer.');
+        return true;
+      }
       return false;
     }
   }
@@ -172,20 +182,25 @@ class PromoService {
         discount: template.discount,
         type: template.type,
         isActive: true,
-        createdAt: now.toISOString(),
-        expiresAt: expiresAt.toISOString(),
+        createdAt: Timestamp.fromDate(now),
+        expiresAt: Timestamp.fromDate(expiresAt),
         createdBy: 'auto_system',
         impressions: 0,
         clicks: 0,
-        conversions: 0
+        conversions: 0,
+        lastImpressionAt: null,
+        lastClickAt: null,
+        lastConversionAt: null
       };
       
       await setDoc(doc(db, 'promo_offers', offerId), offerData);
       
       console.log('✅ PromoService: Created offer:', template.title);
+      console.log('   Duration:', template.durationDays, 'days');
       console.log('   Expires:', expiresAt.toLocaleDateString());
       
-      if (FirebaseService && FirebaseService.trackEvent) {
+      // Track event
+      if (FirebaseService?.trackEvent) {
         FirebaseService.trackEvent('promo_offer_auto_created', {
           offer_type: template.type,
           duration_days: template.durationDays
@@ -194,7 +209,7 @@ class PromoService {
       
       return offerData;
     } catch (error) {
-      console.log('❌ PromoService: Create offer error:', error.message);
+      console.error('❌ PromoService: Create offer error:', error);
       throw error;
     }
   }
@@ -204,7 +219,7 @@ class PromoService {
    */
   async cleanupExpiredOffers() {
     try {
-      const now = new Date().toISOString();
+      const now = Timestamp.now();
       
       const q = query(
         collection(db, 'promo_offers'),
@@ -215,22 +230,23 @@ class PromoService {
       const snapshot = await getDocs(q);
       
       if (!snapshot.empty) {
-        console.log(`🧹 PromoService: Cleaning up ${snapshot.size} expired offers`);
+        console.log(`🧹 PromoService: Cleaning ${snapshot.size} expired offers`);
         
         const updatePromises = snapshot.docs.map(docSnapshot =>
           updateDoc(doc(db, 'promo_offers', docSnapshot.id), {
             isActive: false,
-            deactivatedAt: now,
+            deactivatedAt: Timestamp.now(),
             deactivatedBy: 'auto_cleanup'
           })
         );
         
         await Promise.all(updatePromises);
+        console.log('✅ Cleanup completed');
       }
       
       return true;
     } catch (error) {
-      console.log('PromoService: Cleanup error:', error.message);
+      console.error('PromoService: Cleanup error:', error);
       return false;
     }
   }
@@ -238,14 +254,14 @@ class PromoService {
   /**
    * Get personalized offer for user
    */
-  async getPersonalizedOffer(userStats) {
+  async getPersonalizedOffer(userStats = {}) {
     try {
-      console.log('PromoService: Fetching personalized offer...');
+      console.log('📋 PromoService: Fetching personalized offer...');
       
-      const now = new Date().toISOString();
+      const now = Timestamp.now();
       
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Offer fetch timeout')), 2500)
+        setTimeout(() => reject(new Error('Fetch timeout')), 3000)
       );
       
       const fetchPromise = (async () => {
@@ -265,46 +281,58 @@ class PromoService {
             ...snapshot.docs[0].data()
           };
           
+          // Convert Firestore Timestamps to ISO strings for easier handling
+          if (offer.createdAt?.toDate) {
+            offer.createdAt = offer.createdAt.toDate().toISOString();
+          }
+          if (offer.expiresAt?.toDate) {
+            offer.expiresAt = offer.expiresAt.toDate().toISOString();
+          }
+          
           console.log('✅ PromoService: Found offer:', offer.title);
           
-          // Track impression in background
-          this.trackOfferImpression(offer.id).catch((error) => {
-            console.log('⚠️ Impression tracking failed:', error.message);
-          });
+          // Track impression in background (non-blocking)
+          this.trackOfferImpression(offer.id).catch(err =>
+            console.log('Impression tracking failed:', err.message)
+          );
           
           return offer;
         }
         
-        console.log('ℹ️ PromoService: No active offers in database');
+        console.log('ℹ️ PromoService: No active offers available');
         return null;
       })();
       
       return await Promise.race([fetchPromise, timeoutPromise]);
     } catch (error) {
-      console.log('PromoService: Get offer error:', error.message);
+      console.error('PromoService: Get offer error:', error);
       return null;
     }
   }
 
   /**
-   * ✅ FIXED: Track offer impression with proper Firestore increment
+   * ✅ Track offer impression with proper Firestore increment
    */
   async trackOfferImpression(offerId) {
+    if (!offerId) {
+      console.warn('⚠️ trackOfferImpression: No offerId provided');
+      return false;
+    }
+
     try {
-      console.log('📊 PromoService: Tracking impression for', offerId);
+      console.log('📊 Tracking impression:', offerId);
       
       const offerRef = doc(db, 'promo_offers', offerId);
       
-      // ✅ Use Firestore's increment directly
       await updateDoc(offerRef, {
         impressions: increment(1),
-        lastImpressionAt: new Date().toISOString()
+        lastImpressionAt: Timestamp.now()
       });
       
-      console.log('✅ PromoService: Impression tracked successfully');
+      console.log('✅ Impression tracked successfully');
       
       // Track in analytics
-      if (FirebaseService && FirebaseService.trackEvent) {
+      if (FirebaseService?.trackEvent) {
         FirebaseService.trackEvent('promo_impression', {
           offer_id: offerId
         }).catch(() => {});
@@ -312,30 +340,34 @@ class PromoService {
       
       return true;
     } catch (error) {
-      console.error('❌ PromoService: Track impression error:', error.message);
-      throw error;
+      console.error('❌ Track impression error:', error);
+      return false;
     }
   }
 
   /**
-   * ✅ FIXED: Track offer click with proper Firestore increment
+   * ✅ Track offer click with proper Firestore increment
    */
   async trackOfferClick(offerId) {
+    if (!offerId) {
+      console.warn('⚠️ trackOfferClick: No offerId provided');
+      return false;
+    }
+
     try {
-      console.log('👆 PromoService: Tracking click for', offerId);
+      console.log('👆 Tracking click:', offerId);
       
       const offerRef = doc(db, 'promo_offers', offerId);
       
-      // ✅ Use Firestore's increment directly
       await updateDoc(offerRef, {
         clicks: increment(1),
-        lastClickAt: new Date().toISOString()
+        lastClickAt: Timestamp.now()
       });
       
-      console.log('✅ PromoService: Click tracked successfully');
+      console.log('✅ Click tracked successfully');
       
       // Track in analytics
-      if (FirebaseService && FirebaseService.trackEvent) {
+      if (FirebaseService?.trackEvent) {
         FirebaseService.trackEvent('promo_click', {
           offer_id: offerId
         }).catch(() => {});
@@ -343,30 +375,34 @@ class PromoService {
       
       return true;
     } catch (error) {
-      console.error('❌ PromoService: Track click error:', error.message);
-      throw error;
+      console.error('❌ Track click error:', error);
+      return false;
     }
   }
 
   /**
-   * ✅ FIXED: Track offer conversion with proper Firestore increment
+   * ✅ Track offer conversion with proper Firestore increment
    */
   async trackOfferConversion(offerId) {
+    if (!offerId) {
+      console.warn('⚠️ trackOfferConversion: No offerId provided');
+      return false;
+    }
+
     try {
-      console.log('💰 PromoService: Tracking conversion for', offerId);
+      console.log('💰 Tracking conversion:', offerId);
       
       const offerRef = doc(db, 'promo_offers', offerId);
       
-      // ✅ Use Firestore's increment directly
       await updateDoc(offerRef, {
         conversions: increment(1),
-        lastConversionAt: new Date().toISOString()
+        lastConversionAt: Timestamp.now()
       });
       
-      console.log('✅ PromoService: Conversion tracked successfully');
+      console.log('✅ Conversion tracked successfully');
       
       // Track in analytics
-      if (FirebaseService && FirebaseService.trackEvent) {
+      if (FirebaseService?.trackEvent) {
         FirebaseService.trackEvent('promo_conversion', {
           offer_id: offerId
         }).catch(() => {});
@@ -374,17 +410,24 @@ class PromoService {
       
       return true;
     } catch (error) {
-      console.error('❌ PromoService: Track conversion error:', error.message);
-      throw error;
+      console.error('❌ Track conversion error:', error);
+      return false;
     }
   }
 
   /**
-   * Force create new offer (for manual testing or admin)
+   * Force create new offer (for testing or manual admin action)
    */
   async forceCreateNewOffer() {
     console.log('🔧 PromoService: Force creating new offer...');
-    return await this.createWeeklyPromoOffers();
+    try {
+      const offer = await this.createWeeklyPromoOffers();
+      console.log('✅ Offer created successfully:', offer.title);
+      return offer;
+    } catch (error) {
+      console.error('❌ Force create offer failed:', error);
+      throw error;
+    }
   }
 
   /**
@@ -392,23 +435,28 @@ class PromoService {
    */
   async getAllActiveOffers() {
     try {
-      const now = new Date().toISOString();
+      const now = Timestamp.now();
       
       const q = query(
         collection(db, 'promo_offers'),
         where('isActive', '==', true),
         where('expiresAt', '>', now),
-        orderBy('createdAt', 'desc')
+        orderBy('expiresAt', 'desc')
       );
       
       const snapshot = await getDocs(q);
       
-      return snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      return snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: data.createdAt?.toDate?.()?.toISOString() || data.createdAt,
+          expiresAt: data.expiresAt?.toDate?.()?.toISOString() || data.expiresAt
+        };
+      });
     } catch (error) {
-      console.log('PromoService: Get all offers error:', error.message);
+      console.error('PromoService: Get all offers error:', error);
       return [];
     }
   }
@@ -418,9 +466,9 @@ class PromoService {
    */
   async getOfferStatistics() {
     try {
-      console.log('📊 PromoService: Calculating offer statistics...');
+      console.log('📊 PromoService: Calculating statistics...');
       
-      const allOffersQuery = query(collection(db, 'promo_offers'));
+      const allOffersQuery = collection(db, 'promo_offers');
       const snapshot = await getDocs(allOffersQuery);
       
       const stats = {
@@ -430,37 +478,43 @@ class PromoService {
         totalImpressions: 0,
         totalClicks: 0,
         totalConversions: 0,
-        conversionRate: 0
+        conversionRate: 0,
+        clickThroughRate: 0
       };
       
-      const now = new Date().toISOString();
+      const now = Timestamp.now();
       
       snapshot.forEach(doc => {
         const data = doc.data();
+        const expiresAt = data.expiresAt;
         
         // Count active vs expired
-        if (data.isActive && data.expiresAt > now) {
+        if (data.isActive && expiresAt && expiresAt.toMillis() > now.toMillis()) {
           stats.activeOffers++;
         } else {
           stats.expiredOffers++;
         }
         
-        // Sum up metrics
-        stats.totalImpressions += data.impressions || 0;
-        stats.totalClicks += data.clicks || 0;
-        stats.totalConversions += data.conversions || 0;
+        // Sum up metrics (handle undefined/null values)
+        stats.totalImpressions += Number(data.impressions) || 0;
+        stats.totalClicks += Number(data.clicks) || 0;
+        stats.totalConversions += Number(data.conversions) || 0;
       });
       
-      // Calculate conversion rate
+      // Calculate rates
+      if (stats.totalImpressions > 0) {
+        stats.clickThroughRate = ((stats.totalClicks / stats.totalImpressions) * 100).toFixed(2);
+      }
+      
       if (stats.totalClicks > 0) {
         stats.conversionRate = ((stats.totalConversions / stats.totalClicks) * 100).toFixed(2);
       }
       
-      console.log('✅ PromoService: Stats calculated:', stats);
+      console.log('✅ Statistics calculated:', stats);
       
       return stats;
     } catch (error) {
-      console.error('❌ PromoService: Get statistics error:', error.message);
+      console.error('❌ Get statistics error:', error);
       return {
         totalOffers: 0,
         activeOffers: 0,
@@ -468,8 +522,34 @@ class PromoService {
         totalImpressions: 0,
         totalClicks: 0,
         totalConversions: 0,
-        conversionRate: 0
+        conversionRate: 0,
+        clickThroughRate: 0
       };
+    }
+  }
+
+  /**
+   * Get detailed offer by ID
+   */
+  async getOfferById(offerId) {
+    try {
+      const docRef = doc(db, 'promo_offers', offerId);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          ...data,
+          createdAt: data.createdAt?.toDate?.()?.toISOString() || data.createdAt,
+          expiresAt: data.expiresAt?.toDate?.()?.toISOString() || data.expiresAt
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('PromoService: Get offer by ID error:', error);
+      return null;
     }
   }
 }

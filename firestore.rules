@@ -79,13 +79,20 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Existing rules - Promo offers
+     // ✅ NEW: Promo offers - read for all authenticated, write for tracking
     match /promo_offers/{offerId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && (isAdmin() || request.resource.data.createdBy == 'auto_system');
-      allow update, delete: if isAdmin();
+      // Anyone authenticated can read active offers
+      allow read: if request.auth != null;
+      
+      // Allow incremental updates for statistics tracking
+      allow update: if request.auth != null 
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['impressions', 'clicks', 'conversions', 'lastImpressionAt', 'lastClickAt', 'lastConversionAt']);
+      
+      // System can create new offers
+      allow create: if request.auth != null;
     }
-
+  
     // Existing rules - Analytics
     match /analytics/{analyticsId} {
       allow read: if isAdmin();
