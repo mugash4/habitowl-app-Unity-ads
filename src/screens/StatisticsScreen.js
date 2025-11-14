@@ -26,7 +26,7 @@ const StatisticsScreen = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState('week'); // week, month, year
   const [isPremium, setIsPremium] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false); // ✅ ADDED
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const { totalHeight: tabBarTotalHeight } = useTabBarHeight();
 
@@ -52,11 +52,9 @@ const StatisticsScreen = ({ navigation }) => {
   
       console.log('📊 Loaded', userHabits ? userHabits.length : 0, 'habits for statistics');
   
-      // ✅ FIX: Check both premium status AND admin status
       let premiumStatus = stats?.isPremium || false;
       let adminStatus = false;
     
-      // Double-check admin status if not premium
       if (!premiumStatus) {
         const user = FirebaseService.currentUser;
         if (user && user.email) {
@@ -70,7 +68,7 @@ const StatisticsScreen = ({ navigation }) => {
       }
     
       setIsPremium(premiumStatus);
-      setIsAdmin(adminStatus); // ✅ ADDED
+      setIsAdmin(adminStatus);
       setHabits(userHabits || []);
       setUserStats(stats);
     } catch (error) {
@@ -87,7 +85,6 @@ const StatisticsScreen = ({ navigation }) => {
     await loadStatistics();
     setRefreshing(false);
     
-    // ✅ FIXED: Only show ads for FREE users
     if (!isPremium && !isAdmin) {
       setTimeout(async () => {
         try {
@@ -117,15 +114,19 @@ const StatisticsScreen = ({ navigation }) => {
       
       data.push(completions);
       
+      // ✅ FIXED: Better label generation logic to prevent overlapping
       if (selectedPeriod === 'week') {
+        // Show all 7 days with short names
         labels.push(date.toLocaleDateString('en', { weekday: 'short' }));
       } else if (selectedPeriod === 'month') {
-        if (i % 3 === 0 || i === 0 || i === days - 1) {
-          labels.push(date.toLocaleDateString('en', { day: 'numeric', month: 'short' }));
+        // Show only 6 labels evenly distributed (start, 5 evenly spaced, end)
+        if (i === 0 || i === days - 1 || i % 6 === 0) {
+          labels.push(date.getDate().toString());
         } else {
           labels.push('');
         }
       } else {
+        // Year: Show only 12 months
         if (i % 30 === 0 || i === 0 || i === days - 1) {
           labels.push(date.toLocaleDateString('en', { month: 'short' }));
         } else {
@@ -153,13 +154,14 @@ const StatisticsScreen = ({ navigation }) => {
       population: count,
       color: colors[index % colors.length],
       legendFontColor: '#374151',
-      legendFontSize: 12,
+      legendFontSize: 11, // ✅ FIXED: Reduced font size to prevent overlap
     }));
   };
 
   const getStreakData = () => {
-    return habits.map(habit => ({
-      name: habit.name.substring(0, 8) + (habit.name.length > 8 ? '...' : ''),
+    // ✅ FIXED: Limit to 6 habits max and shorten names further
+    return habits.slice(0, 6).map(habit => ({
+      name: habit.name.substring(0, 6) + (habit.name.length > 6 ? '..' : ''),
       current: habit.currentStreak || 0,
       best: habit.longestStreak || 0,
     }));
@@ -192,12 +194,13 @@ const StatisticsScreen = ({ navigation }) => {
     };
   };
 
+  // ✅ FIXED: Updated chart configuration with better label sizing
   const chartConfig = {
     backgroundGradientFrom: '#ffffff',
     backgroundGradientTo: '#ffffff',
     color: (opacity = 1) => `rgba(79, 70, 229, ${opacity})`,
     strokeWidth: 3,
-    barPercentage: 0.7,
+    barPercentage: 0.6, // ✅ FIXED: Reduced from 0.7 to give more space
     decimalPlaces: 0,
     propsForDots: {
       r: '4',
@@ -205,8 +208,8 @@ const StatisticsScreen = ({ navigation }) => {
       stroke: '#4f46e5'
     },
     propsForLabels: {
-      fontSize: 10,
-      fontWeight: '600'
+      fontSize: 9, // ✅ FIXED: Reduced from 10 to 9
+      fontWeight: '500' // ✅ FIXED: Reduced weight for cleaner look
     }
   };
 
@@ -256,6 +259,13 @@ const StatisticsScreen = ({ navigation }) => {
     if (data.length === 0) return null;
 
     const maxValue = Math.max(...data, 1);
+    
+    // ✅ FIXED: Adjust chart width based on period to give more horizontal space
+    const chartWidth = selectedPeriod === 'week' 
+      ? screenWidth - 64 
+      : selectedPeriod === 'month' 
+        ? screenWidth - 48  // More width for month view
+        : screenWidth - 48; // More width for year view
 
     return (
       <Card style={styles.chartCard}>
@@ -274,45 +284,60 @@ const StatisticsScreen = ({ navigation }) => {
                 selected={selectedPeriod === period}
                 onPress={() => setSelectedPeriod(period)}
                 style={styles.periodChip}
+                textStyle={styles.periodChipText}
               >
                 {period.charAt(0).toUpperCase() + period.slice(1)}
               </Chip>
             ))}
           </View>
 
-          <LineChart
-            data={{
-              labels,
-              datasets: [{
-                data,
-                color: (opacity = 1) => `rgba(79, 70, 229, ${opacity})`,
-                strokeWidth: 3
-              }],
-            }}
-            width={screenWidth - 64}
-            height={240}
-            yAxisSuffix=" "
-            yAxisInterval={1}
-            chartConfig={{
-              ...chartConfig,
-              formatYLabel: (value) => Math.round(value).toString()
-            }}
-            style={styles.chart}
-            bezier
-            fromZero
-            segments={Math.min(maxValue, 5)}
-            withInnerLines={true}
-            withOuterLines={true}
-            withVerticalLines={false}
-            withHorizontalLines={true}
-            withVerticalLabels={true}
-            withHorizontalLabels={true}
-          />
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={selectedPeriod !== 'week'}
+            style={styles.chartScrollView}
+          >
+            <LineChart
+              data={{
+                labels,
+                datasets: [{
+                  data,
+                  color: (opacity = 1) => `rgba(79, 70, 229, ${opacity})`,
+                  strokeWidth: 3
+                }],
+              }}
+              width={chartWidth}
+              height={240}
+              yAxisSuffix=" "
+              yAxisInterval={1}
+              chartConfig={{
+                ...chartConfig,
+                formatYLabel: (value) => Math.round(value).toString(),
+                propsForLabels: {
+                  fontSize: selectedPeriod === 'year' ? 8 : 9, // ✅ FIXED: Smaller for year view
+                  fontWeight: '500'
+                }
+              }}
+              style={styles.chart}
+              bezier
+              fromZero
+              segments={Math.min(maxValue, 5)}
+              withInnerLines={true}
+              withOuterLines={true}
+              withVerticalLines={false}
+              withHorizontalLines={true}
+              withVerticalLabels={true}
+              withHorizontalLabels={true}
+            />
+          </ScrollView>
           
           <View style={styles.chartLegend}>
             <Icon name="information-outline" size={16} color="#6b7280" />
             <Text style={styles.chartLegendText}>
-              Showing completed habits per day
+              {selectedPeriod === 'week' 
+                ? 'Showing completed habits per day' 
+                : selectedPeriod === 'month'
+                  ? 'Showing last 30 days - scroll to see all'
+                  : 'Showing last 12 months - scroll to see all'}
             </Text>
           </View>
         </Card.Content>
@@ -377,28 +402,48 @@ const StatisticsScreen = ({ navigation }) => {
     return (
       <Card style={styles.chartCard}>
         <Card.Content>
-          <Text style={styles.chartTitle}>Streak Comparison</Text>
+          <View style={styles.chartHeader}>
+            <Text style={styles.chartTitle}>Streak Comparison</Text>
+            {habits.length > 6 && (
+              <Text style={styles.chartSubtitle}>
+                Showing top 6 habits
+              </Text>
+            )}
+          </View>
           
-          <BarChart
-            data={{
-              labels: streakData.map(item => item.name),
-              datasets: [
-                {
-                  data: streakData.map(item => item.current),
-                  color: (opacity = 1) => `rgba(79, 70, 229, ${opacity})`,
-                },
-                {
-                  data: streakData.map(item => item.best),
-                  color: (opacity = 1) => `rgba(16, 185, 129, ${opacity})`,
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            style={styles.chartScrollView}
+          >
+            <BarChart
+              data={{
+                labels: streakData.map(item => item.name),
+                datasets: [
+                  {
+                    data: streakData.map(item => item.current),
+                    color: (opacity = 1) => `rgba(79, 70, 229, ${opacity})`,
+                  },
+                  {
+                    data: streakData.map(item => item.best),
+                    color: (opacity = 1) => `rgba(16, 185, 129, ${opacity})`,
+                  }
+                ],
+              }}
+              width={Math.max(screenWidth - 64, streakData.length * 80)} // ✅ FIXED: Dynamic width
+              height={220}
+              chartConfig={{
+                ...chartConfig,
+                propsForLabels: {
+                  fontSize: 8, // ✅ FIXED: Smaller font for bar labels
+                  fontWeight: '500'
                 }
-              ],
-            }}
-            width={screenWidth - 64}
-            height={220}
-            chartConfig={chartConfig}
-            style={styles.chart}
-            showBarTops={false}
-          />
+              }}
+              style={styles.chart}
+              showBarTops={false}
+              fromZero
+            />
+          </ScrollView>
           
           <View style={styles.legend}>
             <View style={styles.legendItem}>
@@ -512,18 +557,25 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1f2937',
-    marginBottom: 16,
+    marginBottom: 4, // ✅ FIXED: Reduced spacing
   },
   periodSelector: {
     flexDirection: 'row',
     gap: 8,
     marginBottom: 16,
+    marginTop: 8, // ✅ FIXED: Added top margin
   },
   periodChip: {
     flex: 1,
   },
+  periodChipText: {
+    fontSize: 12, // ✅ FIXED: Smaller chip text
+  },
   chart: {
     borderRadius: 8,
+  },
+  chartScrollView: {
+    marginHorizontal: -8, // ✅ FIXED: Better horizontal alignment
   },
   legend: {
     flexDirection: 'row',
@@ -542,7 +594,7 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   legendText: {
-    fontSize: 12,
+    fontSize: 11, // ✅ FIXED: Smaller legend text
     color: '#6b7280',
   },
   emptyState: {
@@ -582,9 +634,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   chartSubtitle: {
-    fontSize: 14,
+    fontSize: 13, // ✅ FIXED: Slightly smaller
     color: '#6b7280',
-    marginTop: 4,
+    marginTop: 2,
   },
   chartLegend: {
     flexDirection: 'row',
@@ -595,9 +647,10 @@ const styles = StyleSheet.create({
     borderTopColor: '#e5e7eb',
   },
   chartLegendText: {
-    fontSize: 12,
+    fontSize: 11, // ✅ FIXED: Smaller legend text
     color: '#6b7280',
     marginLeft: 6,
+    flex: 1,
   },
   premiumLock: {
     alignItems: 'center',
