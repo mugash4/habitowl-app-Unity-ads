@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -21,7 +21,6 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useTabBarHeight } from '../hooks/useTabBarHeight';
-import { useFocusEffect } from '@react-navigation/native'; // ✅ ADDED
 
 import FirebaseService from '../services/FirebaseService';
 import SecureAIService from '../services/SecureAIService';
@@ -29,6 +28,7 @@ import NotificationService from '../services/NotificationService';
 import ContactSupport from '../components/ContactSupport';
 import AdminService from '../services/AdminService';
 import adMobService from '../services/AdMobService';
+import PrivacyComplianceService from '../services/PrivacyComplianceService'; // ✅ NEW
 
 let PromoOfferBanner = null;
 try {
@@ -60,56 +60,36 @@ const SettingsScreen = ({ navigation }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [interactionCount, setInteractionCount] = useState(0);
 
+  // ✅ NEW: Data Export & Deletion States
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteReason, setDeleteReason] = useState('');
+  const [exportingData, setExportingData] = useState(false);
+
   const { totalHeight: tabBarTotalHeight } = useTabBarHeight();
 
-  // ✅ FIX: Use useFocusEffect instead of useEffect to reload stats when screen is focused
-  useFocusEffect(
-    useCallback(() => {
-      console.log('⚙️ SettingsScreen FOCUSED - Reloading user stats...');
-      
-      let isActive = true;
-      
-      const reloadData = async () => {
-        try {
-          await loadAllDataInBackground(isActive);
-        } catch (error) {
-          console.error('Error reloading settings data:', error);
-        }
-      };
-      
-      reloadData();
-      
-      return () => {
-        console.log('👋 SettingsScreen BLURRED - Cleaning up');
-        isActive = false;
-      };
-    }, []) // Empty dependency array - reload every time screen is focused
-  );
+  useEffect(() => {
+    console.log('SettingsScreen: Mounted ✅');
+    loadAllDataInBackground();
+  }, []);
 
-  // ✅ FIX: Modified to accept isActive parameter
-  const loadAllDataInBackground = async (isActive = true) => {
-    if (!isActive) return;
-    
+  const loadAllDataInBackground = async () => {
     setIsLoading(true);
     
     try {
       await Promise.allSettled([
-        loadUserDataSafely(isActive),
-        loadSettingsSafely(isActive),
-        checkAdminStatusSafely(isActive)
+        loadUserDataSafely(),
+        loadSettingsSafely(),
+        checkAdminStatusSafely()
       ]);
     } catch (error) {
       console.log('SettingsScreen: Background load error:', error.message);
     } finally {
-      if (isActive) {
-        setIsLoading(false);
-        console.log('SettingsScreen: Data loaded ✅');
-      }
+      setIsLoading(false);
+      console.log('SettingsScreen: Data loaded ✅');
     }
   };
 
-  // ✅ FIX: Modified to accept isActive parameter
-  const loadUserDataSafely = async (isActive = true) => {
+  const loadUserDataSafely = async () => {
     try {
       const timeout = new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Timeout')), 3000)
@@ -120,15 +100,7 @@ const SettingsScreen = ({ navigation }) => {
         timeout
       ]);
       
-      if (!isActive) return;
-      
       if (stats && typeof stats === 'object') {
-        console.log('📊 Updated user stats:', {
-          totalHabits: stats.totalHabits,
-          longestStreak: stats.longestStreak,
-          referralCount: stats.referralCount
-        });
-        
         setUserStats(prevStats => ({
           ...prevStats,
           ...stats
@@ -140,8 +112,7 @@ const SettingsScreen = ({ navigation }) => {
     }
   };
 
-  // ✅ FIX: Modified to accept isActive parameter
-  const loadSettingsSafely = async (isActive = true) => {
+  const loadSettingsSafely = async () => {
     try {
       const timeout = new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Timeout')), 2000)
@@ -153,22 +124,16 @@ const SettingsScreen = ({ navigation }) => {
       })();
       
       const provider = await Promise.race([settingsPromise, timeout]);
-      
-      if (!isActive) return;
-      
       if (provider) {
         setApiProvider(provider);
       }
     } catch (error) {
       console.log('Settings load failed:', error.message);
-      if (isActive) {
-        setApiProvider('deepseek');
-      }
+      setApiProvider('deepseek');
     }
   };
 
-  // ✅ FIX: Modified to accept isActive parameter
-  const checkAdminStatusSafely = async (isActive = true) => {
+  const checkAdminStatusSafely = async () => {
     try {
       const user = FirebaseService.currentUser;
       if (!user?.email) {
@@ -184,8 +149,6 @@ const SettingsScreen = ({ navigation }) => {
         timeout
       ]);
       
-      if (!isActive) return;
-      
       setIsAdmin(!!adminStatus);
       
       if (adminStatus && !isPremium) {
@@ -194,18 +157,11 @@ const SettingsScreen = ({ navigation }) => {
       }
     } catch (error) {
       console.log('Admin check failed:', error.message);
-      if (isActive) {
-        setIsAdmin(false);
-      }
+      setIsAdmin(false);
     }
   };
 
   const trackInteractionAndShowAd = async (actionName) => {
-    if (isPremium || isAdmin) {
-      console.log(`[Settings] 👑 Premium/Admin user - no ads for ${actionName}`);
-      return;
-    }
-
     const newCount = interactionCount + 1;
     setInteractionCount(newCount);
     
@@ -287,7 +243,7 @@ const SettingsScreen = ({ navigation }) => {
       setShowReferralDialog(false);
       setReferralCode('');
       Alert.alert('Success!', 'Referral code applied successfully!');
-      await loadUserDataSafely(); // ✅ Reload stats after referral
+      await loadUserDataSafely();
       trackInteractionAndShowAd('referral_submit');
     } catch (error) {
       Alert.alert('Error', error.message || 'Failed to process referral code');
@@ -379,6 +335,95 @@ const SettingsScreen = ({ navigation }) => {
     }
   };
 
+  // ✅ NEW: Export User Data (JSON)
+  const handleExportData = async () => {
+    try {
+      setExportingData(true);
+      trackInteractionAndShowAd('export_data');
+
+      Alert.alert(
+        'Export Your Data',
+        'Choose export format:',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel'
+          },
+          {
+            text: 'JSON (Complete)',
+            onPress: async () => {
+              try {
+                await PrivacyComplianceService.exportUserDataToFile(user.uid);
+                Alert.alert('Success', 'Your complete data has been exported and shared!');
+              } catch (error) {
+                Alert.alert('Error', 'Failed to export data: ' + error.message);
+              }
+            }
+          },
+          {
+            text: 'CSV (Habits Only)',
+            onPress: async () => {
+              try {
+                await PrivacyComplianceService.exportHabitsToCSV(user.uid);
+                Alert.alert('Success', 'Your habits have been exported to CSV!');
+              } catch (error) {
+                Alert.alert('Error', 'Failed to export habits: ' + error.message);
+              }
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      Alert.alert('Error', 'Failed to export data');
+    } finally {
+      setExportingData(false);
+    }
+  };
+
+  // ✅ NEW: Request Account Deletion
+  const handleDeleteAccount = () => {
+    trackInteractionAndShowAd('delete_account');
+    setShowDeleteDialog(true);
+  };
+
+  const handleConfirmDeletion = async () => {
+    if (!deleteReason.trim()) {
+      Alert.alert('Required', 'Please provide a reason for deletion');
+      return;
+    }
+
+    Alert.alert(
+      'Confirm Account Deletion',
+      '⚠️ This action will:\n\n• Schedule your account for deletion in 7 days\n• Allow you to export your data first\n• Give you 7 days to cancel if you change your mind\n\nAre you sure?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete My Account',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const result = await PrivacyComplianceService.requestAccountDeletion(
+                user.uid,
+                deleteReason.trim()
+              );
+
+              setShowDeleteDialog(false);
+              setDeleteReason('');
+
+              Alert.alert(
+                'Deletion Scheduled',
+                result.message,
+                [{ text: 'OK' }]
+              );
+            } catch (error) {
+              Alert.alert('Error', 'Failed to request deletion: ' + error.message);
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const renderUserInfo = () => {
     const user = FirebaseService.currentUser;
     if (!user) return null;
@@ -447,23 +492,11 @@ const SettingsScreen = ({ navigation }) => {
       >
         {renderUserInfo()}
 
-        {/* FIXED: Promo Banner - Always render for free users */}
-        {!isPremium && !isAdmin && (
+        {!isPremium && !isAdmin && PromoOfferBanner && (
           <View style={styles.promoContainer}>
-            {PromoOfferBanner ? (
-              <PromoOfferBanner onUpgradePress={handlePremiumUpgrade} />
-            ) : (
-              <Card style={styles.card}>
-                <Card.Content>
-                  <Text style={{ textAlign: 'center', color: '#6b7280' }}>
-                    Special offers loading...
-                  </Text>
-              </Card.Content>
-          </Card>
+            <PromoOfferBanner onUpgradePress={handlePremiumUpgrade} />
+          </View>
         )}
-      </View>
-    )}
-
 
         {!isPremium && !isAdmin && (
           <Card style={styles.card}>
@@ -586,6 +619,31 @@ const SettingsScreen = ({ navigation }) => {
           />
         </Card>
 
+        {/* ✅ NEW: Privacy & Data Section */}
+        <Card style={styles.card}>
+          <List.Subheader style={styles.subheader}>Privacy & Data</List.Subheader>
+          
+          <List.Item
+            title="Export My Data"
+            description="Download all your data (GDPR)"
+            left={(props) => <List.Icon {...props} icon="download" color="#10b981" />}
+            right={(props) => <List.Icon {...props} icon="chevron-right" />}
+            onPress={handleExportData}
+            titleStyle={styles.listItemTitle}
+            descriptionStyle={styles.listItemDescription}
+          />
+
+          <List.Item
+            title="Delete My Account"
+            description="Request account deletion (7-day grace period)"
+            left={(props) => <List.Icon {...props} icon="delete-forever" color="#ef4444" />}
+            right={(props) => <List.Icon {...props} icon="chevron-right" />}
+            onPress={handleDeleteAccount}
+            titleStyle={[styles.listItemTitle, { color: '#ef4444' }]}
+            descriptionStyle={styles.listItemDescription}
+          />
+        </Card>
+
         <Card style={styles.card}>
           <List.Subheader style={styles.subheader}>Support & Legal</List.Subheader>
           
@@ -667,6 +725,38 @@ const SettingsScreen = ({ navigation }) => {
           <Dialog.Actions>
             <Button onPress={() => setShowReferralDialog(false)}>Cancel</Button>
             <Button onPress={handleReferralSubmit}>Apply</Button>
+          </Dialog.Actions>
+        </Dialog>
+
+        {/* ✅ NEW: Account Deletion Dialog */}
+        <Dialog visible={showDeleteDialog} onDismiss={() => setShowDeleteDialog(false)}>
+          <Dialog.Title>Delete Account</Dialog.Title>
+          <Dialog.Content>
+            <Text style={styles.dialogDescription}>
+              We're sorry to see you go. Your account will be scheduled for deletion in 7 days. You can cancel anytime within this period.
+            </Text>
+            
+            <TextInput
+              label="Reason for leaving (optional)"
+              value={deleteReason}
+              onChangeText={setDeleteReason}
+              mode="outlined"
+              multiline
+              numberOfLines={3}
+              style={styles.dialogInput}
+              placeholder="Help us improve..."
+            />
+
+            <View style={styles.warningBox}>
+              <Icon name="alert-circle" size={20} color="#ef4444" />
+              <Text style={styles.warningText}>
+                Your data will be retained for 90 days for legal compliance, then permanently deleted.
+              </Text>
+            </View>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setShowDeleteDialog(false)}>Cancel</Button>
+            <Button onPress={handleConfirmDeletion} textColor="#ef4444">Delete</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
@@ -799,6 +889,24 @@ const styles = StyleSheet.create({
   },
   promoContainer: {
     marginBottom: 8,
+  },
+  // ✅ NEW: Warning Box Style
+  warningBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#fef2f2',
+    padding: 12,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#ef4444',
+    marginTop: 8,
+  },
+  warningText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#991b1b',
+    marginLeft: 8,
+    lineHeight: 18,
   },
 });
 
