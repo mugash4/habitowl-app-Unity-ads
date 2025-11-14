@@ -3,6 +3,7 @@ import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import FCM_CONFIG from '../config/fcm-config';
 
 // Configure notification behavior
 Notifications.setNotificationHandler({
@@ -22,7 +23,7 @@ class NotificationService {
 
   async initialize() {
     try {
-      console.log('Initializing NotificationService...');
+      console.log('🔔 Initializing NotificationService...');
       
       // Request permissions and get push token
       this.expoPushToken = await this.registerForPushNotificationsAsync();
@@ -37,10 +38,10 @@ class NotificationService {
         this.handleNotificationResponse.bind(this)
       );
 
-      console.log('NotificationService initialized successfully');
+      console.log('✅ NotificationService initialized successfully');
       return this.expoPushToken;
     } catch (error) {
-      console.error('Error initializing NotificationService:', error);
+      console.error('❌ Error initializing NotificationService:', error);
       throw error;
     }
   }
@@ -50,15 +51,14 @@ class NotificationService {
 
     // Only proceed if running on a physical device
     if (!Device.isDevice) {
-      console.log('Must use physical device for Push Notifications');
+      console.log('⚠️ Must use physical device for Push Notifications');
       return null;
     }
 
     try {
       // Step 1: Configure Android notification channels BEFORE requesting permissions
-      // This is CRITICAL for Android 13+ to show the permission prompt
       if (Platform.OS === 'android') {
-        console.log('Configuring Android notification channels...');
+        console.log('📱 Configuring Android notification channels...');
         
         await Notifications.setNotificationChannelAsync('habit-reminders', {
           name: 'Habit Reminders',
@@ -90,27 +90,27 @@ class NotificationService {
           showBadge: true,
         });
 
-        console.log('Android notification channels configured successfully');
+        console.log('✅ Android notification channels configured');
       }
 
       // Step 2: Check existing permissions
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
-      console.log('Existing notification permission status:', existingStatus);
+      console.log('📋 Existing permission status:', existingStatus);
       
       let finalStatus = existingStatus;
 
       // Step 3: Request permissions if not already granted
       if (existingStatus !== 'granted') {
-        console.log('Requesting notification permissions...');
+        console.log('🔐 Requesting notification permissions...');
         const { status } = await Notifications.requestPermissionsAsync();
         finalStatus = status;
-        console.log('Permission request result:', finalStatus);
+        console.log('📋 Permission request result:', finalStatus);
       }
 
       // Step 4: Handle permission denial
       if (finalStatus !== 'granted') {
         console.log('❌ Notification permission denied by user');
-        console.log('App will function but notifications will not be shown');
+        console.log('ℹ️ App will function but notifications will not be shown');
         return null;
       }
 
@@ -123,26 +123,28 @@ class NotificationService {
           Constants?.easConfig?.projectId;
         
         if (!projectId) {
-          console.warn('⚠️ Project ID not found - push notifications may not work');
-          console.warn('Local notifications will still work');
+          console.warn('⚠️ Project ID not found - using local notifications only');
           return null;
         }
 
-        token = (
-          await Notifications.getExpoPushTokenAsync({
-            projectId,
-          })
-        ).data;
+        const tokenData = await Notifications.getExpoPushTokenAsync({
+          projectId,
+        });
         
+        token = tokenData.data;
         console.log('✅ Expo Push Token obtained:', token);
+        
+        // Save token to AsyncStorage for later use
+        await AsyncStorage.setItem('expoPushToken', token);
+        
       } catch (tokenError) {
-        console.error('Error getting Expo Push Token:', tokenError);
-        console.log('Local notifications will still work');
+        console.error('❌ Error getting Expo Push Token:', tokenError);
+        console.log('ℹ️ Local notifications will still work');
         token = null;
       }
 
     } catch (error) {
-      console.error('Error in registerForPushNotificationsAsync:', error);
+      console.error('❌ Error in registerForPushNotificationsAsync:', error);
       throw error;
     }
 
@@ -151,13 +153,13 @@ class NotificationService {
 
   async scheduleHabitReminder(habit) {
     try {
-      console.log(`Scheduling reminder for habit: ${habit.name}`);
+      console.log(`🔔 Scheduling reminder for habit: ${habit.name}`);
       
       // Cancel existing notifications for this habit
       await this.cancelHabitNotifications(habit.id);
 
       if (!habit.reminderEnabled || !habit.reminderTime) {
-        console.log('Reminder not enabled or time not set for this habit');
+        console.log('⚠️ Reminder not enabled or time not set for this habit');
         return;
       }
 
@@ -175,6 +177,7 @@ class NotificationService {
           },
           sound: true,
           priority: Notifications.AndroidNotificationPriority.HIGH,
+          categoryIdentifier: 'habit-reminders',
         },
         trigger: {
           hour: hours,
@@ -203,6 +206,7 @@ class NotificationService {
           },
           sound: false,
           priority: Notifications.AndroidNotificationPriority.DEFAULT,
+          categoryIdentifier: 'motivational',
         },
         trigger: {
           hour: followUpHour,
@@ -216,7 +220,7 @@ class NotificationService {
 
       return { reminderId: notificationId, followUpId };
     } catch (error) {
-      console.error('Error scheduling habit reminder:', error);
+      console.error('❌ Error scheduling habit reminder:', error);
       throw error;
     }
   }
@@ -250,13 +254,16 @@ class NotificationService {
           },
           sound: true,
           priority: Notifications.AndroidNotificationPriority.HIGH,
+          categoryIdentifier: 'streak-celebrations',
         },
         trigger: {
-          seconds: 2, // Show immediately
+          seconds: 2,
         },
       });
+
+      console.log('✅ Streak celebration scheduled');
     } catch (error) {
-      console.error('Error scheduling streak celebration:', error);
+      console.error('❌ Error scheduling streak celebration:', error);
     }
   }
 
@@ -271,13 +278,65 @@ class NotificationService {
           },
           sound: false,
           priority: Notifications.AndroidNotificationPriority.DEFAULT,
+          categoryIdentifier: 'motivational',
         },
         trigger: {
           seconds: delay,
         },
       });
+      
+      console.log('✅ Motivational message scheduled');
     } catch (error) {
-      console.error('Error sending motivational message:', error);
+      console.error('❌ Error sending motivational message:', error);
+    }
+  }
+
+  /**
+   * ✅ NEW: Send push notification using FCM
+   * This works even when app is closed
+   */
+  async sendPushNotification(userId, title, body, data = {}) {
+    try {
+      // Get user's push token
+      const pushToken = await AsyncStorage.getItem('expoPushToken');
+      
+      if (!pushToken) {
+        console.log('⚠️ No push token found for user');
+        return;
+      }
+
+      const message = {
+        to: pushToken,
+        sound: 'default',
+        title: title,
+        body: body,
+        data: data,
+        priority: 'high',
+        channelId: data.type || 'habit-reminders',
+      };
+
+      const response = await fetch(FCM_CONFIG.EXPO_PUSH_API, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Accept-encoding': 'gzip, deflate',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(message),
+      });
+
+      const result = await response.json();
+      
+      if (result.data && result.data[0].status === 'ok') {
+        console.log('✅ Push notification sent successfully');
+      } else {
+        console.error('❌ Push notification failed:', result);
+      }
+
+      return result;
+    } catch (error) {
+      console.error('❌ Error sending push notification:', error);
+      throw error;
     }
   }
 
@@ -288,28 +347,28 @@ class NotificationService {
       if (storedIds) {
         for (const [type, notificationId] of Object.entries(storedIds)) {
           await Notifications.cancelScheduledNotificationAsync(notificationId);
-          console.log(`Cancelled ${type} notification: ${notificationId}`);
+          console.log(`✅ Cancelled ${type} notification: ${notificationId}`);
         }
         
         // Remove from storage
         await AsyncStorage.removeItem(`notifications_${habitId}`);
       }
     } catch (error) {
-      console.error('Error cancelling habit notifications:', error);
+      console.error('❌ Error cancelling habit notifications:', error);
     }
   }
 
   async cancelAllNotifications() {
     try {
       await Notifications.cancelAllScheduledNotificationsAsync();
-      console.log('All scheduled notifications cancelled');
+      console.log('✅ All scheduled notifications cancelled');
       
       // Clear all stored notification IDs
       const keys = await AsyncStorage.getAllKeys();
       const notificationKeys = keys.filter(key => key.startsWith('notifications_'));
       await AsyncStorage.multiRemove(notificationKeys);
     } catch (error) {
-      console.error('Error cancelling all notifications:', error);
+      console.error('❌ Error cancelling all notifications:', error);
     }
   }
 
@@ -322,7 +381,7 @@ class NotificationService {
       notifications[type] = notificationId;
       await AsyncStorage.setItem(key, JSON.stringify(notifications));
     } catch (error) {
-      console.error('Error storing notification ID:', error);
+      console.error('❌ Error storing notification ID:', error);
     }
   }
 
@@ -332,14 +391,13 @@ class NotificationService {
       const stored = await AsyncStorage.getItem(key);
       return stored ? JSON.parse(stored) : null;
     } catch (error) {
-      console.error('Error getting stored notification IDs:', error);
+      console.error('❌ Error getting stored notification IDs:', error);
       return null;
     }
   }
 
   handleNotificationReceived(notification) {
     console.log('📩 Notification received:', notification.request.content.title);
-    // You can add custom logic here when a notification is received
   }
 
   handleNotificationResponse(response) {
@@ -347,17 +405,13 @@ class NotificationService {
     
     const data = response.notification.request.content.data;
     
-    // Handle different notification types
     switch (data.type) {
       case 'habit_reminder':
       case 'habit_followup':
-        // Navigate to habit completion screen
-        // This would be handled by the navigation system
         console.log('Navigate to habit:', data.habitId);
         break;
       
       case 'streak_celebration':
-        // Navigate to progress/stats screen
         console.log('Show streak celebration for:', data.habitId);
         break;
       
@@ -369,10 +423,10 @@ class NotificationService {
   async getScheduledNotifications() {
     try {
       const scheduled = await Notifications.getAllScheduledNotificationsAsync();
-      console.log(`Currently scheduled notifications: ${scheduled.length}`);
+      console.log(`📋 Currently scheduled notifications: ${scheduled.length}`);
       return scheduled;
     } catch (error) {
-      console.error('Error getting scheduled notifications:', error);
+      console.error('❌ Error getting scheduled notifications:', error);
       return [];
     }
   }
@@ -384,10 +438,10 @@ class NotificationService {
   async checkPermissionStatus() {
     try {
       const { status, ios, android } = await Notifications.getPermissionsAsync();
-      console.log('Current permission status:', { status, ios, android });
+      console.log('📋 Current permission status:', { status, ios, android });
       return { status, ios, android };
     } catch (error) {
-      console.error('Error checking permission status:', error);
+      console.error('❌ Error checking permission status:', error);
       return null;
     }
   }

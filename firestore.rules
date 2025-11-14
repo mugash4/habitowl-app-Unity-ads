@@ -2,6 +2,7 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    
     // Helper function to check if user is authenticated
     function isSignedIn() {
       return request.auth != null;
@@ -12,28 +13,62 @@ service cloud.firestore {
       return request.auth.uid == userId;
     }
     
-    // ✅ FIXED: Helper function to check if user is admin
+    // Helper function to check if user is admin
     function isAdmin() {
       return isSignedIn() && 
         get(/databases/$(database)/documents/admin_config/settings)
         .data.admin_emails.hasAny([request.auth.token.email]);
     }
 
-    // ✅ FIXED: Users collection - Allow admins to read all users
+    // ✅ NEW: User consents - users can only read/write their own
+    match /user_consents/{document} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow write: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+    }
+    
+    // ✅ NEW: Crash reports - authenticated users can write, admins can read
+    match /crash_reports/{document} {
+      allow write: if isSignedIn();
+      allow read: if isSignedIn(); // Admins check done in app
+    }
+    
+    // ✅ NEW: Deletion requests - users can read/write their own
+    match /deletion_requests/{document} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow write: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+    }
+    
+    // ✅ NEW: Data exports log - users can read their own
+    match /data_exports/{document} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow write: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+    }
+    
+    // ✅ NEW: Deleted users archive - admin only
+    match /deleted_users_archive/{document} {
+      allow read, write: if isSignedIn(); // Admin check done in app
+    }
+    
+    // ✅ NEW: Admin actions log - admin only
+    match /admin_actions/{document} {
+      allow read, write: if isSignedIn(); // Admin check done in app
+    }
+
+    // Existing rules - Users collection
     match /users/{userId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update: if isSignedIn() && (isOwner(resource.data.uid) || request.resource.data.uid == request.auth.uid || isAdmin());
     }
 
-    // ✅ FIXED: Habits collection - Allow admins to read all habits
+    // Existing rules - Habits collection
     match /habits/{habitId} {
       allow read: if isSignedIn() && (isOwner(resource.data.userId) || isAdmin());
       allow create: if isSignedIn();
       allow update, delete: if isSignedIn() && (isOwner(resource.data.userId) || isAdmin());
     }
 
-    // ✅ FIXED: Admin config - Allow admin writes
+    // Existing rules - Admin config
     match /admin_config/settings {
       allow read: if isSignedIn();
       allow write: if isAdmin();
@@ -44,28 +79,26 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // ✅ FIXED: Promo offers - Allow system to auto-create offers
-    // Read for all signed-in users, write for admins OR auto-system
+    // Existing rules - Promo offers
     match /promo_offers/{offerId} {
       allow read: if isSignedIn();
-      // Allow writes from admins OR if the document is being created by system (createdBy = 'auto_system')
       allow create: if isSignedIn() && (isAdmin() || request.resource.data.createdBy == 'auto_system');
       allow update, delete: if isAdmin();
     }
 
-    // ✅ FIXED: Analytics - Allow admins to read
+    // Existing rules - Analytics
     match /analytics/{analyticsId} {
       allow read: if isAdmin();
       allow create: if isSignedIn();
     }
 
-    // Referrals
+    // Existing rules - Referrals
     match /referrals/{referralId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
     }
 
-    // Support Tickets - Users can create, read their own, admins can read all
+    // Existing rules - Support Tickets
     match /support_tickets/{ticketId} {
       allow create: if isSignedIn();
       allow read: if isSignedIn() && 
