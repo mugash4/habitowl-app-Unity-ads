@@ -15,15 +15,36 @@
         }
         h1 { color: #4f46e5; border-bottom: 2px solid #4f46e5; padding-bottom: 10px; }
         h2 { color: #374151; margin-top: 30px; }
+        h3 { color: #4b5563; margin-top: 20px; }
         .last-updated { color: #6b7280; font-style: italic; margin-bottom: 30px; }
         .contact-info { background: #f8fafc; padding: 20px; border-radius: 8px; margin-top: 30px; }
+        .warning-box { 
+            background: #fef2f2; 
+            border-left: 4px solid #ef4444; 
+            padding: 15px; 
+            margin: 20px 0; 
+            border-radius: 4px;
+        }
+        .info-box { 
+            background: #eff6ff; 
+            border-left: 4px solid #3b82f6; 
+            padding: 15px; 
+            margin: 20px 0; 
+            border-radius: 4px;
+        }
+        .highlight {
+            background: #fef3c7;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: 600;
+        }
     </style>
 </head>
 <body>
     <h1>🦉 HabitOwl Privacy Policy</h1>
     <p><strong>Smart Habit & Routine Builder App</strong></p>
     <p><strong>Website:</strong> <a href="https://habitowl-3405d.web.app/">https://habitowl-3405d.web.app/</a></p>
-    <p class="last-updated">Last updated: October 2025</p>
+    <p class="last-updated">Last updated: November 2025</p>
 
     <h2>1. Introduction</h2>
     <p>Welcome to HabitOwl ("we," "our," or "us"). We respect your privacy and are committed to protecting your personal data. This privacy policy explains how we collect, use, and safeguard your information when you use our mobile application and services.</p>
@@ -54,7 +75,77 @@
         <li><strong>Security:</strong> To protect against fraud and maintain service security</li>
     </ul>
 
-    <h2>4. Data Storage and Security</h2>
+    <h2>4. Third-Party AI Services</h2>
+    <div class="warning-box">
+        <h3>⚠️ IMPORTANT: AI Data Processing</h3>
+        <p><strong>HabitOwl uses multiple AI service providers to deliver personalized habit coaching:</strong></p>
+        
+        <h4>🤖 DeepSeek AI (China-based Service)</h4>
+        <ul>
+            <li><strong>What it does:</strong> Provides AI-powered habit coaching and personalized suggestions</li>
+            <li><strong>Data sent:</strong> Your prompts, habit data, and coaching questions are sent to DeepSeek servers located in China</li>
+            <li><strong>Data access:</strong> Data may be accessible to Chinese authorities under local laws</li>
+            <li><strong>Privacy Policy:</strong> <a href="https://cdn.deepseek.com/policies/en-US/deepseek-privacy-policy.html" target="_blank">DeepSeek Privacy Policy</a></li>
+        </ul>
+
+        <h4>🧠 OpenAI / ChatGPT (US-based Service)</h4>
+        <ul>
+            <li><strong>What it does:</strong> Alternative AI provider for habit coaching (Premium users)</li>
+            <li><strong>Data sent:</strong> Your prompts and habit-related queries</li>
+            <li><strong>Privacy Policy:</strong> <a href="https://openai.com/policies/privacy-policy" target="_blank">OpenAI Privacy Policy</a></li>
+        </ul>
+
+        <h4>🔀 OpenRouter (AI Routing Service)</h4>
+        <ul>
+            <li><strong>What it does:</strong> Routes AI requests to multiple AI providers</li>
+            <li><strong>Data sent:</strong> Your AI prompts may be routed through OpenRouter's infrastructure</li>
+            <li><strong>Privacy Policy:</strong> <a href="https://openrouter.ai/privacy" target="_blank">OpenRouter Privacy Policy</a></li>
+        </ul>
+
+        <h4>🛡️ How to Opt Out of AI Features</h4>
+        <p class="highlight">You can completely avoid AI data processing by:</p>
+        <ul>
+            <li>Not using the AI coaching features (lightbulb 💡 icon on habits)</li>
+            <li>AI features are entirely optional and not required for core habit tracking</li>
+            <li>All your habit data remains private and is NOT sent to AI services unless you explicitly use the coaching feature</li>
+        </ul>
+    </div>
+
+    <h2>5. Advertising Data Collection</h2>
+    <div class="info-box">
+        <h3>📱 Google AdMob Advertising</h3>
+        <p><strong>HabitOwl uses Google AdMob to display advertisements to free users:</strong></p>
+        
+        <h4>Data Collected by AdMob:</h4>
+        <ul>
+            <li><strong>Device Advertising ID:</strong> Unique identifier for advertising purposes</li>
+            <li><strong>IP Address:</strong> Your device's internet address</li>
+            <li><strong>App Interactions:</strong> How you interact with ads</li>
+            <li><strong>Device Information:</strong> Device model, OS version, screen size</li>
+        </ul>
+
+        <h4>How AdMob Uses This Data:</h4>
+        <ul>
+            <li>Personalized advertising based on your interests</li>
+            <li>Analytics and performance measurement</li>
+            <li>Fraud detection and prevention</li>
+        </ul>
+
+        <h4>AdMob Privacy Resources:</h4>
+        <ul>
+            <li><strong>Privacy Policy:</strong> <a href="https://policies.google.com/privacy" target="_blank">Google Privacy Policy</a></li>
+            <li><strong>Ad Settings:</strong> <a href="https://adssettings.google.com/" target="_blank">Manage Ad Personalization</a></li>
+        </ul>
+
+        <h4>🛡️ How to Opt Out of Personalized Ads:</h4>
+        <ul>
+            <li><strong>Android:</strong> Settings → Google → Ads → Opt out of Ads Personalization</li>
+            <li><strong>iOS:</strong> Settings → Privacy → Tracking → Disable "Allow Apps to Request to Track"</li>
+            <li><strong>Or upgrade to Premium:</strong> Remove all ads by subscribing to HabitOwl Premium</li>
+        </ul>
+    </div>
+
+    <h2>6. Data Storage and Security</h2>
     <ul>
         <li>Your data is stored securely using Firebase, Google's cloud platform</li>
         <li>We use industry-standard encryption for data transmission and storage</li>
@@ -62,62 +153,73 @@
         <li>We regularly review and update our security practices</li>
     </ul>
 
-    <h2>5. Data Sharing</h2>
+    <h2>7. Data Sharing</h2>
     <p>We do not sell, trade, or rent your personal information to third parties. We may share data only in these limited circumstances:</p>
     <ul>
-        <li><strong>Service Providers:</strong> With trusted partners who help us operate our services (e.g., Firebase, AI services)</li>
+        <li><strong>Service Providers:</strong> With trusted partners who help us operate our services (e.g., Firebase, DeepSeek AI, OpenAI, OpenRouter, Google AdMob)</li>
         <li><strong>Legal Requirements:</strong> When required by law or to protect our rights and safety</li>
         <li><strong>Business Transfer:</strong> In case of merger, acquisition, or sale of assets (with prior notice)</li>
     </ul>
 
-    <h2>6. Third-Party Services</h2>
+    <h2>8. Third-Party Services Summary</h2>
     <p>HabitOwl integrates with the following third-party services:</p>
     <ul>
-        <li><strong>Firebase:</strong> For data storage, authentication, and analytics</li>
-        <li><strong>Google AdMob:</strong> For displaying advertisements (free users only)</li>
-        <li><strong>AI Services:</strong> For generating personalized habit suggestions and insights</li>
+        <li><strong>Firebase (Google):</strong> Data storage, authentication, and analytics - <a href="https://firebase.google.com/support/privacy" target="_blank">Privacy Policy</a></li>
+        <li><strong>Google AdMob:</strong> Advertising (free users only) - <a href="https://policies.google.com/privacy" target="_blank">Privacy Policy</a></li>
+        <li><strong>DeepSeek AI:</strong> AI coaching (China-based) - <a href="https://cdn.deepseek.com/policies/en-US/deepseek-privacy-policy.html" target="_blank">Privacy Policy</a></li>
+        <li><strong>OpenAI / ChatGPT:</strong> AI coaching alternative - <a href="https://openai.com/policies/privacy-policy" target="_blank">Privacy Policy</a></li>
+        <li><strong>OpenRouter:</strong> AI routing service - <a href="https://openrouter.ai/privacy" target="_blank">Privacy Policy</a></li>
     </ul>
     <p>Each service has its own privacy policy, which we encourage you to review.</p>
 
-    <h2>7. Your Rights and Choices</h2>
+    <h2>9. Your Rights and Choices</h2>
     <ul>
         <li><strong>Access:</strong> View and download your personal data</li>
         <li><strong>Correction:</strong> Update incorrect or incomplete information</li>
         <li><strong>Deletion:</strong> Request deletion of your account and data</li>
         <li><strong>Portability:</strong> Export your habit data in a standard format</li>
         <li><strong>Opt-out:</strong> Unsubscribe from promotional communications</li>
+        <li><strong>AI Opt-out:</strong> Simply don't use AI coaching features to avoid AI data processing</li>
+        <li><strong>Ad Opt-out:</strong> Disable personalized ads in your device settings or upgrade to Premium</li>
     </ul>
 
-    <h2>8. Children's Privacy</h2>
+    <h2>10. Children's Privacy</h2>
     <p>HabitOwl is not intended for children under 13. We do not knowingly collect personal information from children under 13. If we discover we have collected such information, we will delete it immediately.</p>
 
-    <h2>9. International Data Transfers</h2>
-    <p>Your data may be transferred and processed in countries other than your own. We ensure appropriate safeguards are in place to protect your privacy rights.</p>
+    <h2>11. International Data Transfers</h2>
+    <p>Your data may be transferred and processed in countries other than your own, including:</p>
+    <ul>
+        <li><strong>United States:</strong> Firebase, OpenAI services</li>
+        <li><strong>China:</strong> DeepSeek AI services (when using AI coaching)</li>
+        <li><strong>Other countries:</strong> Through OpenRouter's global infrastructure</li>
+    </ul>
+    <p>We ensure appropriate safeguards are in place to protect your privacy rights in accordance with applicable laws.</p>
 
-    <h2>10. Data Retention</h2>
+    <h2>12. Data Retention</h2>
     <ul>
         <li>We retain your account data while your account is active</li>
-        <li>After account deletion, we may retain some data for legal compliance (typically 90 days)</li>
+        <li>After account deletion, we retain some data for legal compliance (typically 90 days)</li>
         <li>Analytics data is anonymized and may be retained longer for service improvement</li>
+        <li>AI service providers (DeepSeek, OpenAI, OpenRouter) may retain data according to their own policies</li>
     </ul>
 
-    <h2>11. Cookies and Tracking</h2>
+    <h2>13. Cookies and Tracking</h2>
     <p>Our app may use local storage and analytics tools to improve performance and user experience. You can manage these preferences in your device settings.</p>
 
-    <h2>12. Changes to This Policy</h2>
+    <h2>14. Changes to This Policy</h2>
     <p>We may update this privacy policy periodically. We will notify you of significant changes through the app or email. Your continued use constitutes acceptance of the updated policy.</p>
 
-    <h2>13. Contact Us</h2>
+    <h2>15. Contact Us</h2>
     <div class="contact-info">
         <p>If you have questions about this privacy policy or your data, please contact us:</p>
         <ul>
-            <li><strong>Email:</strong> augustinemwathi96@gmail.com</li>
-            <li><strong>Support:</strong> augustinemwathi96@gmail.com</li>
+            <li><strong>Email:</strong> <a href="mailto:augustinemwathi96@gmail.com">Contact support habitowl</a> </li>
+            <li><strong>Support:</strong> Available through the app's Contact Support feature</li>
             <li><strong>Website:</strong> https://habitowl-3405d.web.app/</li>
         </ul>
     </div>
 
-    <h2>14. GDPR Compliance (EU Users)</h2>
+    <h2>16. GDPR Compliance (EU Users)</h2>
     <p>If you are located in the European Union, you have additional rights under GDPR:</p>
     <ul>
         <li>Right to be informed about data processing</li>
@@ -129,10 +231,19 @@
         <li>Right to object to processing</li>
         <li>Rights related to automated decision-making</li>
     </ul>
+    <p><strong>Note:</strong> When using AI features, your data is processed by DeepSeek (China), OpenAI (USA), and OpenRouter, which may have different data protection standards than the EU.</p>
 
-    <h2>15. California Privacy Rights (CCPA)</h2>
-    <p>California residents have specific rights regarding their personal information. Contact us to exercise these rights or learn more about our data practices.</p>
+    <h2>17. California Privacy Rights (CCPA)</h2>
+    <p>California residents have specific rights regarding their personal information:</p>
+    <ul>
+        <li>Right to know what personal information is collected</li>
+        <li>Right to know whether personal information is sold or disclosed</li>
+        <li>Right to opt-out of the sale of personal information (we do not sell data)</li>
+        <li>Right to request deletion of personal information</li>
+        <li>Right to non-discrimination for exercising CCPA rights</li>
+    </ul>
+    <p><strong>Email:</strong> <a href="mailto:augustinemwathi96@gmail.com">Contact support habitowl</a> to exercise these rights.</p>
 
-    <p><em>This privacy policy is effective as of October 2025 and governs your use of HabitOwl services.</em></p>
+    <p><em>This privacy policy is effective as of November 2025 and governs your use of HabitOwl services.</em></p>
 </body>
 </html>

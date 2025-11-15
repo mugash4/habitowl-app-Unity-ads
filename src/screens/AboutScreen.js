@@ -174,6 +174,79 @@ const AboutScreen = ({ navigation }) => {
           </Card.Content>
         </Card>
 
+        {/* ✅ NEW: Third-Party Services Disclosure */}
+        <Card style={styles.card}>
+          <Card.Content>
+            <View style={styles.disclosureHeader}>
+              <Icon name="information" size={24} color="#4f46e5" />
+              <Text style={styles.sectionTitle}>Third-Party Services</Text>
+            </View>
+            
+            <View style={styles.serviceItem}>
+              <View style={styles.serviceIconContainer}>
+                <Icon name="google-ads" size={20} color="#34A853" />
+              </View>
+              <View style={styles.serviceContent}>
+                <Text style={styles.serviceName}>Google AdMob</Text>
+                <Text style={styles.serviceDescription}>
+                  This app uses Google AdMob for displaying advertisements. 
+                  AdMob may collect device information and usage data for personalized advertising.
+                </Text>
+                <Button
+                  mode="text"
+                  compact
+                  onPress={() => handleOpenLink('https://policies.google.com/privacy')}
+                  style={styles.privacyButton}
+                  labelStyle={styles.privacyButtonLabel}
+                >
+                  View AdMob Privacy Policy →
+                </Button>
+              </View>
+            </View>
+
+            <View style={styles.serviceItem}>
+              <View style={styles.serviceIconContainer}>
+                <Icon name="robot" size={20} color="#4f46e5" />
+              </View>
+              <View style={styles.serviceContent}>
+                <Text style={styles.serviceName}>AI Services</Text>
+                <Text style={styles.serviceDescription}>
+                  AI features are powered by multiple providers including:
+                </Text>
+                <View style={styles.aiProvidersList}>
+                  <Text style={styles.aiProvider}>• DeepSeek AI (China-based)</Text>
+                  <Text style={styles.aiProvider}>• OpenAI / ChatGPT</Text>
+                  <Text style={styles.aiProvider}>• OpenRouter</Text>
+                </View>
+                <Text style={styles.serviceWarning}>
+                  ⚠️ When you use AI coaching, your prompts and habit data are sent to these AI service providers.
+                </Text>
+                <Button
+                  mode="text"
+                  compact
+                  onPress={() => handleOpenLink('https://habitowl-3405d.web.app/privacy')}
+                  style={styles.privacyButton}
+                  labelStyle={styles.privacyButtonLabel}
+                >
+                  Read Full Privacy Policy →
+                </Button>
+              </View>
+            </View>
+
+            <View style={styles.optOutBox}>
+              <Icon name="shield-check" size={20} color="#10b981" />
+              <View style={styles.optOutContent}>
+                <Text style={styles.optOutTitle}>Your Privacy Choices</Text>
+                <Text style={styles.optOutText}>
+                  • Opt out of personalized ads in your device settings
+                  {'\n'}• AI features are optional - don't use them to avoid AI data processing
+                  {'\n'}• Upgrade to Premium to remove all advertisements
+                </Text>
+              </View>
+            </View>
+          </Card.Content>
+        </Card>
+
         {/* Technology Stack */}
         <Card style={styles.card}>
           <Card.Content>
@@ -288,7 +361,7 @@ const AboutScreen = ({ navigation }) => {
             
             <Button
               mode="text"
-              onPress={() => handleOpenLink('https://habitowl-3405d.web.app/privacy.html')}
+              onPress={() => handleOpenLink('https://habitowl-3405d.web.app/privacy')}
               style={styles.legalButton}
             >
               Privacy Policy
@@ -296,7 +369,7 @@ const AboutScreen = ({ navigation }) => {
             
             <Button
               mode="text"
-              onPress={() => handleOpenLink('https://habitowl-3405d.web.app/terms.html')}
+              onPress={() => handleOpenLink('https://habitowl-3405d.web.app/terms')}
               style={styles.legalButton}
             >
               Terms of Service
@@ -409,6 +482,94 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     lineHeight: 20,
     marginLeft: 36,
+  },
+  // ✅ NEW: Disclosure Styles
+  disclosureHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  serviceItem: {
+    flexDirection: 'row',
+    marginBottom: 24,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  serviceIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f3f4f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  serviceContent: {
+    flex: 1,
+  },
+  serviceName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 6,
+  },
+  serviceDescription: {
+    fontSize: 14,
+    color: '#6b7280',
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  aiProvidersList: {
+    marginLeft: 8,
+    marginTop: 6,
+    marginBottom: 8,
+  },
+  aiProvider: {
+    fontSize: 13,
+    color: '#4b5563',
+    marginBottom: 4,
+  },
+  serviceWarning: {
+    fontSize: 13,
+    color: '#dc2626',
+    backgroundColor: '#fef2f2',
+    padding: 8,
+    borderRadius: 6,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  privacyButton: {
+    alignSelf: 'flex-start',
+    marginTop: 4,
+  },
+  privacyButtonLabel: {
+    fontSize: 13,
+    color: '#4f46e5',
+  },
+  optOutBox: {
+    flexDirection: 'row',
+    backgroundColor: '#f0fdf4',
+    padding: 12,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#10b981',
+    marginTop: 8,
+  },
+  optOutContent: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  optOutTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#047857',
+    marginBottom: 6,
+  },
+  optOutText: {
+    fontSize: 13,
+    color: '#065f46',
+    lineHeight: 20,
   },
   techGrid: {
     flexDirection: 'row',
