@@ -7,7 +7,7 @@ import { Platform } from 'react-native';
 
 export const ADMOB_CONFIG = {
   // ==========================================
-  // AD UNIT IDs
+  // AD UNIT IDs - REPLACE WITH YOUR REAL IDS
   // ==========================================
   AD_UNIT_IDS: {
     // ANDROID Ad Unit IDs
@@ -34,8 +34,8 @@ export const ADMOB_CONFIG = {
   // Max interstitials per session
   MAX_INTERSTITIALS_PER_SESSION: 5,
   
-  // ✅ PRODUCTION: Set to false to hide console logs
-  DEBUG_MODE: __DEV__, // Automatically false in production builds
+  // Debug mode - set to false in production
+  DEBUG_MODE: true, // ✅ Keep true to see logs
   
   // Auto-load ads after initialization
   AUTO_LOAD_ADS: true,
@@ -55,7 +55,11 @@ export const ADMOB_CONFIG = {
  */
 export const getAdUnitId = (adType) => {
   const platform = Platform.OS === 'ios' ? 'IOS' : 'ANDROID';
-  return ADMOB_CONFIG.AD_UNIT_IDS[platform][adType];
+  const adUnitId = ADMOB_CONFIG.AD_UNIT_IDS[platform][adType];
+  
+  console.log(`[AdMob Config] Getting ${adType} ad unit for ${platform}:`, adUnitId);
+  
+  return adUnitId;
 };
 
 export default ADMOB_CONFIG;

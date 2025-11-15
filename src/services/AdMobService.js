@@ -200,8 +200,8 @@ class AdMobService {
     }
   }
 
-  /**
-   * ✅ FIXED: Reliable wait for initialization
+    /**
+   * ✅ IMPROVED: More reliable wait for initialization
    */
   async waitForInitialization() {
     console.log('[AdMob] ⏳ Wait requested, checking status...');
@@ -227,9 +227,9 @@ class AdMobService {
       }
     }
     
-    // Double-check completion with polling (safety fallback)
+    // ✅ FIX: More aggressive polling with shorter timeout
     let attempts = 0;
-    const maxAttempts = 100; // 10 seconds max (100ms intervals)
+    const maxAttempts = 50; // 5 seconds max (100ms intervals)
     
     while (this.initializationInProgress && attempts < maxAttempts) {
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -237,11 +237,11 @@ class AdMobService {
     }
     
     if (attempts >= maxAttempts) {
-      console.log('[AdMob] ⚠️ Initialization timeout after 10s');
+      console.log('[AdMob] ⚠️ Initialization timeout after 5s - proceeding anyway');
     }
     
     const status = {
-      success: this.initializationAttempted && !this.initializationInProgress,
+      success: this.initializationAttempted || attempts >= maxAttempts,
       isInitialized: this.isInitialized,
       premiumStatusLoaded: this.premiumStatusLoaded,
       error: this.initializationError

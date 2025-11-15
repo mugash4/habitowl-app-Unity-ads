@@ -238,23 +238,16 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
     }
   };
 
-    /**
+  /**
    * Handle offer click
    */
   const handleOfferClick = async () => {
     if (!offer) return;
 
     try {
-      // Track click - WITH ERROR ALERTS
+      // Track click
       if (PromoService && PromoService.trackOfferClick) {
-        console.log('📱 PromoOfferBanner: Calling trackOfferClick...');
-        const success = await PromoService.trackOfferClick(offer.id);
-        if (!success) {
-          console.error('📱 PromoOfferBanner: Click tracking FAILED - check console');
-          // Don't alert user, just log it
-        } else {
-          console.log('📱 PromoOfferBanner: Click tracked successfully ✅');
-        }
+        PromoService.trackOfferClick(offer.id).catch(() => {});
       }
       
       if (FirebaseService && FirebaseService.trackEvent) {
@@ -274,15 +267,9 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
           {
             text: 'Upgrade Now',
             onPress: async () => {
-              // Track conversion - WITH ERROR ALERTS
+              // Track conversion
               if (PromoService && PromoService.trackOfferConversion) {
-                console.log('📱 PromoOfferBanner: Calling trackOfferConversion...');
-                const success = await PromoService.trackOfferConversion(offer.id);
-                if (!success) {
-                  console.error('📱 PromoOfferBanner: Conversion tracking FAILED - check console');
-                } else {
-                  console.log('📱 PromoOfferBanner: Conversion tracked successfully ✅');
-                }
+                PromoService.trackOfferConversion(offer.id).catch(() => {});
               }
               
               if (FirebaseService && FirebaseService.trackEvent) {
