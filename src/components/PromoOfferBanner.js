@@ -239,22 +239,30 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
   };
 
   /**
-   * Handle offer click
-   */
+ * Handle offer click
+ */
   const handleOfferClick = async () => {
     if (!offer) return;
 
     try {
-      // Track click
+      // ✅ FIXED: Better error logging for tracking
+      console.log('🎯 User clicked promo offer:', offer.id);
+    
+      // Track click with proper error logging
       if (PromoService && PromoService.trackOfferClick) {
-        PromoService.trackOfferClick(offer.id).catch(() => {});
+        try {
+          await PromoService.trackOfferClick(offer.id);
+          console.log('✅ Click tracked successfully');
+        } catch (clickError) {
+          console.error('❌ Failed to track click:', clickError);
+        }
       }
-      
+    
       if (FirebaseService && FirebaseService.trackEvent) {
         FirebaseService.trackEvent('promo_offer_clicked', {
           offer_id: offer.id,
           offer_title: offer.title
-        }).catch(() => {});
+        }).catch((err) => console.log('Analytics tracking failed:', err.message));
       }
 
       // Show offer details
@@ -267,18 +275,26 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
           {
             text: 'Upgrade Now',
             onPress: async () => {
-              // Track conversion
+              // ✅ FIXED: Better error logging for conversion tracking
+              console.log('💰 User clicked Upgrade Now - tracking conversion');
+            
+              // Track conversion with proper error logging
               if (PromoService && PromoService.trackOfferConversion) {
-                PromoService.trackOfferConversion(offer.id).catch(() => {});
+                try {
+                  await PromoService.trackOfferConversion(offer.id);
+                  console.log('✅ Conversion tracked successfully');
+                } catch (convError) {
+                  console.error('❌ Failed to track conversion:', convError);
+                }
               }
-              
+            
               if (FirebaseService && FirebaseService.trackEvent) {
                 FirebaseService.trackEvent('promo_offer_converted', {
                   offer_id: offer.id,
                   offer_title: offer.title
-                }).catch(() => {});
+                }).catch((err) => console.log('Analytics tracking failed:', err.message));
               }
-              
+            
               // Navigate to upgrade
               if (onUpgradePress && typeof onUpgradePress === 'function') {
                 onUpgradePress();
@@ -288,9 +304,10 @@ const PromoOfferBanner = ({ onUpgradePress, style = {} }) => {
         ]
       );
     } catch (error) {
-      console.error('PromoOfferBanner click error:', error);
+      console.error('❌ PromoOfferBanner click error:', error);
     }
   };
+
 
   /**
    * Handle dismiss
