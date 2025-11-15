@@ -234,6 +234,9 @@
         "projectId": "6e390587-527f-484b-a6fd-09aff553df18"
       }
     },
-    "owner": "augustinemwathi6"
+    "owner": "augustinemwathi6",
+    "description": "HabitOwl - Smart Habit & Routine Builder. Developed and managed by Astraea Labs.",
+    "developedBy": "Astraea Labs",
+    "copyright": "© 2025 Astraea Labs. All rights reserved."
   }
 }

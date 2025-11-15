@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
+  StyleStyle,
   Linking,
   Image,
   Platform,
@@ -95,24 +95,6 @@ const AboutScreen = ({ navigation }) => {
     }
   ];
 
-  const team = [
-    {
-      name: 'Development Team',
-      role: 'Full-Stack Development',
-      description: 'Passionate developers committed to building tools that improve lives.'
-    },
-    {
-      name: 'AI Research Team',
-      role: 'Machine Learning & AI',
-      description: 'Experts in behavioral psychology and machine learning algorithms.'
-    },
-    {
-      name: 'Design Team',
-      role: 'User Experience',
-      description: 'Creating intuitive and delightful user experiences.'
-    }
-  ];
-
   return (
     <View style={styles.container}>
       <Appbar.Header>
@@ -142,18 +124,41 @@ const AboutScreen = ({ navigation }) => {
           </Text>
         </LinearGradient>
 
+        {/* ✅ UPDATED: Developer Information Card */}
+        <Card style={styles.card}>
+          <Card.Content>
+            <View style={styles.developerHeader}>
+              <Icon name="code-tags" size={24} color="#4f46e5" />
+              <Text style={styles.sectionTitle}>Developed By</Text>
+            </View>
+            
+            <View style={styles.developerInfo}>
+              <Text style={styles.developerName}>Astraea Labs</Text>
+              <Text style={styles.developerDescription}>
+                Astraea Labs is a forward-thinking software development company specializing in 
+                AI-powered mobile applications that help people improve their lives.
+              </Text>
+              
+              <View style={styles.developerBadge}>
+                <Icon name="shield-check" size={18} color="#10b981" />
+                <Text style={styles.developerBadgeText}>Verified Developer</Text>
+              </View>
+            </View>
+          </Card.Content>
+        </Card>
+
         {/* Mission Statement */}
         <Card style={styles.card}>
           <Card.Content>
             <Text style={styles.sectionTitle}>Our Mission</Text>
             <Text style={styles.missionText}>
-              At HabitOwl, we believe that small, consistent actions lead to extraordinary transformations. 
+              At Astraea Labs, we believe that small, consistent actions lead to extraordinary transformations. 
               Our mission is to empower individuals to build sustainable habits through intelligent technology, 
               personalized guidance, and a supportive community.
             </Text>
             <Text style={styles.missionText}>
-              We combine cutting-edge AI with behavioral science to create an app that doesn't just track 
-              your habits—it understands them, learns from them, and helps you optimize them for lasting change.
+              We combine cutting-edge AI with behavioral science to create apps that don't just track 
+              your habits—they understand them, learn from them, and help you optimize them for lasting change.
             </Text>
           </Card.Content>
         </Card>
@@ -174,7 +179,7 @@ const AboutScreen = ({ navigation }) => {
           </Card.Content>
         </Card>
 
-        {/* ✅ NEW: Third-Party Services Disclosure */}
+        {/* ✅ Third-Party Services Disclosure */}
         <Card style={styles.card}>
           <Card.Content>
             <View style={styles.disclosureHeader}>
@@ -272,20 +277,6 @@ const AboutScreen = ({ navigation }) => {
           </Card.Content>
         </Card>
 
-        {/* Team */}
-        <Card style={styles.card}>
-          <Card.Content>
-            <Text style={styles.sectionTitle}>Our Team</Text>
-            {team.map((member, index) => (
-              <View key={index} style={styles.teamMember}>
-                <Text style={styles.memberName}>{member.name}</Text>
-                <Text style={styles.memberRole}>{member.role}</Text>
-                <Text style={styles.memberDescription}>{member.description}</Text>
-              </View>
-            ))}
-          </Card.Content>
-        </Card>
-
         {/* Contact & Links */}
         <Card style={styles.card}>
           <Card.Content>
@@ -335,6 +326,12 @@ const AboutScreen = ({ navigation }) => {
             />
             
             <List.Item
+              title="Developer"
+              description="Astraea Labs"
+              left={(props) => <List.Icon {...props} icon="code-tags" />}
+            />
+            
+            <List.Item
               title="Build"
               description="Production"
               left={(props) => <List.Icon {...props} icon="hammer" />}
@@ -380,10 +377,10 @@ const AboutScreen = ({ navigation }) => {
         {/* Copyright */}
         <View style={styles.copyright}>
           <Text style={styles.copyrightText}>
-            © 2025 HabitOwl. All rights reserved.
+            © 2025 Astraea Labs. All rights reserved.
           </Text>
           <Text style={styles.copyrightText}>
-            Made with ❤️ for habit builders everywhere
+            Made with ❤️ by Astraea Labs for habit builders everywhere
           </Text>
         </View>
       </ScrollView>
@@ -457,6 +454,47 @@ const styles = StyleSheet.create({
     color: '#1f2937',
     marginBottom: 16,
   },
+  // ✅ NEW: Developer Card Styles
+  developerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  developerInfo: {
+    backgroundColor: '#f0f9ff',
+    padding: 16,
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4f46e5',
+  },
+  developerName: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1e40af',
+    marginBottom: 12,
+  },
+  developerDescription: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: '#1e3a8a',
+    marginBottom: 12,
+  },
+  developerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#d1fae5',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginTop: 8,
+  },
+  developerBadgeText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#065f46',
+    marginLeft: 6,
+  },
   missionText: {
     fontSize: 16,
     lineHeight: 24,
@@ -483,7 +521,6 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginLeft: 36,
   },
-  // ✅ NEW: Disclosure Styles
   disclosureHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -586,25 +623,6 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     marginTop: 8,
     textAlign: 'center',
-  },
-  teamMember: {
-    marginBottom: 20,
-  },
-  memberName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1f2937',
-    marginBottom: 4,
-  },
-  memberRole: {
-    fontSize: 14,
-    color: '#4f46e5',
-    marginBottom: 6,
-  },
-  memberDescription: {
-    fontSize: 14,
-    color: '#6b7280',
-    lineHeight: 20,
   },
   contactButton: {
     marginBottom: 12,

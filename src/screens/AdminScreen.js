@@ -6,6 +6,7 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  RefreshControl,
 } from 'react-native';
 import {
   Card,
@@ -49,11 +50,12 @@ const AdminScreen = ({ navigation }) => {
   
   const [showApiDialog, setShowApiDialog] = useState(false);
   const [showPromoDialog, setShowPromoDialog] = useState(false);
-  const [showPromoStatsDialog, setShowPromoStatsDialog] = useState(false); // ✅ NEW
+  const [showPromoStatsDialog, setShowPromoStatsDialog] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState('deepseek');
   const [apiKey, setApiKey] = useState('');
   const [defaultProvider, setDefaultProvider] = useState('deepseek');
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false); // ✅ NEW: Pull-to-refresh state
   const [isVerifyingAdmin, setIsVerifyingAdmin] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState(false);
 
@@ -117,12 +119,18 @@ const AdminScreen = ({ navigation }) => {
     }
   };
 
-  const loadAdminDataSafely = async () => {
-    console.log('AdminScreen: Loading admin data...');
+  // ✅ CRITICAL FIX: Force refresh with proper data reloading
+  const loadAdminDataSafely = async (isManualRefresh = false) => {
+    console.log('AdminScreen: Loading admin data...', isManualRefresh ? '(MANUAL REFRESH)' : '(AUTO)');
     
     try {
-      setLoading(true);
+      if (isManualRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
       
+      // ✅ Load app statistics
       const statsPromise = AdminService.getAppStatistics();
       const statsTimeout = new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Stats timeout')), 10000)
@@ -142,6 +150,7 @@ const AdminScreen = ({ navigation }) => {
         console.warn('AdminScreen: Stats loading failed:', statsError.message);
       }
       
+      // ✅ Load AI provider
       const providerPromise = AdminService.getDefaultAiProvider();
       const providerTimeout = new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Provider timeout')), 5000)
@@ -156,39 +165,56 @@ const AdminScreen = ({ navigation }) => {
         setDefaultProvider('deepseek');
       }
       
-      // ✅ NEW: Load promo analytics
+      // ✅ CRITICAL FIX: Load promo analytics with FORCED REFRESH
       if (PromoService) {
         try {
-          const promoStatsPromise = PromoService.getOfferStatistics();
-          const promoTimeout = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Promo stats timeout')), 5000)
-          );
+          console.log('📊 AdminScreen: Loading promo analytics...');
           
-          const promoAnalytics = await Promise.race([promoStatsPromise, promoTimeout]);
-          console.log('AdminScreen: Promo stats loaded:', promoAnalytics);
+          // ✅ Get fresh statistics from Firestore (no caching)
+          const promoAnalytics = await PromoService.getOfferStatistics();
+          console.log('✅ AdminScreen: Promo stats loaded:', promoAnalytics);
           setPromoStats(promoAnalytics);
           
-          // Load active offers
-          const offersPromise = PromoService.getAllActiveOffers();
-          const offersTimeout = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Offers timeout')), 5000)
-          );
-          
-          const offers = await Promise.race([offersPromise, offersTimeout]);
-          console.log('AdminScreen: Active offers loaded:', offers.length);
+          // ✅ Load active offers
+          const offers = await PromoService.getAllActiveOffers();
+          console.log('✅ AdminScreen: Active offers loaded:', offers.length);
           setActiveOffers(offers);
+          
+          // ✅ Log detailed metrics for debugging
+          console.log('📊 METRICS UPDATE:', {
+            totalOffers: promoAnalytics.totalOffers,
+            activeOffers: promoAnalytics.activeOffers,
+            impressions: promoAnalytics.totalImpressions,
+            clicks: promoAnalytics.totalClicks,
+            conversions: promoAnalytics.totalConversions,
+            conversionRate: promoAnalytics.conversionRate + '%'
+          });
         } catch (promoError) {
-          console.warn('AdminScreen: Promo analytics loading failed:', promoError.message);
+          console.error('❌ AdminScreen: Promo analytics loading failed:', promoError);
         }
       }
       
-      console.log('AdminScreen: Data loaded successfully');
+      console.log('✅ AdminScreen: All data loaded successfully');
+      
+      // ✅ Show success message on manual refresh
+      if (isManualRefresh) {
+        Alert.alert('Success', 'Dashboard data refreshed successfully!');
+      }
       
     } catch (error) {
       console.error('AdminScreen: Data loading error:', error);
+      if (isManualRefresh) {
+        Alert.alert('Error', 'Failed to refresh data. Please try again.');
+      }
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  // ✅ NEW: Pull-to-refresh handler
+  const onRefresh = async () => {
+    await loadAdminDataSafely(true);
   };
 
   const handleSetApiKey = async () => {
@@ -309,7 +335,7 @@ const AdminScreen = ({ navigation }) => {
     );
   };
 
-  // ✅ NEW: Render promo analytics section
+  // ✅ FIXED: Updated promo analytics card with live data
   const renderPromoAnalyticsCard = () => {
     if (!PromoService || !promoStats) {
       return null;
@@ -434,8 +460,8 @@ const AdminScreen = ({ navigation }) => {
         <Appbar.Content title="Admin Dashboard" />
         <Appbar.Action 
           icon="refresh" 
-          onPress={loadAdminDataSafely}
-          disabled={loading}
+          onPress={() => loadAdminDataSafely(true)}
+          disabled={loading || refreshing}
         />
       </Appbar.Header>
 
@@ -444,6 +470,14 @@ const AdminScreen = ({ navigation }) => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={true}
         keyboardShouldPersistTaps='handled'
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#4f46e5']}
+            tintColor="#4f46e5"
+          />
+        }
       >
         <Card style={[styles.card, styles.securityNotice]}>
           <Card.Content>
@@ -452,7 +486,7 @@ const AdminScreen = ({ navigation }) => {
               <Text style={styles.noticeTitle}>Admin Access</Text>
             </View>
             <Text style={styles.noticeText}>
-              You have administrative privileges. API keys and sensitive data are visible only to verified admins.
+              You have administrative privileges. Pull down to refresh dashboard stats.
             </Text>
           </Card.Content>
         </Card>
@@ -460,7 +494,7 @@ const AdminScreen = ({ navigation }) => {
         <Text style={styles.sectionTitle}>App Statistics</Text>
         {renderStats()}
 
-        {/* ✅ NEW: Promo Analytics Section */}
+        {/* ✅ Promo Analytics Section */}
         {renderPromoAnalyticsCard()}
 
         <Card style={styles.card}>
@@ -516,7 +550,6 @@ const AdminScreen = ({ navigation }) => {
 
         </Card>
 
-        {/* ✅ NEW: User Management Section */}
         <Card style={styles.card}>
           <List.Subheader>👥 User Management</List.Subheader>
           
@@ -666,7 +699,7 @@ const AdminScreen = ({ navigation }) => {
         </Dialog>
       </Portal>
 
-      {/* ✅ NEW: Promo Analytics Dialog */}
+      {/* ✅ Promo Analytics Dialog */}
       <Portal>
         <Dialog 
           visible={showPromoStatsDialog} 
@@ -906,7 +939,6 @@ const styles = StyleSheet.create({
     color: '#991b1b',
     marginLeft: 8,
   },
-  // ✅ NEW: Promo analytics styles
   promoStatsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
