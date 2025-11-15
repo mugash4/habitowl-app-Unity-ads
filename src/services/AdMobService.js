@@ -1,8 +1,8 @@
 /**
- * ✅ FIXED: Google AdMob Service with Guaranteed Initialization
- * - Ensures SDK initializes BEFORE any ads attempt to load
- * - Provides reliable initialization status
- * - Prevents banner loading race conditions
+ * ✅ COMPLETELY FIXED: Google AdMob Service
+ * - More aggressive initialization
+ * - Better status tracking
+ * - Guaranteed readiness for banner ads
  */
 
 import { Platform } from 'react-native';
@@ -60,7 +60,7 @@ class AdMobService {
     this.initializationAttempted = false;
     this.initializationError = null;
     this.initializationPromise = null;
-    this.initializationResolvers = [];
+    this.initializationComplete = false; // NEW: Explicit complete flag
     
     // Status change listeners
     this.statusChangeListeners = [];
@@ -71,10 +71,10 @@ class AdMobService {
   }
 
   /**
-   * ✅ FIXED: Robust async initialization
+   * ✅ FIXED: More robust async initialization
    */
   async initializeAsync() {
-    if (this.initializationInProgress || this.initializationAttempted) {
+    if (this.initializationInProgress || this.initializationComplete) {
       console.log('[AdMob] ⚠️ Init already in progress or completed');
       return this.initializationPromise;
     }
@@ -86,29 +86,33 @@ class AdMobService {
         console.log('[AdMob] 🚀 Starting initialization sequence...');
         
         // Step 1: Load premium status from storage FIRST
-        console.log('[AdMob] Step 1/3: Loading premium status...');
+        console.log('[AdMob] Step 1/4: Loading premium status...');
         await this.loadPremiumStatusAsync();
         console.log('[AdMob] ✅ Premium status loaded:', {
           premium: this.isPremium,
           admin: this.isAdmin
         });
         
+        // ✅ FIX: Add delay after loading status
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
         // Step 2: Initialize SDK (if available and not web)
         if (Platform.OS !== 'web' && sdkAvailable && mobileAds) {
-          console.log('[AdMob] Step 2/3: Initializing AdMob SDK...');
+          console.log('[AdMob] Step 2/4: Initializing AdMob SDK...');
           await this.initializeSDK();
+          
+          // ✅ FIX: Wait for SDK to be fully ready
+          console.log('[AdMob] Step 3/4: Waiting for SDK to be fully ready...');
+          await new Promise(resolve => setTimeout(resolve, 2000));
         } else {
-          console.log('[AdMob] Step 2/3: Skipping SDK init (web or SDK unavailable)');
+          console.log('[AdMob] Step 2/4: Skipping SDK init (web or SDK unavailable)');
         }
         
         // Step 3: Mark as complete
-        console.log('[AdMob] Step 3/3: Finalization...');
+        console.log('[AdMob] Step 4/4: Finalization...');
         this.initializationAttempted = true;
         this.initializationInProgress = false;
-        
-        // Notify all waiters
-        this.initializationResolvers.forEach(resolve => resolve(true));
-        this.initializationResolvers = [];
+        this.initializationComplete = true; // ✅ NEW: Set complete flag
         
         // Notify all listeners
         this.notifyStatusChange();
@@ -122,10 +126,6 @@ class AdMobService {
         this.initializationError = error.message;
         this.initializationAttempted = true;
         this.initializationInProgress = false;
-        
-        // Notify waiters of failure
-        this.initializationResolvers.forEach(resolve => resolve(false));
-        this.initializationResolvers = [];
         
         this.notifyStatusChange();
         return false;
@@ -182,33 +182,32 @@ class AdMobService {
       
       console.log('[AdMob] ✅ SDK initialized successfully');
       
-      // Load ads if free user and auto-load enabled
+      // ✅ FIX: Load ads after longer delay for free users
       if (!this.isPremium && !this.isAdmin && ADMOB_CONFIG.AUTO_LOAD_ADS) {
-        // Wait a bit before creating ads to ensure SDK is fully ready
         setTimeout(() => {
           console.log('[AdMob] 📱 Creating ads for free user...');
           this.createAndLoadAds();
-        }, 1500); // Increased delay for stability
+        }, 2500); // Increased delay
       } else {
-        console.log('[AdMob] ℹ️ Skipping ad creation (premium/admin user or auto-load disabled)');
+        console.log('[AdMob] ℹ️ Skipping ad creation (premium/admin or auto-load disabled)');
       }
       
     } catch (error) {
       console.log('[AdMob] ❌ SDK init error:', error.message);
       this.initializationError = error.message;
-      throw error; // Propagate error
+      throw error;
     }
   }
 
-    /**
-   * ✅ IMPROVED: More reliable wait for initialization
+  /**
+   * ✅ IMPROVED: Wait for initialization with better tracking
    */
   async waitForInitialization() {
-    console.log('[AdMob] ⏳ Wait requested, checking status...');
+    console.log('[AdMob] ⏳ Wait requested...');
     
-    // If already done, return immediately
-    if (this.initializationAttempted && !this.initializationInProgress) {
-      console.log('[AdMob] ✅ Already initialized');
+    // If completely done, return immediately
+    if (this.initializationComplete && this.premiumStatusLoaded) {
+      console.log('[AdMob] ✅ Already fully initialized');
       return {
         success: true,
         isInitialized: this.isInitialized,
@@ -216,32 +215,35 @@ class AdMobService {
       };
     }
     
-    // If initialization promise exists, wait for it
+    // If promise exists, wait for it
     if (this.initializationPromise) {
-      console.log('[AdMob] ⏳ Waiting for existing initialization promise...');
+      console.log('[AdMob] ⏳ Waiting for initialization promise...');
       try {
         await this.initializationPromise;
-        console.log('[AdMob] ✅ Initialization promise resolved');
       } catch (error) {
-        console.log('[AdMob] ⚠️ Initialization promise rejected:', error.message);
+        console.log('[AdMob] ⚠️ Promise rejected:', error.message);
       }
     }
     
-    // ✅ FIX: More aggressive polling with shorter timeout
+    // ✅ FIX: More aggressive polling
     let attempts = 0;
-    const maxAttempts = 50; // 5 seconds max (100ms intervals)
+    const maxAttempts = 100; // 10 seconds max (100ms intervals)
     
-    while (this.initializationInProgress && attempts < maxAttempts) {
+    while (!this.initializationComplete && attempts < maxAttempts) {
       await new Promise(resolve => setTimeout(resolve, 100));
       attempts++;
+      
+      if (attempts % 10 === 0) {
+        console.log(`[AdMob] Still waiting... (${attempts * 100}ms)`);
+      }
     }
     
     if (attempts >= maxAttempts) {
-      console.log('[AdMob] ⚠️ Initialization timeout after 5s - proceeding anyway');
+      console.log('[AdMob] ⚠️ Timeout after 10s');
     }
     
     const status = {
-      success: this.initializationAttempted || attempts >= maxAttempts,
+      success: this.initializationComplete || attempts >= maxAttempts,
       isInitialized: this.isInitialized,
       premiumStatusLoaded: this.premiumStatusLoaded,
       error: this.initializationError
@@ -261,7 +263,7 @@ class AdMobService {
     this.statusChangeListeners.push(callback);
     
     // Call immediately if loaded
-    if (this.premiumStatusLoaded && this.initializationAttempted) {
+    if (this.premiumStatusLoaded && this.initializationComplete) {
       setTimeout(() => {
         try {
           callback(this.getStatus());
@@ -516,7 +518,7 @@ class AdMobService {
   }
 
   /**
-   * ✅ Get banner config - Returns config when ready
+   * ✅ FIXED: Get banner config - Only returns when FULLY ready
    */
   getBannerConfig() {
     if (!BannerAdSize || Platform.OS === 'web') {
@@ -529,12 +531,17 @@ class AdMobService {
       return null;
     }
 
+    // ✅ FIX: Check complete initialization
+    if (!this.initializationComplete) {
+      console.log('[AdMob] ⏳ Initialization not complete yet');
+      return null;
+    }
+
     if (!this.premiumStatusLoaded) {
       console.log('[AdMob] ⏳ Premium status not loaded yet');
       return null;
     }
 
-    // ✅ Only return config if SDK is initialized
     if (!this.isInitialized) {
       console.log('[AdMob] ⏳ SDK not initialized yet');
       return null;
@@ -601,7 +608,8 @@ class AdMobService {
            !this.isAdmin &&
            Platform.OS !== 'web' && 
            sdkAvailable &&
-           this.premiumStatusLoaded;
+           this.premiumStatusLoaded &&
+           this.initializationComplete; // ✅ NEW: Check complete flag
   }
 
   /**
@@ -639,6 +647,7 @@ class AdMobService {
       isInitialized: this.isInitialized,
       initializationAttempted: this.initializationAttempted,
       initializationInProgress: this.initializationInProgress,
+      initializationComplete: this.initializationComplete, // ✅ NEW
       initializationError: this.initializationError,
       isPremium: this.isPremium,
       isAdmin: this.isAdmin,

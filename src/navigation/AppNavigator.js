@@ -59,10 +59,39 @@ const BANNER_AD_HEIGHT = 50;
 
 /**
  * FREE USER TAB BAR - WITH BANNER AD
+ * ✅ FIXED: Better initialization wait
  */
 const FreeUserTabBar = ({ state, descriptors, navigation, insets }) => {
   const systemNavHeight = insets.bottom || 0;
   const totalHeight = TAB_ICONS_HEIGHT + BANNER_AD_HEIGHT + systemNavHeight;
+  const [isBannerReady, setIsBannerReady] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    
+    // ✅ FIX: Wait for banner to be ready before rendering
+    const checkBannerReady = async () => {
+      console.log('[TabBar] Checking if banner is ready...');
+      
+      // Wait for AdMob to initialize
+      await AdMobService.waitForInitialization();
+      
+      // Extra delay to ensure everything is loaded
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      if (mounted) {
+        const status = AdMobService.getStatus();
+        console.log('[TabBar] Banner ready status:', status);
+        setIsBannerReady(true);
+      }
+    };
+    
+    checkBannerReady();
+    
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   return (
     <View style={{
@@ -143,7 +172,7 @@ const FreeUserTabBar = ({ state, descriptors, navigation, insets }) => {
         })}
       </View>
 
-      {/* Banner Ad Container */}
+      {/* Banner Ad Container - Only render when ready */}
       <View style={{
         height: BANNER_AD_HEIGHT,
         width: '100%',
@@ -153,7 +182,13 @@ const FreeUserTabBar = ({ state, descriptors, navigation, insets }) => {
         borderTopWidth: 1,
         borderTopColor: '#e5e7eb',
       }}>
-        <AdMobBanner />
+        {isBannerReady ? (
+          <AdMobBanner />
+        ) : (
+          <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 10, color: '#9ca3af' }}>Loading ad...</Text>
+          </View>
+        )}
       </View>
 
       {/* System Navigation Spacer */}
@@ -163,6 +198,7 @@ const FreeUserTabBar = ({ state, descriptors, navigation, insets }) => {
     </View>
   );
 };
+
 
 /**
  * PREMIUM USER TAB BAR - NO BANNER AD

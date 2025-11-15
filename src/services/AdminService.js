@@ -4,6 +4,8 @@ import {
   getDoc,
   setDoc,
   updateDoc,
+  deleteDoc,  // ✅ ADDED - Missing import
+  addDoc,     // ✅ ADDED - Missing import
   query, 
   where,
   getDocs
@@ -133,7 +135,7 @@ class AdminService {
     }
   }
 
-    // ✅ IMPROVED: Better API key retrieval with fallback
+  // ✅ IMPROVED: Better API key retrieval with fallback
   async getGlobalApiKey(provider) {
     try {
       console.log('AdminService: Getting API key for provider:', provider);
@@ -305,7 +307,7 @@ class AdminService {
       }
 
       const offersRef = collection(db, 'promo_offers');
-      await setDoc(doc(offersRef), {
+      await addDoc(offersRef, {
         ...offerData,
         createdAt: new Date().toISOString(),
         createdBy: auth.currentUser?.email || 'admin',
@@ -339,7 +341,7 @@ class AdminService {
     }
   }
 
-  // ===== NEW: USER MANAGEMENT & DELETION METHODS =====
+  // ===== USER MANAGEMENT & DELETION METHODS =====
 
   async getPendingDeletionRequests() {
     try {
@@ -461,127 +463,7 @@ class AdminService {
     }
   }
 
-    // ===== USER MANAGEMENT & ACCOUNT SUSPENSION =====
-
-  async getPendingDeletionRequests() {
-    try {
-      const isAdmin = await this.isCurrentUserAdmin();
-      if (!isAdmin) {
-        throw new Error('Unauthorized: Admin access required');
-      }
-
-      const q = query(
-        collection(db, 'deletion_requests'),
-        where('status', '==', 'pending')
-      );
-      
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-    } catch (error) {
-      console.error('AdminService: Error getting deletion requests:', error);
-      throw error;
-    }
-  }
-
-  async processAccountDeletion(userId, immediate = false) {
-    try {
-      const isAdmin = await this.isCurrentUserAdmin();
-      if (!isAdmin) {
-        throw new Error('Unauthorized: Admin access required');
-      }
-
-      console.log(`AdminService: Processing deletion for user: ${userId}`);
-
-      // Get user data first for archival
-      const userQuery = query(collection(db, 'users'), where('uid', '==', userId));
-      const userSnapshot = await getDocs(userQuery);
-      
-      if (userSnapshot.empty) {
-        throw new Error('User not found');
-      }
-
-      const userData = userSnapshot.docs[0].data();
-      const userDocRef = userSnapshot.docs[0].ref;
-
-      // Archive user data (for 90-day retention)
-      if (!immediate) {
-        await addDoc(collection(db, 'deleted_users_archive'), {
-          ...userData,
-          originalUserId: userId,
-          deletedAt: new Date().toISOString(),
-          deletedBy: auth.currentUser?.email || 'admin',
-          permanentDeletionDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
-          retentionReason: 'Legal compliance - 90 day retention'
-        });
-      }
-
-      // Delete user habits
-      const habitsQuery = query(
-        collection(db, 'habits'),
-        where('userId', '==', userId)
-      );
-      const habitsSnapshot = await getDocs(habitsQuery);
-      const habitsDeletion = habitsSnapshot.docs.map(doc => deleteDoc(doc.ref));
-
-      // Delete user analytics
-      const analyticsQuery = query(
-        collection(db, 'analytics'),
-        where('userId', '==', userId)
-      );
-      const analyticsSnapshot = await getDocs(analyticsQuery);
-      const analyticsDeletion = analyticsSnapshot.docs.map(doc => deleteDoc(doc.ref));
-
-      // Delete referrals
-      const referralsQuery = query(
-        collection(db, 'referrals'),
-        where('referrerId', '==', userId)
-      );
-      const referralsSnapshot = await getDocs(referralsQuery);
-      const referralsDeletion = referralsSnapshot.docs.map(doc => deleteDoc(doc.ref));
-
-      // Execute all deletions
-      await Promise.all([
-        ...habitsDeletion,
-        ...analyticsDeletion,
-        ...referralsDeletion
-      ]);
-
-      // Delete user document
-      await deleteDoc(userDocRef);
-
-      // Update deletion request status
-      const deletionRequestQuery = query(
-        collection(db, 'deletion_requests'),
-        where('userId', '==', userId),
-        where('status', '==', 'pending')
-      );
-      const deletionSnapshot = await getDocs(deletionRequestQuery);
-      if (!deletionSnapshot.empty) {
-        await updateDoc(deletionSnapshot.docs[0].ref, {
-          status: 'completed',
-          completedAt: new Date().toISOString(),
-          completedBy: auth.currentUser?.email || 'admin'
-        });
-      }
-
-      console.log(`AdminService: User ${userId} deleted successfully`);
-      return {
-        success: true,
-        archived: !immediate,
-        deletedRecords: {
-          habits: habitsSnapshot.size,
-          analytics: analyticsSnapshot.size,
-          referrals: referralsSnapshot.size
-        }
-      };
-    } catch (error) {
-      console.error('AdminService: Error processing account deletion:', error);
-      throw error;
-    }
-  }
+  // ===== ACCOUNT SUSPENSION METHODS =====
 
   async suspendUserAccount(userId, reason, durationDays = null) {
     try {
@@ -715,8 +597,6 @@ class AdminService {
       throw error;
     }
   }
-
-  
 }
 
 // Export as singleton instance (default export)
@@ -725,3 +605,4 @@ export default adminServiceInstance;
 
 // Also export the class itself as named export (for flexibility)
 export { AdminService };
+      

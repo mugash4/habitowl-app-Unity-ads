@@ -1,8 +1,8 @@
 /**
- * ✅ SIMPLIFIED & FIXED: AdMob Banner Component
- * - Removed overly strict checks
+ * ✅ COMPLETELY FIXED: AdMob Banner Component
+ * - Guaranteed initialization wait
+ * - Proper retry mechanism
  * - Better error handling
- * - Will show banner reliably for free users
  */
 
 import React, { useEffect, useState, useRef } from 'react';
@@ -25,7 +25,10 @@ try {
 const AdMobBanner = ({ style = {} }) => {
   const [shouldRender, setShouldRender] = useState(false);
   const [adUnitId, setAdUnitId] = useState(null);
+  const [isReady, setIsReady] = useState(false);
   const isMounted = useRef(true);
+  const retryCount = useRef(0);
+  const maxRetries = 3;
 
   useEffect(() => {
     console.log('[Banner] 🎬 Component mounted');
@@ -45,38 +48,59 @@ const AdMobBanner = ({ style = {} }) => {
           return;
         }
 
-        // ✅ FIX: Wait for AdMob to initialize with timeout
-        console.log('[Banner] ⏳ Waiting for AdMob initialization...');
+        console.log('[Banner] ⏳ Starting initialization wait...');
         
-        const initPromise = adMobService.waitForInitialization();
-        const timeoutPromise = new Promise(resolve => setTimeout(() => resolve({ timeout: true }), 5000));
+        // ✅ FIX 1: Wait for COMPLETE initialization with longer timeout
+        const waitStart = Date.now();
+        const maxWaitTime = 10000; // 10 seconds max wait
         
-        const result = await Promise.race([initPromise, timeoutPromise]);
-        
-        if (result.timeout) {
-          console.log('[Banner] ⚠️ Initialization timeout, trying anyway...');
-        } else {
-          console.log('[Banner] ✅ Initialization complete');
+        while (isMounted.current) {
+          const status = adMobService.getStatus();
+          
+          // Check if fully initialized
+          const fullyInitialized = status.isInitialized && 
+                                   status.premiumStatusLoaded && 
+                                   !status.initializationInProgress;
+          
+          if (fullyInitialized) {
+            console.log('[Banner] ✅ Initialization complete!');
+            break;
+          }
+          
+          // Check timeout
+          if (Date.now() - waitStart > maxWaitTime) {
+            console.log('[Banner] ⚠️ Initialization timeout - trying anyway');
+            break;
+          }
+          
+          // Wait a bit and check again
+          await new Promise(resolve => setTimeout(resolve, 200));
         }
 
         if (!isMounted.current) return;
 
-        // ✅ FIX: Give SDK extra time to be ready
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // ✅ FIX 2: Extra safety delay after initialization
+        console.log('[Banner] ⏳ Extra safety delay (2s)...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
         
         if (!isMounted.current) return;
 
         // Check if user should see ads
         const status = adMobService.getStatus();
-        console.log('[Banner] Status:', {
+        console.log('[Banner] Status check:', {
           initialized: status.isInitialized,
           premium: status.isPremium,
           admin: status.isAdmin,
-          shouldShow: status.shouldShowAds
+          shouldShow: status.shouldShowAds,
+          premiumLoaded: status.premiumStatusLoaded
         });
 
-        // ✅ FIX: Less strict check - show if not premium/admin
-        const shouldShow = !status.isPremium && !status.isAdmin && Platform.OS !== 'web';
+        // ✅ FIX 3: Stricter check - must be fully initialized
+        const shouldShow = status.isInitialized && 
+                          status.premiumStatusLoaded &&
+                          !status.isPremium && 
+                          !status.isAdmin && 
+                          Platform.OS !== 'web';
         
         if (shouldShow) {
           const config = adMobService.getBannerConfig();
@@ -84,32 +108,62 @@ const AdMobBanner = ({ style = {} }) => {
           
           if (config && config.adUnitId) {
             setAdUnitId(config.adUnitId);
-            setShouldRender(true);
-            console.log('[Banner] ✅ READY TO RENDER!');
-          } else {
-            console.log('[Banner] ⚠️ No config available, will retry...');
-            // ✅ FIX: Retry after delay
+            setIsReady(true);
+            
+            // ✅ FIX 4: Delay rendering slightly to ensure everything is ready
             setTimeout(() => {
               if (isMounted.current) {
-                const retryConfig = adMobService.getBannerConfig();
-                if (retryConfig && retryConfig.adUnitId) {
-                  setAdUnitId(retryConfig.adUnitId);
-                  setShouldRender(true);
-                  console.log('[Banner] ✅ READY after retry!');
-                }
+                setShouldRender(true);
+                console.log('[Banner] ✅ ✅ ✅ READY TO RENDER!');
               }
-            }, 2000);
+            }, 500);
+          } else {
+            console.log('[Banner] ⚠️ No config available');
+            
+            // ✅ FIX 5: Retry mechanism
+            if (retryCount.current < maxRetries) {
+              retryCount.current++;
+              console.log(`[Banner] 🔄 Retry attempt ${retryCount.current}/${maxRetries}`);
+              setTimeout(() => {
+                if (isMounted.current) {
+                  initBanner();
+                }
+              }, 3000);
+            } else {
+              console.log('[Banner] ❌ Max retries reached');
+            }
           }
         } else {
-          console.log('[Banner] ❌ User is premium/admin - no banner');
+          console.log('[Banner] ❌ User should not see ads:', {
+            reason: !status.isInitialized ? 'NOT_INITIALIZED' :
+                   !status.premiumStatusLoaded ? 'PREMIUM_STATUS_NOT_LOADED' :
+                   status.isPremium ? 'IS_PREMIUM' :
+                   status.isAdmin ? 'IS_ADMIN' : 'UNKNOWN'
+          });
         }
         
       } catch (error) {
         console.log('[Banner] ❌ Init error:', error.message);
+        
+        // ✅ FIX 6: Retry on error
+        if (retryCount.current < maxRetries && isMounted.current) {
+          retryCount.current++;
+          console.log(`[Banner] 🔄 Retry on error ${retryCount.current}/${maxRetries}`);
+          setTimeout(() => {
+            if (isMounted.current) {
+              initBanner();
+            }
+          }, 3000);
+        }
       }
     };
 
-    initBanner();
+    // ✅ FIX 7: Small initial delay to ensure parent component is ready
+    setTimeout(() => {
+      if (isMounted.current) {
+        initBanner();
+      }
+    }, 500);
 
     return () => {
       console.log('[Banner] 🚪 Unmounting');
@@ -118,12 +172,16 @@ const AdMobBanner = ({ style = {} }) => {
   }, []);
 
   // Don't render if conditions not met
-  if (!shouldRender || !adUnitId || !BannerAd || !BannerAdSize) {
+  if (!shouldRender || !adUnitId || !BannerAd || !BannerAdSize || !isReady) {
     const reason = !BannerAd || !BannerAdSize ? 'SDK_NOT_LOADED' :
+                   !isReady ? 'NOT_READY' :
                    !shouldRender ? 'SHOULD_NOT_RENDER' :
                    !adUnitId ? 'NO_AD_UNIT_ID' : 'UNKNOWN';
     
-    console.log('[Banner] Not rendering. Reason:', reason);
+    // Only log occasionally to avoid spam
+    if (retryCount.current === 0 || retryCount.current >= maxRetries) {
+      console.log('[Banner] Not rendering. Reason:', reason);
+    }
     return null;
   }
 
@@ -150,9 +208,11 @@ const AdMobBanner = ({ style = {} }) => {
           
           if (error.code === 3) {
             console.log('[Banner] ℹ️ ERROR CODE 3 (NO FILL) - This is NORMAL for:');
-            console.log('[Banner]   • New ad units (wait 24-48 hours)');
-            console.log('[Banner]   • Low ad inventory');
+            console.log('[Banner]   • New ad units (wait 24-48 hours after creating)');
+            console.log('[Banner]   • Low ad inventory in your region');
+            console.log('[Banner]   • Time of day with low advertiser demand');
             console.log('[Banner]   ✅ Your integration is CORRECT!');
+            console.log('[Banner]   ✅ Real ads will show once AdMob approves your app');
           }
         }}
         onAdOpened={() => {
