@@ -135,7 +135,7 @@ const AboutScreen = ({ navigation }) => {
             <View style={styles.developerInfo}>
               <Text style={styles.developerName}>Astraea Labs</Text>
               <Text style={styles.developerDescription}>
-                Astraea Labs is a forward-thinking software development company specializing in 
+                Astraea Labs is a forward-thinking software development professionals specializing in 
                 AI-powered mobile applications that help people improve their lives.
               </Text>
               

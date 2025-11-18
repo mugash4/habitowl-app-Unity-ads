@@ -19,7 +19,7 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.habitowl.app",
+      "bundleIdentifier": "com.mugash4.habitowl",
       "infoPlist": {
         "SKAdNetworkItems": [
           {
@@ -171,7 +171,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
       },
-      "package": "com.habitowl.app",
+      "package": "com.mugash4.habitowl",
       "permissions": [
         "android.permission.INTERNET",
         "android.permission.ACCESS_NETWORK_STATE",
@@ -181,7 +181,7 @@
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "com.google.android.gms.permission.AD_ID"
       ],
-      "versionCode": 11,
+      "versionCode": 12,
       "googleServicesFile": "./google-services.json"
     },
     "web": {
@@ -235,8 +235,8 @@
       }
     },
     "owner": "augustinemwathi6",
-    "description": "HabitOwl - Smart Habit & Routine Builder. Developed and managed by Astraea Labs.",
+    "description": "HabitOwl - Smart Habit Tracker. Developed and managed by Astraea Labs.",
     "developedBy": "Astraea Labs",
-    "copyright": "© 2025 Astraea Labs. All rights reserved."
+    "copyright": " 2025 Astraea Labs. All rights reserved."
   }
 }

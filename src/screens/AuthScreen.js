@@ -304,7 +304,8 @@ const AuthScreen = ({ navigation }) => {
               </View>
               <Headline style={styles.appName}>HabitOwl</Headline>
               <Paragraph style={styles.tagline}>
-                Smart Habit & Routine Builder
+                Smart Habit Tracker
+
               </Paragraph>
             </View>
 
