@@ -1,7 +1,6 @@
 /**
- * PromoService - Automatic Promotional Offer Management
- * COMPLETE FIX: All metrics update properly in real-time
- * Version: 8.0 - Production Ready with Verified Tracking
+ * PromoService - FIXED: Metrics now update properly
+ * All tracking functions use updateDoc + increment()
  */
 
 import { 
@@ -20,7 +19,6 @@ import {
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
-// Safe Firebase Service import
 let FirebaseService = null;
 try {
   FirebaseService = require('./FirebaseService').default;
@@ -69,25 +67,14 @@ class PromoService {
         discount: "50% OFF + Bonus",
         durationDays: 6,
         type: "accelerator"
-      },
-      {
-        title: "🚀 Transform Your Life!",
-        description: "Start building better habits today with Premium! Special offer: 60% OFF - Biggest discount ever!",
-        discount: "60% OFF",
-        durationDays: 7,
-        type: "new_year"
       }
     ];
     
-    // Delayed initialization to avoid blocking app startup
     setTimeout(() => {
       this.initializePromoSystemBackground();
     }, 2000);
   }
 
-  /**
-   * Background initialization - non-blocking
-   */
   async initializePromoSystemBackground() {
     if (this.isInitializing || this.isInitialized) {
       return;
@@ -103,7 +90,6 @@ class PromoService {
       );
 
       const initPromise = (async () => {
-        // Check if collection exists and has active offers
         const needsUpdate = await this.checkIfOffersNeedUpdate();
         
         if (needsUpdate) {
@@ -113,7 +99,6 @@ class PromoService {
           console.log('✅ PromoService: Active offers exist');
         }
         
-        // Cleanup expired offers in background
         this.cleanupExpiredOffers().catch(err => 
           console.log('Cleanup error (non-critical):', err.message)
         );
@@ -127,15 +112,12 @@ class PromoService {
       console.log('✅ PromoService: Initialized successfully');
     } catch (error) {
       console.log('⚠️ PromoService: Init error (non-critical):', error.message);
-      this.isInitialized = true; // Mark as initialized even on error to prevent retries
+      this.isInitialized = true;
     } finally {
       this.isInitializing = false;
     }
   }
 
-  /**
-   * Check if new offers need to be created
-   */
   async checkIfOffersNeedUpdate() {
     try {
       const now = Timestamp.now();
@@ -154,7 +136,6 @@ class PromoService {
       return needsUpdate;
     } catch (error) {
       console.error('PromoService: Check offers error:', error);
-      // If collection doesn't exist, we need to create offers
       if (error.code === 'permission-denied' || error.message.includes('index')) {
         console.log('⚠️ Collection may not exist or missing index. Will create offer.');
         return true;
@@ -163,9 +144,6 @@ class PromoService {
     }
   }
 
-  /**
-   * Create weekly promo offers automatically
-   */
   async createWeeklyPromoOffers() {
     try {
       const template = this.PROMO_TEMPLATES[
@@ -200,7 +178,6 @@ class PromoService {
       console.log('   Duration:', template.durationDays, 'days');
       console.log('   Expires:', expiresAt.toLocaleDateString());
       
-      // Track event
       if (FirebaseService?.trackEvent) {
         FirebaseService.trackEvent('promo_offer_auto_created', {
           offer_type: template.type,
@@ -215,9 +192,6 @@ class PromoService {
     }
   }
 
-  /**
-   * Cleanup expired offers
-   */
   async cleanupExpiredOffers() {
     try {
       const now = Timestamp.now();
@@ -252,9 +226,6 @@ class PromoService {
     }
   }
 
-  /**
-   * Get personalized offer for user
-   */
   async getPersonalizedOffer(userStats = {}) {
     try {
       console.log('📋 PromoService: Fetching personalized offer...');
@@ -282,7 +253,6 @@ class PromoService {
             ...snapshot.docs[0].data()
           };
           
-          // Convert Firestore Timestamps to ISO strings for easier handling
           if (offer.createdAt?.toDate) {
             offer.createdAt = offer.createdAt.toDate().toISOString();
           }
@@ -292,7 +262,6 @@ class PromoService {
           
           console.log('✅ PromoService: Found offer:', offer.title);
           
-          // Track impression in background (non-blocking)
           this.trackOfferImpression(offer.id).catch(err =>
             console.log('Impression tracking failed:', err.message)
           );
@@ -312,7 +281,7 @@ class PromoService {
   }
 
   /**
-   * ✅ CRITICAL FIX: Track offer impression with proper Firestore updateDoc + increment
+   * ✅ CRITICAL FIX: Use updateDoc with increment() for atomic updates
    */
   async trackOfferImpression(offerId) {
     if (!offerId || offerId === 'fallback') {
@@ -325,7 +294,7 @@ class PromoService {
       
       const offerRef = doc(db, 'promo_offers', offerId);
       
-      // ✅ CRITICAL: Use updateDoc (NOT setDoc) with increment() for atomic updates
+      // ✅ CRITICAL: Use updateDoc with increment() for atomic updates
       await updateDoc(offerRef, {
         impressions: increment(1),
         lastImpressionAt: Timestamp.now()
@@ -333,7 +302,6 @@ class PromoService {
       
       console.log('✅ Impression tracked successfully for:', offerId);
       
-      // Track in analytics
       if (FirebaseService?.trackEvent) {
         FirebaseService.trackEvent('promo_impression', {
           offer_id: offerId
@@ -350,7 +318,7 @@ class PromoService {
   }
 
   /**
-   * ✅ CRITICAL FIX: Track offer click with proper Firestore updateDoc + increment
+   * ✅ CRITICAL FIX: Use updateDoc with increment() for atomic updates
    */
   async trackOfferClick(offerId) {
     if (!offerId || offerId === 'fallback') {
@@ -363,7 +331,7 @@ class PromoService {
       
       const offerRef = doc(db, 'promo_offers', offerId);
       
-      // ✅ CRITICAL: Use updateDoc (NOT setDoc) with increment() for atomic updates
+      // ✅ CRITICAL: Use updateDoc with increment() for atomic updates
       await updateDoc(offerRef, {
         clicks: increment(1),
         lastClickAt: Timestamp.now()
@@ -371,7 +339,6 @@ class PromoService {
       
       console.log('✅ Click tracked successfully for:', offerId);
       
-      // Track in analytics
       if (FirebaseService?.trackEvent) {
         FirebaseService.trackEvent('promo_click', {
           offer_id: offerId
@@ -388,7 +355,7 @@ class PromoService {
   }
 
   /**
-   * ✅ CRITICAL FIX: Track offer conversion with proper Firestore updateDoc + increment
+   * ✅ CRITICAL FIX: Use updateDoc with increment() for atomic updates
    */
   async trackOfferConversion(offerId) {
     if (!offerId || offerId === 'fallback') {
@@ -401,7 +368,7 @@ class PromoService {
       
       const offerRef = doc(db, 'promo_offers', offerId);
       
-      // ✅ CRITICAL: Use updateDoc (NOT setDoc) with increment() for atomic updates
+      // ✅ CRITICAL: Use updateDoc with increment() for atomic updates
       await updateDoc(offerRef, {
         conversions: increment(1),
         lastConversionAt: Timestamp.now()
@@ -409,7 +376,6 @@ class PromoService {
       
       console.log('✅ Conversion tracked successfully for:', offerId);
       
-      // Track in analytics
       if (FirebaseService?.trackEvent) {
         FirebaseService.trackEvent('promo_conversion', {
           offer_id: offerId
@@ -425,9 +391,6 @@ class PromoService {
     }
   }
 
-  /**
-   * Force create new offer (for testing or manual admin action)
-   */
   async forceCreateNewOffer() {
     console.log('🔧 PromoService: Force creating new offer...');
     try {
@@ -440,9 +403,6 @@ class PromoService {
     }
   }
 
-  /**
-   * Get all active offers
-   */
   async getAllActiveOffers() {
     try {
       const now = Timestamp.now();
@@ -498,14 +458,13 @@ class PromoService {
         const data = doc.data();
         const expiresAt = data.expiresAt;
         
-        // Count active vs expired
         if (data.isActive && expiresAt && expiresAt.toMillis() > now.toMillis()) {
           stats.activeOffers++;
         } else if (!data.isActive || (expiresAt && expiresAt.toMillis() <= now.toMillis())) {
           stats.expiredOffers++;
         }
         
-        // ✅ CRITICAL: Sum up metrics (handle undefined/null values properly)
+        // ✅ CRITICAL: Sum up metrics properly
         stats.totalImpressions += Number(data.impressions) || 0;
         stats.totalClicks += Number(data.clicks) || 0;
         stats.totalConversions += Number(data.conversions) || 0;
@@ -545,9 +504,6 @@ class PromoService {
     }
   }
 
-  /**
-   * Get detailed offer by ID
-   */
   async getOfferById(offerId) {
     try {
       const docRef = doc(db, 'promo_offers', offerId);
@@ -571,7 +527,6 @@ class PromoService {
   }
 }
 
-// Export singleton instance
 const promoServiceInstance = new PromoService();
 export default promoServiceInstance;
 export { PromoService };

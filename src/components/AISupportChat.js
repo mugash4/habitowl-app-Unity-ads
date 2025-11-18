@@ -26,9 +26,8 @@ import aiSupportService from '../services/aiSupportService';
 
 /**
  * ✅ FIXED: Simplified AI Support Chat Component
- * - Removed overly complex nesting
- * - Better error handling
- * - Immediate loading feedback
+ * - Fixed button visibility issue
+ * - Proper modal structure like AICoachingChat
  */
 const AISupportChat = ({ visible, onDismiss }) => {
   const [selectedIssue, setSelectedIssue] = useState('general');
@@ -53,13 +52,11 @@ const AISupportChat = ({ visible, onDismiss }) => {
     if (visible) {
       console.log('✅ AI Support Chat opened');
       
-      // Pre-fill user email if logged in
       const user = FirebaseService.currentUser;
       if (user?.email) {
         setUserEmail(user.email);
       }
       
-      // Reset state
       setShowResponse(false);
       setAiResponse(null);
       setApiKeyMissing(false);
@@ -68,11 +65,7 @@ const AISupportChat = ({ visible, onDismiss }) => {
     }
   }, [visible]);
 
-  /**
-   * ✅ FIXED: Send support message with better error handling
-   */
   const handleSendMessage = async () => {
-    // Validation
     if (!message.trim()) {
       Alert.alert('Required', 'Please describe your issue');
       return;
@@ -90,7 +83,6 @@ const AISupportChat = ({ visible, onDismiss }) => {
 
       console.log('📤 Sending support ticket...');
 
-      // Send to AI Support Service
       const result = await aiSupportService.handleSupportTicket({
         userEmail: userEmail.trim(),
         issueType: selectedIssue,
@@ -101,12 +93,10 @@ const AISupportChat = ({ visible, onDismiss }) => {
 
       console.log('✅ Ticket created:', result.ticketId);
 
-      // Show AI response
       setAiResponse(result);
       setTicketId(result.ticketId);
       setShowResponse(true);
 
-      // Track event
       await FirebaseService.trackEvent('ai_support_ticket_created', {
         issue_type: selectedIssue,
         needs_human: result.needsHuman,
@@ -116,7 +106,6 @@ const AISupportChat = ({ visible, onDismiss }) => {
     } catch (error) {
       console.error('❌ Error sending support message:', error);
       
-      // ✅ IMPROVED: Better error messages
       if (error.message && error.message.includes('API key')) {
         setApiKeyMissing(true);
         Alert.alert(
@@ -138,7 +127,6 @@ const AISupportChat = ({ visible, onDismiss }) => {
         );
       }
       
-      // Show fallback response
       setAiResponse({
         aiResponse: getFallbackMessage(selectedIssue),
         needsHuman: true,
@@ -151,9 +139,6 @@ const AISupportChat = ({ visible, onDismiss }) => {
     }
   };
 
-  /**
-   * ✅ NEW: Fallback messages when AI is unavailable
-   */
   const getFallbackMessage = (issueType) => {
     const fallbacks = {
       general: "Thank you for contacting HabitOwl support! 📧\n\nYour message has been received and our team will respond within 24 hours.\n\nFor immediate help, check out:\n• Settings → About → FAQ section\n• In-app help guides",
@@ -172,9 +157,6 @@ const AISupportChat = ({ visible, onDismiss }) => {
     return fallbacks[issueType] || fallbacks.general;
   };
 
-  /**
-   * Close dialog
-   */
   const handleClose = () => {
     setMessage('');
     setSelectedIssue('general');
@@ -185,9 +167,6 @@ const AISupportChat = ({ visible, onDismiss }) => {
     onDismiss();
   };
 
-  /**
-   * Start new ticket
-   */
   const handleNewTicket = () => {
     setMessage('');
     setSelectedIssue('general');
@@ -221,18 +200,14 @@ const AISupportChat = ({ visible, onDismiss }) => {
           </View>
         </LinearGradient>
 
-        {/* ✅ FIXED: Simplified content structure - removed Dialog.ScrollArea */}
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.contentContainer}
-        >
+        {/* ✅ CRITICAL FIX: Use Dialog.ScrollArea with proper structure */}
+        <Dialog.ScrollArea style={styles.scrollArea}>
           <ScrollView 
-            style={styles.scrollContent}
+            contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.scrollContentContainer}
+            nestedScrollEnabled={true}
           >
             {!showResponse ? (
-              // ✅ Ticket Creation Form
               <>
                 <Text style={styles.sectionTitle}>What can we help you with?</Text>
                 
@@ -299,10 +274,8 @@ const AISupportChat = ({ visible, onDismiss }) => {
                 </View>
               </>
             ) : (
-              // ✅ AI Response Display
               <>
                 <View style={styles.responseContainer}>
-                  {/* Response Header */}
                   <View style={styles.responseHeader}>
                     <Icon name={aiResponse?.needsHuman ? "account" : "robot"} size={24} color="#4f46e5" />
                     <Text style={styles.responseTitle}>
@@ -319,12 +292,10 @@ const AISupportChat = ({ visible, onDismiss }) => {
                     )}
                   </View>
 
-                  {/* Response Card */}
                   <View style={styles.responseCard}>
                     <Text style={styles.responseText}>{aiResponse?.aiResponse}</Text>
                   </View>
 
-                  {/* Escalation Notice */}
                   {aiResponse?.needsHuman && (
                     <View style={styles.escalationNotice}>
                       <Icon name="account-arrow-right" size={20} color="#10b981" />
@@ -334,13 +305,11 @@ const AISupportChat = ({ visible, onDismiss }) => {
                     </View>
                   )}
 
-                  {/* Ticket Info */}
                   <View style={styles.ticketInfo}>
                     <Text style={styles.ticketLabel}>Ticket ID:</Text>
                     <Text style={styles.ticketId}>#{ticketId?.slice(-8)}</Text>
                   </View>
 
-                  {/* Rating */}
                   <View style={styles.ratingContainer}>
                     <Text style={styles.ratingText}>Was this helpful?</Text>
                     <View style={styles.ratingButtons}>
@@ -372,9 +341,9 @@ const AISupportChat = ({ visible, onDismiss }) => {
               </>
             )}
           </ScrollView>
-        </KeyboardAvoidingView>
+        </Dialog.ScrollArea>
 
-        {/* Actions */}
+        {/* ✅ CRITICAL FIX: Actions outside ScrollArea */}
         <Dialog.Actions style={styles.actions}>
           {!showResponse ? (
             <>
@@ -387,6 +356,7 @@ const AISupportChat = ({ visible, onDismiss }) => {
                 disabled={isLoading}
                 mode="contained"
                 buttonColor="#4f46e5"
+                labelStyle={{ color: '#ffffff' }}
               >
                 {isLoading ? 'Sending...' : 'Send Message'}
               </Button>
@@ -396,7 +366,12 @@ const AISupportChat = ({ visible, onDismiss }) => {
               <Button onPress={handleNewTicket}>
                 New Ticket
               </Button>
-              <Button onPress={handleClose} mode="contained" buttonColor="#4f46e5">
+              <Button 
+                onPress={handleClose} 
+                mode="contained" 
+                buttonColor="#4f46e5"
+                labelStyle={{ color: '#ffffff' }}
+              >
                 Close
               </Button>
             </>
@@ -437,13 +412,11 @@ const styles = StyleSheet.create({
     color: '#e0e7ff',
     marginTop: 2,
   },
-  contentContainer: {
-    maxHeight: 500,
+  scrollArea: {
+    maxHeight: 400,
+    paddingHorizontal: 0,
   },
   scrollContent: {
-    flex: 1,
-  },
-  scrollContentContainer: {
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 16,
@@ -577,6 +550,8 @@ const styles = StyleSheet.create({
   actions: {
     paddingHorizontal: 16,
     paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
   },
 });
 
