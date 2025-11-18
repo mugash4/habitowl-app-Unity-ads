@@ -35,7 +35,7 @@ export const ADMOB_CONFIG = {
   MAX_INTERSTITIALS_PER_SESSION: 5,
   
   // Debug mode - set to false in production
-  DEBUG_MODE: true, // ✅ Keep true to see logs
+  DEBUG_MODE: false, // ✅ Keep true to see logs
   
   // Auto-load ads after initialization
   AUTO_LOAD_ADS: true,
