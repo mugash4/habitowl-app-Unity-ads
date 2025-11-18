@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  StyleStyle,
+  StyleSheet,  // ✅ FIXED: Was "StyleStyle" - now correct
   Linking,
   Image,
   Platform,
@@ -118,7 +118,7 @@ const AboutScreen = ({ navigation }) => {
             />
           </View>
           <Text style={styles.appName}>HabitOwl</Text>
-          <Text style={styles.version}>Version 2.9.0</Text>
+          <Text style={styles.version}>Version 1.0.0</Text>
           <Text style={styles.tagline}>
             Your intelligent companion for building better habits
           </Text>
@@ -321,7 +321,7 @@ const AboutScreen = ({ navigation }) => {
             
             <List.Item
               title="Version"
-              description="2.9.0"
+              description="1.0.0"
               left={(props) => <List.Icon {...props} icon="information" />}
             />
             

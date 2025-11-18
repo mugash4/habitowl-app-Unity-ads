@@ -6,8 +6,7 @@ import {
   ScrollView,
   Alert,
   KeyboardAvoidingView,
-  Platform,
-  Dimensions
+  Platform
 } from 'react-native';
 import {
   Dialog,
@@ -25,10 +24,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import FirebaseService from '../services/FirebaseService';
 import aiSupportService from '../services/aiSupportService';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-
 /**
- * ✅ FIXED: AI Support Chat Component - Buttons now properly visible
+ * ✅ FIXED: Simplified AI Support Chat Component
+ * - Removed overly complex nesting
+ * - Better error handling
+ * - Immediate loading feedback
  */
 const AISupportChat = ({ visible, onDismiss }) => {
   const [selectedIssue, setSelectedIssue] = useState('general');
@@ -69,7 +69,7 @@ const AISupportChat = ({ visible, onDismiss }) => {
   }, [visible]);
 
   /**
-   * ✅ Send support message with better error handling
+   * ✅ FIXED: Send support message with better error handling
    */
   const handleSendMessage = async () => {
     // Validation
@@ -96,7 +96,7 @@ const AISupportChat = ({ visible, onDismiss }) => {
         issueType: selectedIssue,
         message: message.trim(),
         platform: Platform.OS,
-        appVersion: '2.9.0'
+        appVersion: '1.0.0'
       });
 
       console.log('✅ Ticket created:', result.ticketId);
@@ -116,7 +116,7 @@ const AISupportChat = ({ visible, onDismiss }) => {
     } catch (error) {
       console.error('❌ Error sending support message:', error);
       
-      // Better error messages
+      // ✅ IMPROVED: Better error messages
       if (error.message && error.message.includes('API key')) {
         setApiKeyMissing(true);
         Alert.alert(
@@ -152,7 +152,7 @@ const AISupportChat = ({ visible, onDismiss }) => {
   };
 
   /**
-   * Fallback messages when AI is unavailable
+   * ✅ NEW: Fallback messages when AI is unavailable
    */
   const getFallbackMessage = (issueType) => {
     const fallbacks = {
@@ -221,44 +221,44 @@ const AISupportChat = ({ visible, onDismiss }) => {
           </View>
         </LinearGradient>
 
-        {/* ✅ FIXED: Proper ScrollView with controlled height */}
-        <View style={styles.contentWrapper}>
+        {/* ✅ FIXED: Simplified content structure - removed Dialog.ScrollArea */}
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.contentContainer}
+        >
           <ScrollView 
-            style={styles.scrollView}
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={true}
-            keyboardShouldPersistTaps="handled"
+            style={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContentContainer}
           >
             {!showResponse ? (
-              // Ticket Creation Form
-              <View style={styles.formContainer}>
+              // ✅ Ticket Creation Form
+              <>
                 <Text style={styles.sectionTitle}>What can we help you with?</Text>
                 
                 {/* Issue Type Selection */}
-                <View style={styles.issueTypeContainer}>
-                  <RadioButton.Group
-                    onValueChange={setSelectedIssue}
-                    value={selectedIssue}
-                  >
-                    {issueTypes.map((issue) => (
-                      <List.Item
-                        key={issue.value}
-                        title={issue.label}
-                        left={() => (
-                          <View style={styles.radioContainer}>
-                            <RadioButton value={issue.value} color="#4f46e5" />
-                            <Icon name={issue.icon} size={20} color={issue.color} />
-                          </View>
-                        )}
-                        onPress={() => setSelectedIssue(issue.value)}
-                        style={[
-                          styles.radioItem,
-                          selectedIssue === issue.value && styles.radioItemSelected
-                        ]}
-                      />
-                    ))}
-                  </RadioButton.Group>
-                </View>
+                <RadioButton.Group
+                  onValueChange={setSelectedIssue}
+                  value={selectedIssue}
+                >
+                  {issueTypes.map((issue) => (
+                    <List.Item
+                      key={issue.value}
+                      title={issue.label}
+                      left={() => (
+                        <View style={styles.radioContainer}>
+                          <RadioButton value={issue.value} color="#4f46e5" />
+                          <Icon name={issue.icon} size={20} color={issue.color} />
+                        </View>
+                      )}
+                      onPress={() => setSelectedIssue(issue.value)}
+                      style={[
+                        styles.radioItem,
+                        selectedIssue === issue.value && styles.radioItemSelected
+                      ]}
+                    />
+                  ))}
+                </RadioButton.Group>
 
                 {/* Email Input */}
                 <TextInput
@@ -281,7 +281,7 @@ const AISupportChat = ({ visible, onDismiss }) => {
                   onChangeText={setMessage}
                   mode="outlined"
                   multiline
-                  numberOfLines={4}
+                  numberOfLines={5}
                   style={styles.textArea}
                   placeholder="Please provide as much detail as possible..."
                   left={<TextInput.Icon icon="message-text" />}
@@ -297,86 +297,88 @@ const AISupportChat = ({ visible, onDismiss }) => {
                       : 'AI will respond instantly. Complex issues are forwarded to our team.'}
                   </Text>
                 </View>
-              </View>
+              </>
             ) : (
-              // AI Response Display
-              <View style={styles.responseContainer}>
-                {/* Response Header */}
-                <View style={styles.responseHeader}>
-                  <Icon name={aiResponse?.needsHuman ? "account" : "robot"} size={24} color="#4f46e5" />
-                  <Text style={styles.responseTitle}>
-                    {aiResponse?.needsHuman ? 'Support Team Notified' : 'AI Response'}
-                  </Text>
-                  {aiResponse?.needsHuman && (
-                    <Chip 
-                      icon="email" 
-                      style={styles.chip}
-                      textStyle={styles.chipText}
-                    >
-                      Email
-                    </Chip>
-                  )}
-                </View>
-
-                {/* Response Card */}
-                <View style={styles.responseCard}>
-                  <Text style={styles.responseText}>{aiResponse?.aiResponse}</Text>
-                </View>
-
-                {/* Escalation Notice */}
-                {aiResponse?.needsHuman && (
-                  <View style={styles.escalationNotice}>
-                    <Icon name="account-arrow-right" size={20} color="#10b981" />
-                    <Text style={styles.escalationText}>
-                      Our support team has been notified and will respond to {userEmail} within 24 hours.
+              // ✅ AI Response Display
+              <>
+                <View style={styles.responseContainer}>
+                  {/* Response Header */}
+                  <View style={styles.responseHeader}>
+                    <Icon name={aiResponse?.needsHuman ? "account" : "robot"} size={24} color="#4f46e5" />
+                    <Text style={styles.responseTitle}>
+                      {aiResponse?.needsHuman ? 'Support Team Notified' : 'AI Response'}
                     </Text>
+                    {aiResponse?.needsHuman && (
+                      <Chip 
+                        icon="email" 
+                        style={styles.chip}
+                        textStyle={styles.chipText}
+                      >
+                        Email
+                      </Chip>
+                    )}
                   </View>
-                )}
 
-                {/* Ticket Info */}
-                <View style={styles.ticketInfo}>
-                  <Text style={styles.ticketLabel}>Ticket ID:</Text>
-                  <Text style={styles.ticketId}>#{ticketId?.slice(-8)}</Text>
-                </View>
+                  {/* Response Card */}
+                  <View style={styles.responseCard}>
+                    <Text style={styles.responseText}>{aiResponse?.aiResponse}</Text>
+                  </View>
 
-                {/* Rating */}
-                <View style={styles.ratingContainer}>
-                  <Text style={styles.ratingText}>Was this helpful?</Text>
-                  <View style={styles.ratingButtons}>
-                    <Button 
-                      icon="thumb-up" 
-                      mode="outlined"
-                      onPress={() => {
-                        Alert.alert('Thanks!', 'Glad we could help!');
-                        handleClose();
-                      }}
-                      style={styles.ratingButton}
-                    >
-                      Yes
-                    </Button>
-                    <Button 
-                      icon="thumb-down" 
-                      mode="outlined"
-                      onPress={() => {
-                        Alert.alert('Sorry', 'Our team will review your ticket and respond via email.');
-                        handleClose();
-                      }}
-                      style={styles.ratingButton}
-                    >
-                      No
-                    </Button>
+                  {/* Escalation Notice */}
+                  {aiResponse?.needsHuman && (
+                    <View style={styles.escalationNotice}>
+                      <Icon name="account-arrow-right" size={20} color="#10b981" />
+                      <Text style={styles.escalationText}>
+                        Our support team has been notified and will respond to {userEmail} within 24 hours.
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Ticket Info */}
+                  <View style={styles.ticketInfo}>
+                    <Text style={styles.ticketLabel}>Ticket ID:</Text>
+                    <Text style={styles.ticketId}>#{ticketId?.slice(-8)}</Text>
+                  </View>
+
+                  {/* Rating */}
+                  <View style={styles.ratingContainer}>
+                    <Text style={styles.ratingText}>Was this helpful?</Text>
+                    <View style={styles.ratingButtons}>
+                      <Button 
+                        icon="thumb-up" 
+                        mode="outlined"
+                        onPress={() => {
+                          Alert.alert('Thanks!', 'Glad we could help!');
+                          handleClose();
+                        }}
+                        style={styles.ratingButton}
+                      >
+                        Yes
+                      </Button>
+                      <Button 
+                        icon="thumb-down" 
+                        mode="outlined"
+                        onPress={() => {
+                          Alert.alert('Sorry', 'Our team will review your ticket and respond via email.');
+                          handleClose();
+                        }}
+                        style={styles.ratingButton}
+                      >
+                        No
+                      </Button>
+                    </View>
                   </View>
                 </View>
-              </View>
+              </>
             )}
           </ScrollView>
-        </View>
+        </KeyboardAvoidingView>
 
-        {/* ✅ FIXED: Actions now properly positioned outside ScrollView */}
+        {/* Actions */}
         <Dialog.Actions style={styles.actions}>
           {!showResponse ? (
             <>
-              <Button onPress={handleClose} disabled={isLoading} textColor="#6b7280">
+              <Button onPress={handleClose} disabled={isLoading}>
                 Cancel
               </Button>
               <Button
@@ -385,22 +387,16 @@ const AISupportChat = ({ visible, onDismiss }) => {
                 disabled={isLoading}
                 mode="contained"
                 buttonColor="#4f46e5"
-                style={styles.sendButton}
               >
                 {isLoading ? 'Sending...' : 'Send Message'}
               </Button>
             </>
           ) : (
             <>
-              <Button onPress={handleNewTicket} textColor="#6b7280">
+              <Button onPress={handleNewTicket}>
                 New Ticket
               </Button>
-              <Button 
-                onPress={handleClose} 
-                mode="contained" 
-                buttonColor="#4f46e5"
-                style={styles.closeButton}
-              >
+              <Button onPress={handleClose} mode="contained" buttonColor="#4f46e5">
                 Close
               </Button>
             </>
@@ -413,12 +409,10 @@ const AISupportChat = ({ visible, onDismiss }) => {
 
 const styles = StyleSheet.create({
   dialog: {
+    maxHeight: '90%',
     maxWidth: 500,
-    width: '90%',
     alignSelf: 'center',
-    maxHeight: SCREEN_HEIGHT * 0.85,
     borderRadius: 16,
-    backgroundColor: '#ffffff',
   },
   header: {
     padding: 20,
@@ -443,21 +437,16 @@ const styles = StyleSheet.create({
     color: '#e0e7ff',
     marginTop: 2,
   },
-  // ✅ FIXED: New wrapper to control content area height
-  contentWrapper: {
-    maxHeight: SCREEN_HEIGHT * 0.55,
-    minHeight: 200,
-  },
-  scrollView: {
-    flex: 1,
+  contentContainer: {
+    maxHeight: 500,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 20,
-  },
-  formContainer: {
     flex: 1,
+  },
+  scrollContentContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 16,
   },
   sectionTitle: {
     fontSize: 16,
@@ -465,45 +454,41 @@ const styles = StyleSheet.create({
     color: '#374151',
     marginBottom: 12,
   },
-  issueTypeContainer: {
-    marginBottom: 16,
-  },
   radioContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingRight: 8,
   },
   radioItem: {
-    paddingVertical: 6,
+    paddingVertical: 8,
     borderRadius: 8,
-    marginVertical: 2,
   },
   radioItemSelected: {
     backgroundColor: '#f0f9ff',
   },
   input: {
     marginBottom: 16,
+    marginTop: 8,
   },
   textArea: {
     marginBottom: 16,
   },
   tipContainer: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     backgroundColor: '#fef3c7',
     padding: 12,
     borderRadius: 8,
-    marginTop: 4,
+    marginBottom: 16,
   },
   tipText: {
     fontSize: 12,
     color: '#92400e',
     marginLeft: 8,
     flex: 1,
-    lineHeight: 18,
   },
   responseContainer: {
-    flex: 1,
+    paddingBottom: 16,
   },
   responseHeader: {
     flexDirection: 'row',
@@ -539,7 +524,7 @@ const styles = StyleSheet.create({
   },
   escalationNotice: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     backgroundColor: '#d1fae5',
     padding: 12,
     borderRadius: 8,
@@ -550,7 +535,6 @@ const styles = StyleSheet.create({
     color: '#065f46',
     marginLeft: 8,
     flex: 1,
-    lineHeight: 18,
   },
   ticketInfo: {
     flexDirection: 'row',
@@ -589,23 +573,10 @@ const styles = StyleSheet.create({
   },
   ratingButton: {
     flex: 1,
-    maxWidth: 120,
   },
-  // ✅ FIXED: Actions now properly styled and visible
   actions: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-    backgroundColor: '#ffffff',
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 16,
-  },
-  sendButton: {
-    marginLeft: 8,
-  },
-  closeButton: {
-    marginLeft: 8,
   },
 });
 
