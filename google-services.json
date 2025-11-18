@@ -7,20 +7,12 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:387609126713:android:12ad5ca555deade02ceae8",
+        "mobilesdk_app_id": "1:387609126713:android:2750c1ae2a5a72c82ceae8",
         "android_client_info": {
-          "package_name": "com.habitowl.app"
+          "package_name": "com.mugash4.habitowl"
         }
       },
       "oauth_client": [
-        {
-          "client_id": "387609126713-6km6188027c72lr3tatccot12mitu0vq.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.habitowl.app",
-            "certificate_hash": "e8:24:d7:45:97:af:b1:56:fc:28:cd:db:ae:6e:73:b7:79:85:48:71"
-          }
-        },
         {
           "client_id": "387609126713-1vpqhjkaha1ku86srq7lla63vqbpj98j.apps.googleusercontent.com",
           "client_type": 3
