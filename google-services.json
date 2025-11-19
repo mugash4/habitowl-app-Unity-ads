@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "387609126713-mma0gpbtledtuan5p7jkf72pskc9j9nm.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mugash4.habitowl",
+            "certificate_hash": "35:99:66:04:E5:74:B3:23:5B:8C:22:47:88:FF:9D:29:81:0E:D0:E9"
+          }
+        },
+        {
           "client_id": "387609126713-1vpqhjkaha1ku86srq7lla63vqbpj98j.apps.googleusercontent.com",
           "client_type": 3
         }

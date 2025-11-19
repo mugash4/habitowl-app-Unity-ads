@@ -2,8 +2,7 @@ import * as RNIap from 'react-native-iap';
 import { Platform, Alert } from 'react-native';
 import FirebaseService from './FirebaseService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import adMobService from './AdMobService'; // ✅ ADD THIS LINE
-
+import adMobService from './AdMobService';
 
 // 🔧 IMPORTANT: Replace these with your actual product IDs from Google Play Console
 const SUBSCRIPTION_SKUS = Platform.select({
@@ -45,6 +44,14 @@ class SubscriptionService {
       console.log('✅ Available subscriptions:', products.length);
       products.forEach(product => {
         console.log(`  - ${product.title}: ${product.localizedPrice}`);
+        
+        // 🔑 LOG OFFER TOKENS FOR DEBUGGING (Android only)
+        if (Platform.OS === 'android' && product.subscriptionOfferDetails) {
+          console.log(`  Offers for ${product.productId}:`, product.subscriptionOfferDetails.length);
+          product.subscriptionOfferDetails.forEach((offer, index) => {
+            console.log(`    Offer ${index}: ${offer.offerToken.substring(0, 20)}...`);
+          });
+        }
       });
 
       // Setup purchase listeners
@@ -92,7 +99,7 @@ class SubscriptionService {
           await RNIap.finishTransaction(purchase);
           console.log('✅ Transaction finished');
       
-          // ✅ FIX: Update AdMobService first, then Firebase
+          // ✅ Update AdMobService first, then Firebase
           await adMobService.setPremiumStatus(true, false);
           await FirebaseService.updateUserPremiumStatus(true);
           await AsyncStorage.setItem('premium_status', 'true');
@@ -104,7 +111,6 @@ class SubscriptionService {
         }
       }
     });
-
 
     // Listen for purchase errors
     this.purchaseErrorSubscription = RNIap.purchaseErrorListener((error) => {
@@ -132,7 +138,7 @@ class SubscriptionService {
         const latestPurchase = availablePurchases[0];
         console.log('✅ Active subscription found:', latestPurchase.productId);
       
-        // ✅ FIX: Update AdMobService first, then Firebase
+        // Update AdMobService first, then Firebase
         await this.verifyPurchase(latestPurchase);
         await adMobService.setPremiumStatus(true, false);
         await FirebaseService.updateUserPremiumStatus(true);
@@ -142,7 +148,7 @@ class SubscriptionService {
         return true;
       } else {
         console.log('No active subscriptions found');
-        // ✅ FIX: Update AdMobService first, then Firebase
+        // Update AdMobService first, then Firebase
         await adMobService.setPremiumStatus(false, false);
         await FirebaseService.updateUserPremiumStatus(false);
         await AsyncStorage.setItem('premium_status', 'false');
@@ -153,7 +159,6 @@ class SubscriptionService {
       return false;
     }
   }
-
 
   // Verify purchase (basic client-side verification)
   async verifyPurchase(purchase) {
@@ -209,20 +214,43 @@ class SubscriptionService {
         await this.initialize();
       }
       
-      // Request subscription purchase
-      await RNIap.requestSubscription({
-        sku,
-        ...(Platform.OS === 'android' && {
-          // 🔧 CRITICAL: Specify the offer token for the 7-day trial
-          // This will be your base plan offer token from Google Play Console
+      // 🔑 KEY FIX: Get the offer token dynamically from subscription details
+      if (Platform.OS === 'android') {
+        // Find the subscription product
+        const subscription = this.subscriptions.find(sub => sub.productId === sku);
+        
+        if (!subscription) {
+          throw new Error(`Subscription ${sku} not found in available products`);
+        }
+        
+        // Get the first available offer (typically the base plan or trial)
+        const subscriptionOffers = subscription.subscriptionOfferDetails;
+        
+        if (!subscriptionOffers || subscriptionOffers.length === 0) {
+          throw new Error(`No offers available for subscription ${sku}`);
+        }
+        
+        // Use the first offer token (this is the base plan or trial offer)
+        const offerToken = subscriptionOffers[0].offerToken;
+        
+        console.log(`🎫 Using offer token: ${offerToken.substring(0, 20)}...`);
+        
+        // Request subscription with offer token
+        await RNIap.requestSubscription({
+          sku,
           subscriptionOffers: [
             {
               sku,
-              offerToken: 'your-offer-token-here' // Replace with actual offer token
+              offerToken
             }
           ]
-        })
-      });
+        });
+      } else {
+        // iOS doesn't need offer token
+        await RNIap.requestSubscription({
+          sku
+        });
+      }
       
       console.log('✅ Purchase request sent');
       return true;
