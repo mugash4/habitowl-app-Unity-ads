@@ -214,7 +214,7 @@ const SettingsScreen = ({ navigation }) => {
     trackInteractionAndShowAd('share_app');
     try {
       const code = userStats?.referralCode || 'HABITOWL';
-      const message = `Check out HabitOwl - the smart habit tracker!\n\nUse code: ${code}\n\nDownload: https://habitowl-app.web.app`;
+      const message = `Check out HabitOwl - the smart habit tracker!\n\nUse code: ${code}\n\nDownload: https://play.google.com/store/apps/details?id=com.mugash4.habitowl`;
       
       await Share.share({ 
         message, 
@@ -683,7 +683,7 @@ const SettingsScreen = ({ navigation }) => {
 
           <List.Item
             title="App Version"
-            description="1.1.0"
+            description="1.2.0"
             left={(props) => <List.Icon {...props} icon="information" />}
             titleStyle={styles.listItemTitle}
             descriptionStyle={styles.listItemDescription}

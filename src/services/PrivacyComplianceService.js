@@ -39,7 +39,7 @@ class PrivacyComplianceService {
         consentDate: new Date().toISOString(),
         ipAddress: null,
         platform: consentData.platform || 'mobile',
-        appVersion: consentData.appVersion || '1.1.0'
+        appVersion: consentData.appVersion || '1.2.0'
       };
 
       await addDoc(collection(db, 'user_consents'), consentDoc);
@@ -156,7 +156,7 @@ class PrivacyComplianceService {
         deviceInfo: {
           platform: crashData.platform || 'unknown',
           osVersion: crashData.osVersion || 'unknown',
-          appVersion: crashData.appVersion || '1.1.0'
+          appVersion: crashData.appVersion || '1.2.0'
         },
         userActions: crashData.userActions || [],
         resolved: false
@@ -188,7 +188,7 @@ class PrivacyComplianceService {
 
       const exportData = {
         exportDate: new Date().toISOString(),
-        exportVersion: '1.1.0',
+        exportVersion: '1.2.0',
         exportType: 'GDPR_Data_Portability',
         user: userData,
         habits: habits,

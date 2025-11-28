@@ -5,13 +5,14 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
-  Platform
+  Platform,
+  Linking,
+  TouchableOpacity
 } from 'react-native';
 import {
   Card,
   Button,
   Checkbox,
-  TextInput,
   HelperText
 } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -32,6 +33,10 @@ const ConsentScreen = ({ onConsentGiven, userEmail }) => {
   const [ageVerified, setAgeVerified] = useState(false);
   const [isOver13, setIsOver13] = useState(null);
 
+  // URLs for legal documents
+  const PRIVACY_POLICY_URL = 'https://habitowl-3405d.web.app/privacy';
+  const TERMS_OF_SERVICE_URL = 'https://habitowl-3405d.web.app/terms';
+
   const handleDateChange = async (event, selectedDate) => {
     setShowDatePicker(Platform.OS === 'ios');
     
@@ -50,6 +55,39 @@ const ConsentScreen = ({ onConsentGiven, userEmail }) => {
           [{ text: 'OK' }]
         );
       }
+    }
+  };
+
+  // Function to open URLs
+  const openURL = async (url, title) => {
+    try {
+      const supported = await Linking.canOpenURL(url);
+      
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        Alert.alert(
+          'Error',
+          `Cannot open ${title}. Please visit: ${url}`,
+          [
+            {
+              text: 'Copy Link',
+              onPress: () => {
+                // Note: Clipboard requires expo-clipboard package
+                // For now, just show the URL
+                Alert.alert('Link', url);
+              }
+            },
+            { text: 'OK' }
+          ]
+        );
+      }
+    } catch (error) {
+      console.error(`Error opening ${title}:`, error);
+      Alert.alert(
+        'Error',
+        `Failed to open ${title}. Please try again or visit: ${url}`
+      );
     }
   };
 
@@ -93,7 +131,7 @@ const ConsentScreen = ({ onConsentGiven, userEmail }) => {
         dateOfBirth: dateOfBirth.toISOString(),
         isOver13: isOver13,
         platform: Platform.OS,
-        appVersion: Constants.expoConfig?.version || '1.1.0'
+        appVersion: Constants.expoConfig?.version || '1.2.0'
       });
 
       console.log('✅ Consent recorded successfully');
@@ -176,7 +214,13 @@ const ConsentScreen = ({ onConsentGiven, userEmail }) => {
                 color="#4f46e5"
               />
               <Text style={styles.checkboxLabel}>
-                I agree to the <Text style={styles.link}>Terms of Service</Text>
+                I agree to the{' '}
+                <TouchableOpacity 
+                  onPress={() => openURL(TERMS_OF_SERVICE_URL, 'Terms of Service')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.link}>Terms of Service</Text>
+                </TouchableOpacity>
               </Text>
             </View>
 
@@ -187,7 +231,13 @@ const ConsentScreen = ({ onConsentGiven, userEmail }) => {
                 color="#4f46e5"
               />
               <Text style={styles.checkboxLabel}>
-                I agree to the <Text style={styles.link}>Privacy Policy</Text>
+                I agree to the{' '}
+                <TouchableOpacity 
+                  onPress={() => openURL(PRIVACY_POLICY_URL, 'Privacy Policy')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.link}>Privacy Policy</Text>
+                </TouchableOpacity>
               </Text>
             </View>
 
@@ -319,6 +369,7 @@ const styles = StyleSheet.create({
   link: {
     color: '#4f46e5',
     textDecorationLine: 'underline',
+    fontWeight: '600',
   },
   submitButton: {
     marginTop: 24,
