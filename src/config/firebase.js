@@ -1,12 +1,17 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
-import { getAuth } from "firebase/auth";
+import { 
+  getAuth, 
+  initializeAuth,
+  getReactNativePersistence 
+} from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
 // Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || "AIzaSyDca2O9HlRLWSm09kHDtn8CaR2lWdpCXZk",
   authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || "habitowl-3405d.firebaseapp.com",
@@ -20,8 +25,21 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firebase services
-export const auth = getAuth(app);
+// ✅ FIX: Initialize Auth with AsyncStorage persistence for React Native
+// This ensures users stay logged in even after closing the app
+let auth;
+
+if (Platform.OS === 'web') {
+  // For web, use default auth (browser persistence)
+  auth = getAuth(app);
+} else {
+  // For mobile (iOS/Android), use AsyncStorage persistence
+  auth = initializeAuth(app, {
+    persistence: getReactNativePersistence(AsyncStorage)
+  });
+}
+
+// Initialize Firestore and Storage
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 
@@ -31,5 +49,7 @@ if (typeof window !== 'undefined') {
   analytics = getAnalytics(app);
 }
 
-export { analytics };
+console.log('✅ Firebase initialized with persistence enabled');
+
+export { auth, analytics };
 export default app;

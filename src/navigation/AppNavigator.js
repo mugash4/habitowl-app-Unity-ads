@@ -1,6 +1,6 @@
 /**
  * HabitOwl App Navigator
- * ✅ UPDATED: Added Consent Screen Flow
+ * ✅ UPDATED: Added Firebase Auth Persistence Fix + Consent Screen Flow
  */
 
 import React, { useEffect, useState } from 'react';
@@ -403,7 +403,7 @@ const MainTabNavigator = () => {
 
 /**
  * Main App Navigator
- * ✅ UPDATED: Added Consent Screen Flow
+ * ✅ UPDATED: Added Firebase Auth Persistence + Consent Screen Flow
  */
 const AppNavigator = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(null);
@@ -418,6 +418,11 @@ const AppNavigator = () => {
     try {
       console.log('[AppNav] 🚀 Initializing app...');
       
+      // ✅ FIX: Wait for Firebase Auth to restore session from AsyncStorage
+      // This is crucial - Firebase needs time to check AsyncStorage for saved credentials
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      console.log('[AppNav] ✅ Firebase Auth persistence restored');
+      
       await new Promise(resolve => setTimeout(resolve, 500));
       console.log('[AppNav] ✅ AdMob ready');
       
@@ -430,6 +435,7 @@ const AppNavigator = () => {
         
         if (user) {
           console.log('[AppNav] 👤 User logged in:', user.email);
+          console.log('[AppNav] 🔑 User UID:', user.uid);
           
           // ✅ NEW: Check if user has given consent
           const hasConsent = await PrivacyComplianceService.hasUserGivenConsent(user.uid);
