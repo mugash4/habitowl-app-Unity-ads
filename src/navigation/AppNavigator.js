@@ -474,6 +474,7 @@ const AppNavigator = () => {
       </View>
     );
   }
+  
 
   return (
     <PaperProvider theme={theme}>
