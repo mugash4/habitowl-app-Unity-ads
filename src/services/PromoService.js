@@ -1,6 +1,8 @@
 /**
- * PromoService - FIXED: Metrics now update properly
- * All tracking functions use updateDoc + increment()
+ * PromoService - FIXED VERSION
+ * ✅ Auto-creates offers reliably
+ * ✅ Metrics update properly
+ * ✅ Better error handling
  */
 
 import { 
@@ -31,6 +33,8 @@ class PromoService {
     console.log('✅ PromoService: Initializing...');
     this.isInitializing = false;
     this.isInitialized = false;
+    this.lastCheckTime = 0;
+    this.CHECK_INTERVAL = 60000; // Check every 60 seconds
     
     this.PROMO_TEMPLATES = [
       {
@@ -70,6 +74,7 @@ class PromoService {
       }
     ];
     
+    // ✅ FIX: Start background initialization
     setTimeout(() => {
       this.initializePromoSystemBackground();
     }, 2000);
@@ -118,6 +123,29 @@ class PromoService {
     }
   }
 
+  // ✅ FIX: Check and create offers on every fetch
+  async ensureActiveOffer() {
+    const now = Date.now();
+    
+    // Rate limit: only check once per minute
+    if (now - this.lastCheckTime < this.CHECK_INTERVAL) {
+      return;
+    }
+    
+    this.lastCheckTime = now;
+    
+    try {
+      const needsUpdate = await this.checkIfOffersNeedUpdate();
+      
+      if (needsUpdate) {
+        console.log('🔧 PromoService: No active offer found, creating one...');
+        await this.createWeeklyPromoOffers();
+      }
+    } catch (error) {
+      console.log('⚠️ PromoService: Ensure offer error:', error.message);
+    }
+  }
+
   async checkIfOffersNeedUpdate() {
     try {
       const now = Timestamp.now();
@@ -132,7 +160,7 @@ class PromoService {
       const snapshot = await getDocs(q);
       const needsUpdate = snapshot.empty;
       
-      console.log(`PromoService: Active offers - ${needsUpdate ? 'NEEDS UPDATE' : 'EXISTS'}`);
+      console.log(`PromoService: Active offers check - ${needsUpdate ? 'NEEDS UPDATE' : 'EXISTS'}`);
       return needsUpdate;
     } catch (error) {
       console.error('PromoService: Check offers error:', error);
@@ -230,6 +258,9 @@ class PromoService {
     try {
       console.log('📋 PromoService: Fetching personalized offer...');
       
+      // ✅ FIX: Ensure there's always an active offer
+      await this.ensureActiveOffer();
+      
       const now = Timestamp.now();
       
       const timeoutPromise = new Promise((_, reject) =>
@@ -262,6 +293,7 @@ class PromoService {
           
           console.log('✅ PromoService: Found offer:', offer.title);
           
+          // ✅ Track impression asynchronously (don't wait)
           this.trackOfferImpression(offer.id).catch(err =>
             console.log('Impression tracking failed:', err.message)
           );
@@ -281,7 +313,7 @@ class PromoService {
   }
 
   /**
-   * ✅ CRITICAL FIX: Use updateDoc with increment() for atomic updates
+   * ✅ Track impression - Uses updateDoc with increment()
    */
   async trackOfferImpression(offerId) {
     if (!offerId || offerId === 'fallback') {
@@ -294,7 +326,7 @@ class PromoService {
       
       const offerRef = doc(db, 'promo_offers', offerId);
       
-      // ✅ CRITICAL: Use updateDoc with increment() for atomic updates
+      // ✅ Use updateDoc with increment() for atomic updates
       await updateDoc(offerRef, {
         impressions: increment(1),
         lastImpressionAt: Timestamp.now()
@@ -313,12 +345,19 @@ class PromoService {
       console.error('❌ Track impression error for', offerId, ':', error);
       console.error('   Error code:', error.code);
       console.error('   Error message:', error.message);
+      
+      // ✅ If permission denied, log detailed error
+      if (error.code === 'permission-denied') {
+        console.error('   ⚠️ PERMISSION DENIED - Check Firestore rules!');
+        console.error('   Make sure "allow update: if isSignedIn();" is set for promo_offers');
+      }
+      
       return false;
     }
   }
 
   /**
-   * ✅ CRITICAL FIX: Use updateDoc with increment() for atomic updates
+   * ✅ Track click - Uses updateDoc with increment()
    */
   async trackOfferClick(offerId) {
     if (!offerId || offerId === 'fallback') {
@@ -331,7 +370,7 @@ class PromoService {
       
       const offerRef = doc(db, 'promo_offers', offerId);
       
-      // ✅ CRITICAL: Use updateDoc with increment() for atomic updates
+      // ✅ Use updateDoc with increment() for atomic updates
       await updateDoc(offerRef, {
         clicks: increment(1),
         lastClickAt: Timestamp.now()
@@ -350,12 +389,17 @@ class PromoService {
       console.error('❌ Track click error for', offerId, ':', error);
       console.error('   Error code:', error.code);
       console.error('   Error message:', error.message);
+      
+      if (error.code === 'permission-denied') {
+        console.error('   ⚠️ PERMISSION DENIED - Check Firestore rules!');
+      }
+      
       return false;
     }
   }
 
   /**
-   * ✅ CRITICAL FIX: Use updateDoc with increment() for atomic updates
+   * ✅ Track conversion - Uses updateDoc with increment()
    */
   async trackOfferConversion(offerId) {
     if (!offerId || offerId === 'fallback') {
@@ -368,7 +412,7 @@ class PromoService {
       
       const offerRef = doc(db, 'promo_offers', offerId);
       
-      // ✅ CRITICAL: Use updateDoc with increment() for atomic updates
+      // ✅ Use updateDoc with increment() for atomic updates
       await updateDoc(offerRef, {
         conversions: increment(1),
         lastConversionAt: Timestamp.now()
@@ -387,6 +431,11 @@ class PromoService {
       console.error('❌ Track conversion error for', offerId, ':', error);
       console.error('   Error code:', error.code);
       console.error('   Error message:', error.message);
+      
+      if (error.code === 'permission-denied') {
+        console.error('   ⚠️ PERMISSION DENIED - Check Firestore rules!');
+      }
+      
       return false;
     }
   }
@@ -432,7 +481,7 @@ class PromoService {
   }
 
   /**
-   * ✅ Get offer statistics with proper calculation
+   * ✅ Get offer statistics - Properly calculates all metrics
    */
   async getOfferStatistics() {
     try {
@@ -464,13 +513,13 @@ class PromoService {
           stats.expiredOffers++;
         }
         
-        // ✅ CRITICAL: Sum up metrics properly
+        // ✅ Sum up metrics properly
         stats.totalImpressions += Number(data.impressions) || 0;
         stats.totalClicks += Number(data.clicks) || 0;
         stats.totalConversions += Number(data.conversions) || 0;
       });
       
-      // ✅ CRITICAL: Calculate rates properly
+      // ✅ Calculate rates properly
       if (stats.totalImpressions > 0) {
         stats.clickThroughRate = ((stats.totalClicks / stats.totalImpressions) * 100).toFixed(2);
       }

@@ -85,24 +85,24 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // ✅ ✅ ✅ CRITICAL FIX: Promo offers - Allow tracking updates for all authenticated users
+    // ✅ Promo offers - Allow tracking updates for all authenticated users
     match /promo_offers/{offerId} {
       // ✅ Anyone authenticated can read active offers
       allow read: if isSignedIn();
-      
-      // ✅ ✅ ✅ FIXED: Allow all authenticated users to update for tracking metrics
-      // This works with increment() operations which don't send full document data
+  
+      // ✅ Allow all authenticated users to update for tracking metrics
       allow update: if isSignedIn();
-      
+  
       // ✅ Admins OR automated system can create
       allow create: if isSignedIn() && (
         isAdmin() || 
-        isSystemCreatedOffer()
+        request.resource.data.createdBy == 'auto_system'
       );
-      
+  
       // ✅ Only admins can delete offers
       allow delete: if isAdmin();
     }
+
   
     // Analytics
     match /analytics/{analyticsId} {
