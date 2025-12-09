@@ -683,7 +683,7 @@ const SettingsScreen = ({ navigation }) => {
 
           <List.Item
             title="App Version"
-            description="1.2.0"
+            description="1.3.0"
             left={(props) => <List.Icon {...props} icon="information" />}
             titleStyle={styles.listItemTitle}
             descriptionStyle={styles.listItemDescription}
