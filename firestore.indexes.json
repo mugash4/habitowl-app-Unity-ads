@@ -19,16 +19,6 @@
       ]
     },
     {
-      "collectionGroup": "users",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "uid",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
       "collectionGroup": "referrals",
       "queryScope": "COLLECTION",
       "fields": [
