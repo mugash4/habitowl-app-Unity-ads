@@ -1,8 +1,8 @@
 /**
  * PromoService - FIXED VERSION
- * ✅ Auto-creates offers reliably
- * ✅ Metrics update properly
- * ✅ Better error handling
+ * ✅ Tracks fallback offers properly
+ * ✅ Metrics update correctly in Firestore
+ * ✅ Better error handling and logging
  */
 
 import { 
@@ -74,7 +74,7 @@ class PromoService {
       }
     ];
     
-    // ✅ FIX: Start background initialization
+    // ✅ Start background initialization
     setTimeout(() => {
       this.initializePromoSystemBackground();
     }, 2000);
@@ -123,7 +123,6 @@ class PromoService {
     }
   }
 
-  // ✅ FIX: Check and create offers on every fetch
   async ensureActiveOffer() {
     const now = Date.now();
     
@@ -258,7 +257,6 @@ class PromoService {
     try {
       console.log('📋 PromoService: Fetching personalized offer...');
       
-      // ✅ FIX: Ensure there's always an active offer
       await this.ensureActiveOffer();
       
       const now = Timestamp.now();
@@ -272,7 +270,7 @@ class PromoService {
           collection(db, 'promo_offers'),
           where('isActive', '==', true),
           where('expiresAt', '>', now),
-          orderBy('expiresAt', 'asc'),
+          orderBy('expiresAt', 'desc'),
           limit(1)
         );
         
@@ -293,7 +291,7 @@ class PromoService {
           
           console.log('✅ PromoService: Found offer:', offer.title);
           
-          // ✅ Track impression asynchronously (don't wait)
+          // ✅ Track impression asynchronously
           this.trackOfferImpression(offer.id).catch(err =>
             console.log('Impression tracking failed:', err.message)
           );
@@ -313,20 +311,63 @@ class PromoService {
   }
 
   /**
-   * ✅ Track impression - Uses updateDoc with increment()
+   * ✅ FIXED: Track impression - Now tracks fallback offers too
    */
   async trackOfferImpression(offerId) {
-    if (!offerId || offerId === 'fallback') {
-      console.log('⚠️ trackOfferImpression: Skipping fallback offer');
+    // ✅ CRITICAL FIX: Allow fallback offer tracking
+    if (!offerId) {
+      console.log('⚠️ trackOfferImpression: No offer ID provided');
       return false;
     }
 
+    // ✅ For fallback offers, create a tracking document
+    if (offerId === 'fallback') {
+      try {
+        console.log('📊 Tracking impression for FALLBACK offer');
+        
+        const fallbackRef = doc(db, 'promo_offers', 'fallback');
+        const fallbackDoc = await getDoc(fallbackRef);
+        
+        if (!fallbackDoc.exists()) {
+          // Create fallback tracking document
+          await setDoc(fallbackRef, {
+            id: 'fallback',
+            title: '🎉 Limited Time Offer!',
+            description: 'Upgrade to Premium',
+            discount: '50% OFF',
+            type: 'fallback',
+            isActive: true,
+            createdAt: Timestamp.now(),
+            expiresAt: null,
+            createdBy: 'auto_system',
+            impressions: 1,
+            clicks: 0,
+            conversions: 0,
+            lastImpressionAt: Timestamp.now()
+          });
+          console.log('✅ Fallback tracking document created with impression');
+        } else {
+          // Update existing fallback document
+          await updateDoc(fallbackRef, {
+            impressions: increment(1),
+            lastImpressionAt: Timestamp.now()
+          });
+          console.log('✅ Fallback impression tracked');
+        }
+        
+        return true;
+      } catch (error) {
+        console.error('❌ Fallback impression tracking error:', error);
+        return false;
+      }
+    }
+
+    // ✅ Track regular offers
     try {
       console.log('📊 Tracking impression for offer:', offerId);
       
       const offerRef = doc(db, 'promo_offers', offerId);
       
-      // ✅ Use updateDoc with increment() for atomic updates
       await updateDoc(offerRef, {
         impressions: increment(1),
         lastImpressionAt: Timestamp.now()
@@ -346,10 +387,8 @@ class PromoService {
       console.error('   Error code:', error.code);
       console.error('   Error message:', error.message);
       
-      // ✅ If permission denied, log detailed error
       if (error.code === 'permission-denied') {
         console.error('   ⚠️ PERMISSION DENIED - Check Firestore rules!');
-        console.error('   Make sure "allow update: if isSignedIn();" is set for promo_offers');
       }
       
       return false;
@@ -357,20 +396,62 @@ class PromoService {
   }
 
   /**
-   * ✅ Track click - Uses updateDoc with increment()
+   * ✅ FIXED: Track click - Now tracks fallback offers too
    */
   async trackOfferClick(offerId) {
-    if (!offerId || offerId === 'fallback') {
-      console.log('⚠️ trackOfferClick: Skipping fallback offer');
+    if (!offerId) {
+      console.log('⚠️ trackOfferClick: No offer ID provided');
       return false;
     }
 
+    // ✅ Track fallback offer clicks
+    if (offerId === 'fallback') {
+      try {
+        console.log('👆 Tracking click for FALLBACK offer');
+        
+        const fallbackRef = doc(db, 'promo_offers', 'fallback');
+        const fallbackDoc = await getDoc(fallbackRef);
+        
+        if (!fallbackDoc.exists()) {
+          // Create fallback tracking document with click
+          await setDoc(fallbackRef, {
+            id: 'fallback',
+            title: '🎉 Limited Time Offer!',
+            description: 'Upgrade to Premium',
+            discount: '50% OFF',
+            type: 'fallback',
+            isActive: true,
+            createdAt: Timestamp.now(),
+            expiresAt: null,
+            createdBy: 'auto_system',
+            impressions: 0,
+            clicks: 1,
+            conversions: 0,
+            lastClickAt: Timestamp.now()
+          });
+          console.log('✅ Fallback tracking document created with click');
+        } else {
+          // Update existing fallback document
+          await updateDoc(fallbackRef, {
+            clicks: increment(1),
+            lastClickAt: Timestamp.now()
+          });
+          console.log('✅ Fallback click tracked');
+        }
+        
+        return true;
+      } catch (error) {
+        console.error('❌ Fallback click tracking error:', error);
+        return false;
+      }
+    }
+
+    // ✅ Track regular offers
     try {
       console.log('👆 Tracking click for offer:', offerId);
       
       const offerRef = doc(db, 'promo_offers', offerId);
       
-      // ✅ Use updateDoc with increment() for atomic updates
       await updateDoc(offerRef, {
         clicks: increment(1),
         lastClickAt: Timestamp.now()
@@ -399,20 +480,62 @@ class PromoService {
   }
 
   /**
-   * ✅ Track conversion - Uses updateDoc with increment()
+   * ✅ FIXED: Track conversion - Now tracks fallback offers too
    */
   async trackOfferConversion(offerId) {
-    if (!offerId || offerId === 'fallback') {
-      console.log('⚠️ trackOfferConversion: Skipping fallback offer');
+    if (!offerId) {
+      console.log('⚠️ trackOfferConversion: No offer ID provided');
       return false;
     }
 
+    // ✅ Track fallback offer conversions
+    if (offerId === 'fallback') {
+      try {
+        console.log('💰 Tracking conversion for FALLBACK offer');
+        
+        const fallbackRef = doc(db, 'promo_offers', 'fallback');
+        const fallbackDoc = await getDoc(fallbackRef);
+        
+        if (!fallbackDoc.exists()) {
+          // Create fallback tracking document with conversion
+          await setDoc(fallbackRef, {
+            id: 'fallback',
+            title: '🎉 Limited Time Offer!',
+            description: 'Upgrade to Premium',
+            discount: '50% OFF',
+            type: 'fallback',
+            isActive: true,
+            createdAt: Timestamp.now(),
+            expiresAt: null,
+            createdBy: 'auto_system',
+            impressions: 0,
+            clicks: 0,
+            conversions: 1,
+            lastConversionAt: Timestamp.now()
+          });
+          console.log('✅ Fallback tracking document created with conversion');
+        } else {
+          // Update existing fallback document
+          await updateDoc(fallbackRef, {
+            conversions: increment(1),
+            lastConversionAt: Timestamp.now()
+          });
+          console.log('✅ Fallback conversion tracked');
+        }
+        
+        return true;
+      } catch (error) {
+        console.error('❌ Fallback conversion tracking error:', error);
+        return false;
+      }
+    }
+
+    // ✅ Track regular offers
     try {
       console.log('💰 Tracking conversion for offer:', offerId);
       
       const offerRef = doc(db, 'promo_offers', offerId);
       
-      // ✅ Use updateDoc with increment() for atomic updates
       await updateDoc(offerRef, {
         conversions: increment(1),
         lastConversionAt: Timestamp.now()
@@ -481,7 +604,7 @@ class PromoService {
   }
 
   /**
-   * ✅ Get offer statistics - Properly calculates all metrics
+   * ✅ Get offer statistics - Properly calculates all metrics including fallback
    */
   async getOfferStatistics() {
     try {
@@ -507,19 +630,20 @@ class PromoService {
         const data = doc.data();
         const expiresAt = data.expiresAt;
         
-        if (data.isActive && expiresAt && expiresAt.toMillis() > now.toMillis()) {
+        // ✅ Count fallback as active (no expiry)
+        if (doc.id === 'fallback' || (data.isActive && expiresAt && expiresAt.toMillis() > now.toMillis())) {
           stats.activeOffers++;
         } else if (!data.isActive || (expiresAt && expiresAt.toMillis() <= now.toMillis())) {
           stats.expiredOffers++;
         }
         
-        // ✅ Sum up metrics properly
+        // ✅ Sum up metrics (including fallback)
         stats.totalImpressions += Number(data.impressions) || 0;
         stats.totalClicks += Number(data.clicks) || 0;
         stats.totalConversions += Number(data.conversions) || 0;
       });
       
-      // ✅ Calculate rates properly
+      // ✅ Calculate rates
       if (stats.totalImpressions > 0) {
         stats.clickThroughRate = ((stats.totalClicks / stats.totalImpressions) * 100).toFixed(2);
       }

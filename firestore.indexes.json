@@ -80,7 +80,7 @@
         },
         {
           "fieldPath": "expiresAt",
-          "order": "ASCENDING"
+          "order": "DESCENDING"
         }
       ]
     }
