@@ -18,37 +18,43 @@ class NotificationService {
     this.expoPushToken = null;
     this.notificationListener = null;
     this.responseListener = null;
+    this.isInitialized = false; // ✅ NEW: Track initialization status
   }
 
   async initialize() {
     try {
+      if (this.isInitialized) {
+        console.log('✅ NotificationService already initialized');
+        return this.expoPushToken;
+      }
+      
       console.log('🔔 Initializing NotificationService...');
       
-      // Request permissions and get push token
+      // ✅ NEW: Works offline - only network call is for push token
       this.expoPushToken = await this.registerForPushNotificationsAsync();
 
-      // Listen for incoming notifications
       this.notificationListener = Notifications.addNotificationReceivedListener(
         this.handleNotificationReceived.bind(this)
       );
 
-      // Listen for notification responses (when user taps notification)
       this.responseListener = Notifications.addNotificationResponseReceivedListener(
         this.handleNotificationResponse.bind(this)
       );
 
+      this.isInitialized = true;
       console.log('✅ NotificationService initialized successfully');
       return this.expoPushToken;
     } catch (error) {
       console.error('❌ Error initializing NotificationService:', error);
-      throw error;
+      // ✅ Don't throw - app should work even if notifications fail
+      this.isInitialized = true;
+      return null;
     }
   }
 
   async registerForPushNotificationsAsync() {
     let token;
 
-    // Only proceed if running on a physical device
     if (!Device.isDevice) {
       console.log('⚠️ Must use physical device for Push Notifications');
       return null;
@@ -115,8 +121,7 @@ class NotificationService {
 
       console.log('✅ Notification permission granted');
 
-      // Step 5: Get Expo Push Token (for remote notifications)
-      // ✅ UPDATED: Expo now uses FCM V1 automatically via EAS credentials
+      // Step 5: Get Expo Push Token (requires network - but non-blocking)
       try {
         const projectId =
           Constants?.expoConfig?.extra?.eas?.projectId ?? 
@@ -135,18 +140,18 @@ class NotificationService {
         console.log('✅ Expo Push Token obtained:', token);
         console.log('🔒 Using FCM V1 API via Expo Push Service');
         
-        // Save token to AsyncStorage for later use
         await AsyncStorage.setItem('expoPushToken', token);
         
       } catch (tokenError) {
         console.error('❌ Error getting Expo Push Token:', tokenError);
-        console.log('ℹ️ Local notifications will still work');
+        console.log('ℹ️ Local notifications will still work offline');
         token = null;
       }
 
     } catch (error) {
       console.error('❌ Error in registerForPushNotificationsAsync:', error);
-      throw error;
+      // ✅ Don't throw - return null to allow app to continue
+      return null;
     }
 
     return token;
@@ -156,7 +161,7 @@ class NotificationService {
     try {
       console.log(`🔔 Scheduling reminder for habit: ${habit.name}`);
       
-      // Cancel existing notifications for this habit
+      // ✅ Works completely offline - no network required
       await this.cancelHabitNotifications(habit.id);
 
       if (!habit.reminderEnabled || !habit.reminderTime) {
@@ -189,10 +194,8 @@ class NotificationService {
 
       console.log(`✅ Reminder scheduled with ID: ${notificationId}`);
 
-      // Store notification ID for later cancellation
       await this.storeNotificationId(habit.id, 'reminder', notificationId);
 
-      // Schedule motivational follow-up (30 minutes later)
       const followUpHour = minutes + 30 >= 60 ? hours + 1 : hours;
       const followUpMinute = minutes + 30 >= 60 ? minutes + 30 - 60 : minutes + 30;
 
@@ -222,7 +225,8 @@ class NotificationService {
       return { reminderId: notificationId, followUpId };
     } catch (error) {
       console.error('❌ Error scheduling habit reminder:', error);
-      throw error;
+      // ✅ Don't throw - just log the error
+      return null;
     }
   }
 
@@ -244,6 +248,7 @@ class NotificationService {
 
       console.log(`🎯 Scheduling streak celebration: ${streak} days`);
 
+      // ✅ Works completely offline
       await Notifications.scheduleNotificationAsync({
         content: {
           title: `Streak Milestone Achieved! 🎯`,
@@ -262,14 +267,16 @@ class NotificationService {
         },
       });
 
-      console.log('✅ Streak celebration scheduled');
+      console.log('✅ Streak celebration scheduled (offline-capable)');
     } catch (error) {
       console.error('❌ Error scheduling streak celebration:', error);
+      // ✅ Don't throw - just log
     }
   }
 
   async sendMotivationalMessage(message, delay = 0) {
     try {
+      // ✅ Works completely offline
       await Notifications.scheduleNotificationAsync({
         content: {
           title: `HabitOwl says... 🦉`,
@@ -286,7 +293,7 @@ class NotificationService {
         },
       });
       
-      console.log('✅ Motivational message scheduled');
+      console.log('✅ Motivational message scheduled (offline-capable)');
     } catch (error) {
       console.error('❌ Error sending motivational message:', error);
     }
@@ -294,16 +301,15 @@ class NotificationService {
 
   /**
    * ✅ UPDATED: Send push notification via Expo Push Service (FCM V1)
-   * Expo handles FCM V1 authentication automatically via EAS credentials
+   * This requires network - but won't block other functionality if offline
    */
   async sendPushNotification(userId, title, body, data = {}) {
     try {
-      // Get user's push token
       const pushToken = await AsyncStorage.getItem('expoPushToken');
       
       if (!pushToken) {
-        console.log('⚠️ No push token found for user');
-        return;
+        console.log('⚠️ No push token found for user (offline or not configured)');
+        return null;
       }
 
       const message = {
@@ -316,7 +322,7 @@ class NotificationService {
         channelId: data.type || 'habit-reminders',
       };
 
-      // ✅ UPDATED: Using Expo Push API (which now uses FCM V1 internally)
+      // ✅ Network call - will fail gracefully if offline
       const response = await fetch('https://exp.host/--/api/v2/push/send', {
         method: 'POST',
         headers: {
@@ -337,13 +343,15 @@ class NotificationService {
 
       return result;
     } catch (error) {
-      console.error('❌ Error sending push notification:', error);
-      throw error;
+      console.error('❌ Error sending push notification (probably offline):', error);
+      // ✅ Return null instead of throwing
+      return null;
     }
   }
 
   async cancelHabitNotifications(habitId) {
     try {
+      // ✅ Works completely offline
       const storedIds = await this.getStoredNotificationIds(habitId);
       
       if (storedIds) {
@@ -352,7 +360,6 @@ class NotificationService {
           console.log(`✅ Cancelled ${type} notification: ${notificationId}`);
         }
         
-        // Remove from storage
         await AsyncStorage.removeItem(`notifications_${habitId}`);
       }
     } catch (error) {
@@ -362,10 +369,10 @@ class NotificationService {
 
   async cancelAllNotifications() {
     try {
+      // ✅ Works completely offline
       await Notifications.cancelAllScheduledNotificationsAsync();
       console.log('✅ All scheduled notifications cancelled');
       
-      // Clear all stored notification IDs
       const keys = await AsyncStorage.getAllKeys();
       const notificationKeys = keys.filter(key => key.startsWith('notifications_'));
       await AsyncStorage.multiRemove(notificationKeys);
@@ -376,6 +383,7 @@ class NotificationService {
 
   async storeNotificationId(habitId, type, notificationId) {
     try {
+      // ✅ Works completely offline - uses AsyncStorage
       const key = `notifications_${habitId}`;
       const existing = await AsyncStorage.getItem(key);
       const notifications = existing ? JSON.parse(existing) : {};
@@ -389,6 +397,7 @@ class NotificationService {
 
   async getStoredNotificationIds(habitId) {
     try {
+      // ✅ Works completely offline - uses AsyncStorage
       const key = `notifications_${habitId}`;
       const stored = await AsyncStorage.getItem(key);
       return stored ? JSON.parse(stored) : null;
@@ -424,6 +433,7 @@ class NotificationService {
 
   async getScheduledNotifications() {
     try {
+      // ✅ Works completely offline
       const scheduled = await Notifications.getAllScheduledNotificationsAsync();
       console.log(`📋 Currently scheduled notifications: ${scheduled.length}`);
       return scheduled;
@@ -439,6 +449,7 @@ class NotificationService {
 
   async checkPermissionStatus() {
     try {
+      // ✅ Works completely offline
       const { status, ios, android } = await Notifications.getPermissionsAsync();
       console.log('📋 Current permission status:', { status, ios, android });
       return { status, ios, android };

@@ -10,7 +10,7 @@ import {
   StatusBar,
   TouchableOpacity
 } from 'react-native';
-import { FAB, Appbar, Button, Card, Chip } from 'react-native-paper';
+import { FAB, Appbar, Button, Card, Chip, Banner } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -32,9 +32,9 @@ const HomeScreen = ({ navigation, route }) => {
   const [fadeAnim] = useState(new Animated.Value(0));
   const [screenKey, setScreenKey] = useState(0);
   const [isPremium, setIsPremium] = useState(false);
+  const [isOffline, setIsOffline] = useState(false); // ✅ NEW: Offline indicator
 
   const { totalHeight: tabBarTotalHeight } = useTabBarHeight();
-
 
   useFocusEffect(
     useCallback(() => {
@@ -44,7 +44,7 @@ const HomeScreen = ({ navigation, route }) => {
       
       const reloadData = async () => {
         try {
-          await loadHabits(true, isActive);
+          await loadHabits(false, isActive); // ✅ Use cache first
           
           if (isActive) {
             Animated.timing(fadeAnim, {
@@ -74,10 +74,10 @@ const HomeScreen = ({ navigation, route }) => {
         setLoading(true);
       }
     
-      console.log('📱 Fetching habits from Firebase...');
-    
-      await new Promise(resolve => setTimeout(resolve, 300));
-      const userHabits = await FirebaseService.getUserHabits(true);
+      console.log('📱 Fetching habits...');
+      
+      // ✅ NEW: getUserHabits now uses cache first
+      const userHabits = await FirebaseService.getUserHabits(forceReload);
     
       const userStats = await FirebaseService.getUserStats();
       let premiumStatus = userStats?.isPremium || false;
@@ -102,6 +102,9 @@ const HomeScreen = ({ navigation, route }) => {
     
       console.log(`✅ Loaded ${userHabits ? userHabits.length : 0} habits`);
       console.log(`Premium status: ${premiumStatus}`);
+      
+      // ✅ NEW: Check if we're offline (no network errors)
+      setIsOffline(false);
     
       if (userHabits && Array.isArray(userHabits)) {
         console.log('📝 Setting habits:', userHabits.map(h => h.name).join(', '));
@@ -137,19 +140,17 @@ const HomeScreen = ({ navigation, route }) => {
       console.error('❌ Error loading habits:', error);
     
       if (isActive) {
-        setHabits([]);
-        setTodayCompletions(new Set());
-        setMotivationalMessage('');
-      
-        if (error.message && error.message.includes('network')) {
-          Alert.alert(
-            'Connection Issue',
-            'Please check your internet connection and try again.',
-            [
-              { text: 'Retry', onPress: () => loadHabits(true) },
-              { text: 'Cancel', style: 'cancel' }
-            ]
-          );
+        // ✅ NEW: Better offline detection
+        if (error.message && (error.message.includes('network') || error.message.includes('offline'))) {
+          setIsOffline(true);
+          console.log('📡 Offline mode detected');
+        }
+        
+        // Don't clear habits on error - keep cached data
+        if (habits.length === 0) {
+          setHabits([]);
+          setTodayCompletions(new Set());
+          setMotivationalMessage('');
         }
       }
     } finally {
@@ -185,30 +186,24 @@ const HomeScreen = ({ navigation, route }) => {
     return 'evening';
   };
 
-  // ✅ FIX: Show interstitial ad when user refreshes the screen
   const onRefresh = async () => {
     console.log('🔄 Manual refresh triggered');
     setRefreshing(true);
     setScreenKey(prev => prev + 1);
     
-    // ✅ NEW: Show interstitial ad after refresh (for free users only)
     try {
-      // Wait a bit for the refresh to start
       await new Promise(resolve => setTimeout(resolve, 300));
       
-      // Load the data
+      // ✅ Force refresh from server
       await loadHabits(true);
       
-      // ✅ Check if user is free (not premium/admin)
       console.log('[Refresh] Checking ad eligibility - isPremium:', isPremium);
       
       if (!isPremium) {
-        // Double-check with AdMobService
         const status = adMobService.getStatus();
         if (!status.isPremium && !status.isAdmin && status.shouldShowAds) {
           console.log('[Refresh] 💰 FREE user confirmed - showing interstitial ad after refresh');
           
-          // Wait a bit after refresh completes to show ad
           setTimeout(async () => {
             try {
               const adShown = await adMobService.showInterstitialAd('homescreen_refresh');
@@ -243,11 +238,9 @@ const HomeScreen = ({ navigation, route }) => {
           await NotificationService.scheduleStreakCelebration(habit, newStreak);
         }
       
-        // ✅ Check premium/admin status before showing ads
         console.log('[Home] Checking ad eligibility - isPremium:', isPremium);
       
         if (!isPremium) {
-          // Double-check with AdMobService
           const status = adMobService.getStatus();
           if (!status.isPremium && !status.isAdmin) {
             console.log('[Home] FREE user confirmed - will show ad after habit completion');
@@ -271,12 +264,12 @@ const HomeScreen = ({ navigation, route }) => {
       setTodayCompletions(newCompletions);
     
       setScreenKey(prev => prev + 1);
-      await loadHabits(true);
+      await loadHabits(false); // ✅ Use cache for faster update
     
     } catch (error) {
       Alert.alert('Error', error.message);
       setScreenKey(prev => prev + 1);
-      await loadHabits(true);
+      await loadHabits(false);
     }
   };
 
@@ -321,7 +314,7 @@ const HomeScreen = ({ navigation, route }) => {
     try {
       await FirebaseService.deleteHabit(habitId);
       setScreenKey(prev => prev + 1);
-      await loadHabits(true);
+      await loadHabits(false); // ✅ Use cache for faster update
     } catch (error) {
       Alert.alert('Error', 'Failed to delete habit');
     }
@@ -353,6 +346,14 @@ const HomeScreen = ({ navigation, route }) => {
     return (
       <LinearGradient colors={['#4f46e5', '#7c3aed']} style={styles.header}>
         <View style={styles.headerContent}>
+          {/* ✅ NEW: Offline indicator */}
+          {isOffline && (
+            <View style={styles.offlineBanner}>
+              <Icon name="wifi-off" size={16} color="#ffffff" />
+              <Text style={styles.offlineText}>Offline Mode - Using cached data</Text>
+            </View>
+          )}
+          
           <View style={styles.greetingContainer}>
             <Text style={styles.greeting}>
               Good {getTimeOfDay()}, {displayName}! 👋
@@ -445,23 +446,19 @@ const HomeScreen = ({ navigation, route }) => {
     <Animated.View style={[styles.container, { opacity: fadeAnim }]} key={screenKey}>
       <StatusBar barStyle="light-content" backgroundColor="#4f46e5" />
       
-      {/* ✅ Header now scrolls WITH the content */}
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[
           styles.contentContainer,
-          { paddingBottom: tabBarTotalHeight + 20 } // Dynamic padding
+          { paddingBottom: tabBarTotalHeight + 20 }
         ]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
         showsVerticalScrollIndicator={false}
       >
-
-        {/* Header is now INSIDE ScrollView */}
         {renderHeader()}
         
-        {/* Today's Progress */}
         {habits.length > 0 && (
           <Card style={styles.progressCard}>
             <Card.Content>
@@ -487,7 +484,6 @@ const HomeScreen = ({ navigation, route }) => {
           </Card>
         )}
 
-        {/* Habits List */}
         {habits.length === 0 ? (
           renderEmptyState()
         ) : (
@@ -506,22 +502,19 @@ const HomeScreen = ({ navigation, route }) => {
           </>
         )}
         
-        {/* Bottom padding for banner ad + tab bar */}
         <View style={styles.bottomPadding} />
       </ScrollView>
 
-      {/* FAB button */}
       <FAB
         style={[
           styles.fab,
-          { bottom: tabBarTotalHeight + 16 } // Dynamic positioning
+          { bottom: tabBarTotalHeight + 16 }
         ]}
         icon="plus"
         color="#ffffff"
         onPress={handleCreateHabit}
         label={habits.length === 0 ? "Add Habit" : undefined}
       />
-
     </Animated.View>
   );
 };
@@ -535,15 +528,30 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    paddingBottom: 20, // Banner + tab bar space
+    paddingBottom: 20,
   },
-  // ✅ FIXED: Header is now scrollable
   header: {
-    paddingTop: 50, // StatusBar height
+    paddingTop: 50,
     paddingBottom: 24,
   },
   headerContent: {
     paddingHorizontal: 20,
+  },
+  // ✅ NEW: Offline banner styles
+  offlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(239, 68, 68, 0.9)',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+    gap: 8,
+  },
+  offlineText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '500',
   },
   greetingContainer: {
     marginBottom: 8,
@@ -685,7 +693,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     margin: 16,
     right: 0,
-    bottom: 80, // Above banner + tab bar
+    bottom: 80,
     backgroundColor: '#4f46e5',
   },
   loadingContainer: {

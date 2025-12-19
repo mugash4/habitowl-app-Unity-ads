@@ -13,7 +13,8 @@ import {
   serverTimestamp,
   increment,
   Timestamp,
-  getDocsFromServer
+  getDocsFromServer,
+  getDocsFromCache
 } from 'firebase/firestore';
 import { 
   createUserWithEmailAndPassword, 
@@ -49,12 +50,90 @@ class FirebaseService {
   constructor() {
     this.currentUser = null;
     this.authStateChangedListeners = [];
+    this.habitsCache = null; // ✅ NEW: In-memory cache
+    this.lastCacheTime = null;
+    this.CACHE_DURATION = 30000; // 30 seconds
     
     // Listen to auth state changes
     onAuthStateChanged(auth, (user) => {
       this.currentUser = user;
       this.authStateChangedListeners.forEach(listener => listener(user));
+      
+      // ✅ NEW: Clear cache on logout
+      if (!user) {
+        this.clearHabitsCache();
+      }
     });
+  }
+
+  // ✅ NEW: Cache management methods
+  async cacheHabits(habits) {
+    try {
+      if (!this.currentUser) return;
+      
+      const cacheKey = `habits_cache_${this.currentUser.uid}`;
+      const cacheData = {
+        habits: habits,
+        timestamp: Date.now(),
+        userId: this.currentUser.uid
+      };
+      
+      await AsyncStorage.setItem(cacheKey, JSON.stringify(cacheData));
+      this.habitsCache = habits;
+      this.lastCacheTime = Date.now();
+      
+      console.log(`✅ Cached ${habits.length} habits to AsyncStorage`);
+    } catch (error) {
+      console.error('❌ Error caching habits:', error);
+    }
+  }
+
+  async getCachedHabits() {
+    try {
+      if (!this.currentUser) return null;
+      
+      // Check in-memory cache first (fastest)
+      if (this.habitsCache && this.lastCacheTime && 
+          (Date.now() - this.lastCacheTime < this.CACHE_DURATION)) {
+        console.log('⚡ Using in-memory cache');
+        return this.habitsCache;
+      }
+      
+      // Check AsyncStorage cache
+      const cacheKey = `habits_cache_${this.currentUser.uid}`;
+      const cached = await AsyncStorage.getItem(cacheKey);
+      
+      if (cached) {
+        const cacheData = JSON.parse(cached);
+        
+        // Verify cache is for current user
+        if (cacheData.userId === this.currentUser.uid) {
+          console.log(`⚡ Using AsyncStorage cache (${cacheData.habits.length} habits)`);
+          this.habitsCache = cacheData.habits;
+          this.lastCacheTime = cacheData.timestamp;
+          return cacheData.habits;
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('❌ Error getting cached habits:', error);
+      return null;
+    }
+  }
+
+  async clearHabitsCache() {
+    try {
+      if (this.currentUser) {
+        const cacheKey = `habits_cache_${this.currentUser.uid}`;
+        await AsyncStorage.removeItem(cacheKey);
+      }
+      this.habitsCache = null;
+      this.lastCacheTime = null;
+      console.log('🗑️ Habits cache cleared');
+    } catch (error) {
+      console.error('❌ Error clearing cache:', error);
+    }
   }
 
   // Authentication Methods
@@ -144,6 +223,7 @@ class FirebaseService {
   async signOut() {
     try {
       console.log('Signing out...');
+      await this.clearHabitsCache(); // ✅ NEW: Clear cache on logout
       await signOut(auth);
       await AsyncStorage.clear();
       console.log('Sign out successful!');
@@ -222,7 +302,7 @@ class FirebaseService {
     }
   }
 
-  // ✅ FIXED: Habit creation with proper verification
+  // ✅ FIXED: Habit creation with proper verification and cache update
   async createHabit(habitData) {
     if (!this.currentUser) {
       throw new Error('User not authenticated');
@@ -255,6 +335,13 @@ class FirebaseService {
       }
       console.log('✅ Habit verified in Firestore');
       
+      // ✅ NEW: Update cache immediately
+      const newHabit = { id: docRef.id, ...habit };
+      if (this.habitsCache) {
+        this.habitsCache = [newHabit, ...this.habitsCache];
+        await this.cacheHabits(this.habitsCache);
+      }
+      
       // Update user stats
       try {
         await this.updateUserStats({ totalHabits: increment(1) });
@@ -262,14 +349,14 @@ class FirebaseService {
         console.error('⚠️ Failed to update user stats:', statsError);
       }
       
-      return { id: docRef.id, ...habit };
+      return newHabit;
     } catch (error) {
       console.error('❌ Error creating habit:', error);
       throw new Error(error.message || 'Failed to create habit');
     }
   }
 
-  // ✅ FIXED: Robust habit loading with proper error handling
+  // ✅ FIXED: Robust habit loading with offline support and caching
   async getUserHabits(forceRefresh = false) {
     if (!this.currentUser) {
       console.log('⚠️ No current user');
@@ -277,17 +364,58 @@ class FirebaseService {
     }
 
     try {
+      // ✅ Step 1: Try to get cached habits first (for instant display)
+      if (!forceRefresh) {
+        const cachedHabits = await this.getCachedHabits();
+        if (cachedHabits && cachedHabits.length > 0) {
+          console.log(`⚡ Loaded ${cachedHabits.length} habits from cache (instant!)`);
+          
+          // ✅ Background sync: Fetch fresh data in background
+          this.syncHabitsInBackground();
+          
+          return cachedHabits;
+        }
+      }
+      
+      // ✅ Step 2: Try to fetch from Firestore
       console.log('📱 Fetching habits from Firestore...');
       
-      // ✅ FIXED: Simplified query without orderBy to avoid index requirement
       const q = query(
         collection(db, 'habits'),
         where('userId', '==', this.currentUser.uid),
         where('isActive', '==', true)
       );
 
-      // Always fetch from server for fresh data
-      const querySnapshot = await getDocsFromServer(q);
+      let querySnapshot;
+      let isFromCache = false;
+      
+      try {
+        // Try to get from server first
+        querySnapshot = await getDocsFromServer(q);
+        console.log('✅ Fetched from server');
+      } catch (networkError) {
+        console.log('⚠️ Network error, trying cache...');
+        
+        try {
+          // Try to get from Firestore cache
+          querySnapshot = await getDocsFromCache(q);
+          isFromCache = true;
+          console.log('✅ Fetched from Firestore cache');
+        } catch (cacheError) {
+          console.log('⚠️ Firestore cache also failed, using AsyncStorage...');
+          
+          // ✅ Step 3: Fallback to AsyncStorage cache
+          const cachedHabits = await this.getCachedHabits();
+          if (cachedHabits) {
+            console.log(`✅ Using AsyncStorage cache (offline mode)`);
+            return cachedHabits;
+          }
+          
+          // ✅ Step 4: No data available at all
+          console.log('❌ No cached data available');
+          return [];
+        }
+      }
       
       const habits = [];
       querySnapshot.forEach((doc) => {
@@ -298,27 +426,63 @@ class FirebaseService {
         });
       });
       
-      // Sort by createdAt in JavaScript (instead of Firestore)
+      // Sort by createdAt in JavaScript
       habits.sort((a, b) => {
         const dateA = new Date(a.createdAt || 0);
         const dateB = new Date(b.createdAt || 0);
-        return dateB - dateA; // Descending order (newest first)
+        return dateB - dateA;
       });
       
-      console.log(`✅ Fetched ${habits.length} habits`);
+      console.log(`✅ Fetched ${habits.length} habits ${isFromCache ? '(from Firestore cache)' : '(from server)'}`);
       
+      // ✅ NEW: Cache the results
       if (habits.length > 0) {
-        console.log('📝 Habits:', habits.map(h => h.name).join(', '));
+        await this.cacheHabits(habits);
       }
       
       return habits;
     } catch (error) {
       console.error('❌ Error fetching habits:', error);
-      console.error('Error code:', error.code);
-      console.error('Error message:', error.message);
       
-      // Return empty array instead of throwing error
+      // ✅ Final fallback: Return cached habits
+      const cachedHabits = await this.getCachedHabits();
+      if (cachedHabits) {
+        console.log('✅ Returning cached habits as fallback');
+        return cachedHabits;
+      }
+      
       return [];
+    }
+  }
+
+  // ✅ NEW: Background sync method
+  async syncHabitsInBackground() {
+    try {
+      console.log('🔄 Background sync started...');
+      
+      const q = query(
+        collection(db, 'habits'),
+        where('userId', '==', this.currentUser.uid),
+        where('isActive', '==', true)
+      );
+
+      const querySnapshot = await getDocsFromServer(q);
+      const habits = [];
+      
+      querySnapshot.forEach((doc) => {
+        habits.push({ id: doc.id, ...doc.data() });
+      });
+      
+      habits.sort((a, b) => {
+        const dateA = new Date(a.createdAt || 0);
+        const dateB = new Date(b.createdAt || 0);
+        return dateB - dateA;
+      });
+      
+      await this.cacheHabits(habits);
+      console.log('✅ Background sync complete');
+    } catch (error) {
+      console.log('⚠️ Background sync failed (offline?):', error.message);
     }
   }
 
@@ -329,7 +493,19 @@ class FirebaseService {
       updatedAt: new Date().toISOString()
     });
     
-    // Small delay for Firestore propagation
+    // ✅ NEW: Update cache
+    if (this.habitsCache) {
+      const index = this.habitsCache.findIndex(h => h.id === habitId);
+      if (index !== -1) {
+        this.habitsCache[index] = {
+          ...this.habitsCache[index],
+          ...updates,
+          updatedAt: new Date().toISOString()
+        };
+        await this.cacheHabits(this.habitsCache);
+      }
+    }
+    
     await new Promise(resolve => setTimeout(resolve, 200));
   }
 
@@ -339,6 +515,12 @@ class FirebaseService {
       isActive: false,
       deletedAt: new Date().toISOString()
     });
+    
+    // ✅ NEW: Update cache
+    if (this.habitsCache) {
+      this.habitsCache = this.habitsCache.filter(h => h.id !== habitId);
+      await this.cacheHabits(this.habitsCache);
+    }
     
     await this.updateUserStats({ totalHabits: increment(-1) });
     await new Promise(resolve => setTimeout(resolve, 200));
@@ -364,14 +546,29 @@ class FirebaseService {
     const newStreak = this.calculateStreak(newCompletions);
     const newLongestStreak = Math.max(habit.longestStreak || 0, newStreak);
 
-    await updateDoc(habitRef, {
+    const updateData = {
       completions: newCompletions,
       currentStreak: newStreak,
       longestStreak: newLongestStreak,
       totalCompletions: increment(1),
       lastCompletedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
-    });
+    };
+
+    await updateDoc(habitRef, updateData);
+
+    // ✅ NEW: Update cache
+    if (this.habitsCache) {
+      const index = this.habitsCache.findIndex(h => h.id === habitId);
+      if (index !== -1) {
+        this.habitsCache[index] = {
+          ...this.habitsCache[index],
+          ...updateData,
+          totalCompletions: (this.habitsCache[index].totalCompletions || 0) + 1
+        };
+        await this.cacheHabits(this.habitsCache);
+      }
+    }
 
     const userStats = await this.getUserStats();
     if (newLongestStreak > (userStats.longestStreak || 0)) {
@@ -398,12 +595,27 @@ class FirebaseService {
     const newCompletions = completions.filter(date => date !== today);
     const newStreak = this.calculateStreak(newCompletions);
 
-    await updateDoc(habitRef, {
+    const updateData = {
       completions: newCompletions,
       currentStreak: newStreak,
       totalCompletions: increment(-1),
       updatedAt: new Date().toISOString()
-    });
+    };
+
+    await updateDoc(habitRef, updateData);
+
+    // ✅ NEW: Update cache
+    if (this.habitsCache) {
+      const index = this.habitsCache.findIndex(h => h.id === habitId);
+      if (index !== -1) {
+        this.habitsCache[index] = {
+          ...this.habitsCache[index],
+          ...updateData,
+          totalCompletions: Math.max(0, (this.habitsCache[index].totalCompletions || 0) - 1)
+        };
+        await this.cacheHabits(this.habitsCache);
+      }
+    }
 
     await new Promise(resolve => setTimeout(resolve, 200));
 
@@ -431,10 +643,8 @@ class FirebaseService {
       
         if (isAdmin) {
           console.log('✅ Admin user detected - granting premium access');
-          // Override premium status for admins
           userData.isPremium = true;
         
-          // Update in database if not already premium
           if (!querySnapshot.docs[0].data().isPremium) {
             await updateDoc(querySnapshot.docs[0].ref, {
               isPremium: true,
@@ -450,7 +660,6 @@ class FirebaseService {
 
     return userData;
   }
-
 
   async updateUserStats(updates) {
     if (!this.currentUser) return;
@@ -622,7 +831,6 @@ class FirebaseService {
     
         console.log(`✅ Firebase premium status updated to: ${isPremium}`);
       
-        // ✅ FIX: Always update AdMobService after Firebase
         const adMob = getAdMobService();
         if (adMob) {
           const isAdmin = await this.checkIfUserIsAdmin(this.currentUser.email);
@@ -648,8 +856,6 @@ class FirebaseService {
       return false;
     }
   }
-
-
 }
 
 export default new FirebaseService();

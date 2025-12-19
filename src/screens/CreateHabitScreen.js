@@ -7,7 +7,8 @@ import {
   Alert,
   Platform,
   KeyboardAvoidingView,
-  Keyboard
+  Keyboard,
+  TouchableOpacity
 } from 'react-native';
 import {
   TextInput,
@@ -344,7 +345,7 @@ const CreateHabitScreen = ({ navigation, route }) => {
         keyboardDismissMode="on-drag"
         automaticallyAdjustKeyboardInsets={true}
       >
-        {/* AI Suggestions */}
+        {/* AI Suggestions - FIXED VERSION */}
         {aiSuggestions.length > 0 && (
           <Card style={styles.card}>
             <Card.Content>
@@ -357,21 +358,20 @@ const CreateHabitScreen = ({ navigation, route }) => {
               </Text>
               
               {aiSuggestions.map((suggestion, index) => (
-                <Button
+                <TouchableOpacity
                   key={index}
-                  mode="outlined"
                   onPress={() => handleSuggestionSelect(suggestion)}
                   style={styles.suggestionButton}
-                  contentStyle={styles.suggestionContent}
-                  labelStyle={styles.suggestionButtonLabel}
+                  activeOpacity={0.7}
                 >
-                  <View style={styles.suggestionText}>
+                  <View style={styles.suggestionContent}>
                     <Text style={styles.suggestionName}>{suggestion.name}</Text>
                     <Text style={styles.suggestionDescription}>
                       {suggestion.description}
                     </Text>
                   </View>
-                </Button>
+                  <Icon name="chevron-right" size={24} color="#9ca3af" />
+                </TouchableOpacity>
               ))}
             </Card.Content>
           </Card>
@@ -627,30 +627,37 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     backgroundColor: '#ffffff',
   },
+  // ✅ FIXED: Proper suggestion button styles using TouchableOpacity
   suggestionButton: {
-    marginBottom: 8,
-    alignItems: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    marginBottom: 12,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 1,
     borderColor: '#e5e7eb',
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
   },
   suggestionContent: {
-    alignItems: 'flex-start',
-    paddingVertical: 8,
-  },
-  suggestionButtonLabel: {
-    color: '#4f46e5',
-  },
-  suggestionText: {
-    alignItems: 'flex-start',
+    flex: 1,
+    marginRight: 8,
   },
   suggestionName: {
     fontSize: 16,
     fontWeight: '600',
     color: '#1f2937',
+    marginBottom: 4,
   },
   suggestionDescription: {
     fontSize: 14,
     color: '#6b7280',
-    marginTop: 4,
+    lineHeight: 20,
   },
   categoriesContainer: {
     flexDirection: 'row',
