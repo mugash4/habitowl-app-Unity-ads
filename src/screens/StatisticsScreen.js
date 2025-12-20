@@ -12,6 +12,7 @@ import { LineChart, BarChart, PieChart } from 'react-native-chart-kit';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTabBarHeight } from '../hooks/useTabBarHeight';
 
 import FirebaseService from '../services/FirebaseService';
@@ -24,31 +25,73 @@ const StatisticsScreen = ({ navigation }) => {
   const [userStats, setUserStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedPeriod, setSelectedPeriod] = useState('week'); // week, month, year
+  const [selectedPeriod, setSelectedPeriod] = useState('week');
   const [isPremium, setIsPremium] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
 
   const { totalHeight: tabBarTotalHeight } = useTabBarHeight();
 
+  // ✅ NEW: Load cached data immediately on mount
   useEffect(() => {
-    loadStatistics();
+    loadCachedDataFirst();
   }, []);
 
+  // ✅ NEW: Reload when screen comes into focus
   useFocusEffect(
     useCallback(() => {
       console.log('📊 Statistics screen focused - reloading data...');
-      loadStatistics();
+      loadStatistics(false); // Use cache first
     }, [])
   );
 
-  const loadStatistics = async () => {
+  // ✅ NEW: Load cached data first for instant display
+  const loadCachedDataFirst = async () => {
     try {
       setLoading(true);
+      
+      const user = FirebaseService.currentUser;
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      // Load from cache first
+      const cacheKey = `stats_cache_${user.uid}`;
+      const cached = await AsyncStorage.getItem(cacheKey);
+      
+      if (cached) {
+        const cacheData = JSON.parse(cached);
+        console.log('⚡ Statistics: Using cached data (instant load)');
+        
+        setHabits(cacheData.habits || []);
+        setUserStats(cacheData.userStats);
+        setIsPremium(cacheData.isPremium || false);
+        setIsAdmin(cacheData.isAdmin || false);
+        setLoading(false);
+        
+        // Load fresh data in background
+        loadStatistics(true);
+      } else {
+        // No cache - load normally
+        await loadStatistics(false);
+      }
+    } catch (error) {
+      console.error('Error loading cached stats:', error);
+      await loadStatistics(false);
+    }
+  };
+
+  // ✅ IMPROVED: Load statistics with caching support
+  const loadStatistics = async (isBackgroundSync = false) => {
+    try {
+      if (!isBackgroundSync) {
+        setLoading(true);
+      }
   
-      const [userHabits, stats] = await Promise.all([
-        FirebaseService.getUserHabits(),
-        FirebaseService.getUserStats()
-      ]);
+      // ✅ Use cached habits first (from FirebaseService cache)
+      const userHabits = await FirebaseService.getUserHabits(false);
+      const stats = await FirebaseService.getUserStats();
   
       console.log('📊 Loaded', userHabits ? userHabits.length : 0, 'habits for statistics');
   
@@ -58,11 +101,15 @@ const StatisticsScreen = ({ navigation }) => {
       if (!premiumStatus) {
         const user = FirebaseService.currentUser;
         if (user && user.email) {
-          const AdminService = require('../services/AdminService').default;
-          adminStatus = await AdminService.checkAdminStatus(user.email);
-          if (adminStatus) {
-            console.log('✅ Admin user - enabling all premium features');
-            premiumStatus = true;
+          try {
+            const AdminService = require('../services/AdminService').default;
+            adminStatus = await AdminService.checkAdminStatus(user.email);
+            if (adminStatus) {
+              console.log('✅ Admin user - enabling all premium features');
+              premiumStatus = true;
+            }
+          } catch (error) {
+            console.log('⚠️ Admin check failed:', error.message);
           }
         }
       }
@@ -71,18 +118,60 @@ const StatisticsScreen = ({ navigation }) => {
       setIsAdmin(adminStatus);
       setHabits(userHabits || []);
       setUserStats(stats);
+      setIsOffline(false);
+
+      // ✅ NEW: Cache the data
+      await cacheStatisticsData({
+        habits: userHabits || [],
+        userStats: stats,
+        isPremium: premiumStatus,
+        isAdmin: adminStatus
+      });
+
     } catch (error) {
       console.error('Error loading statistics:', error);
-      setHabits([]);
-      setUserStats(null);
+      
+      // ✅ Better offline detection
+      if (error.message && (error.message.includes('network') || error.message.includes('offline'))) {
+        setIsOffline(true);
+        console.log('📡 Statistics: Offline mode detected');
+      }
+      
+      // Keep existing data on error (don't clear)
+      if (habits.length === 0) {
+        setHabits([]);
+      }
+      if (!userStats) {
+        setUserStats(null);
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  // ✅ NEW: Cache statistics data
+  const cacheStatisticsData = async (data) => {
+    try {
+      const user = FirebaseService.currentUser;
+      if (!user) return;
+
+      const cacheKey = `stats_cache_${user.uid}`;
+      const cacheData = {
+        ...data,
+        timestamp: Date.now(),
+        userId: user.uid
+      };
+
+      await AsyncStorage.setItem(cacheKey, JSON.stringify(cacheData));
+      console.log('✅ Statistics data cached');
+    } catch (error) {
+      console.error('❌ Error caching statistics:', error);
+    }
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadStatistics();
+    await loadStatistics(true); // Force refresh
     setRefreshing(false);
     
     if (!isPremium && !isAdmin) {
@@ -114,19 +203,15 @@ const StatisticsScreen = ({ navigation }) => {
       
       data.push(completions);
       
-      // ✅ FIXED: Better label generation logic to prevent overlapping
       if (selectedPeriod === 'week') {
-        // Show all 7 days with short names
         labels.push(date.toLocaleDateString('en', { weekday: 'short' }));
       } else if (selectedPeriod === 'month') {
-        // Show only 6 labels evenly distributed (start, 5 evenly spaced, end)
         if (i === 0 || i === days - 1 || i % 6 === 0) {
           labels.push(date.getDate().toString());
         } else {
           labels.push('');
         }
       } else {
-        // Year: Show only 12 months
         if (i % 30 === 0 || i === 0 || i === days - 1) {
           labels.push(date.toLocaleDateString('en', { month: 'short' }));
         } else {
@@ -154,12 +239,11 @@ const StatisticsScreen = ({ navigation }) => {
       population: count,
       color: colors[index % colors.length],
       legendFontColor: '#374151',
-      legendFontSize: 11, // ✅ FIXED: Reduced font size to prevent overlap
+      legendFontSize: 11,
     }));
   };
 
   const getStreakData = () => {
-    // ✅ FIXED: Limit to 6 habits max and shorten names further
     return habits.slice(0, 6).map(habit => ({
       name: habit.name.substring(0, 6) + (habit.name.length > 6 ? '..' : ''),
       current: habit.currentStreak || 0,
@@ -194,13 +278,12 @@ const StatisticsScreen = ({ navigation }) => {
     };
   };
 
-  // ✅ FIXED: Updated chart configuration with better label sizing
   const chartConfig = {
     backgroundGradientFrom: '#ffffff',
     backgroundGradientTo: '#ffffff',
     color: (opacity = 1) => `rgba(79, 70, 229, ${opacity})`,
     strokeWidth: 3,
-    barPercentage: 0.6, // ✅ FIXED: Reduced from 0.7 to give more space
+    barPercentage: 0.6,
     decimalPlaces: 0,
     propsForDots: {
       r: '4',
@@ -208,8 +291,8 @@ const StatisticsScreen = ({ navigation }) => {
       stroke: '#4f46e5'
     },
     propsForLabels: {
-      fontSize: 9, // ✅ FIXED: Reduced from 10 to 9
-      fontWeight: '500' // ✅ FIXED: Reduced weight for cleaner look
+      fontSize: 9,
+      fontWeight: '500'
     }
   };
 
@@ -218,6 +301,14 @@ const StatisticsScreen = ({ navigation }) => {
     
     return (
       <View style={styles.overviewContainer}>
+        {/* ✅ NEW: Offline indicator */}
+        {isOffline && (
+          <View style={styles.offlineBanner}>
+            <Icon name="wifi-off" size={16} color="#ffffff" />
+            <Text style={styles.offlineText}>Offline - Using cached data</Text>
+          </View>
+        )}
+
         <Card style={styles.overviewCard}>
           <LinearGradient colors={['#4f46e5', '#7c3aed']} style={styles.overviewGradient}>
             <Icon name="check-all" size={24} color="#ffffff" />
@@ -260,12 +351,11 @@ const StatisticsScreen = ({ navigation }) => {
 
     const maxValue = Math.max(...data, 1);
     
-    // ✅ FIXED: Adjust chart width based on period to give more horizontal space
     const chartWidth = selectedPeriod === 'week' 
       ? screenWidth - 64 
       : selectedPeriod === 'month' 
-        ? screenWidth - 48  // More width for month view
-        : screenWidth - 48; // More width for year view
+        ? screenWidth - 48
+        : screenWidth - 48;
 
     return (
       <Card style={styles.chartCard}>
@@ -313,7 +403,7 @@ const StatisticsScreen = ({ navigation }) => {
                 ...chartConfig,
                 formatYLabel: (value) => Math.round(value).toString(),
                 propsForLabels: {
-                  fontSize: selectedPeriod === 'year' ? 8 : 9, // ✅ FIXED: Smaller for year view
+                  fontSize: selectedPeriod === 'year' ? 8 : 9,
                   fontWeight: '500'
                 }
               }}
@@ -430,12 +520,12 @@ const StatisticsScreen = ({ navigation }) => {
                   }
                 ],
               }}
-              width={Math.max(screenWidth - 64, streakData.length * 80)} // ✅ FIXED: Dynamic width
+              width={Math.max(screenWidth - 64, streakData.length * 80)}
               height={220}
               chartConfig={{
                 ...chartConfig,
                 propsForLabels: {
-                  fontSize: 8, // ✅ FIXED: Smaller font for bar labels
+                  fontSize: 8,
                   fontWeight: '500'
                 }
               }}
@@ -521,6 +611,24 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
+  // ✅ NEW: Offline banner
+  offlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ef4444',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginBottom: 12,
+    width: '100%',
+  },
+  offlineText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
   overviewContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -557,25 +665,25 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1f2937',
-    marginBottom: 4, // ✅ FIXED: Reduced spacing
+    marginBottom: 4,
   },
   periodSelector: {
     flexDirection: 'row',
     gap: 8,
     marginBottom: 16,
-    marginTop: 8, // ✅ FIXED: Added top margin
+    marginTop: 8,
   },
   periodChip: {
     flex: 1,
   },
   periodChipText: {
-    fontSize: 12, // ✅ FIXED: Smaller chip text
+    fontSize: 12,
   },
   chart: {
     borderRadius: 8,
   },
   chartScrollView: {
-    marginHorizontal: -8, // ✅ FIXED: Better horizontal alignment
+    marginHorizontal: -8,
   },
   legend: {
     flexDirection: 'row',
@@ -594,7 +702,7 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   legendText: {
-    fontSize: 11, // ✅ FIXED: Smaller legend text
+    fontSize: 11,
     color: '#6b7280',
   },
   emptyState: {
@@ -634,7 +742,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   chartSubtitle: {
-    fontSize: 13, // ✅ FIXED: Slightly smaller
+    fontSize: 13,
     color: '#6b7280',
     marginTop: 2,
   },
@@ -647,7 +755,7 @@ const styles = StyleSheet.create({
     borderTopColor: '#e5e7eb',
   },
   chartLegendText: {
-    fontSize: 11, // ✅ FIXED: Smaller legend text
+    fontSize: 11,
     color: '#6b7280',
     marginLeft: 6,
     flex: 1,
