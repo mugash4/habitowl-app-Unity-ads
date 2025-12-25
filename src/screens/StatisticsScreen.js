@@ -23,7 +23,7 @@ const { width: screenWidth } = Dimensions.get('window');
 const StatisticsScreen = ({ navigation }) => {
   const [habits, setHabits] = useState([]);
   const [userStats, setUserStats] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // ✅ CHANGED: Start with false for instant display
   const [refreshing, setRefreshing] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState('week');
   const [isPremium, setIsPremium] = useState(false);
@@ -32,23 +32,24 @@ const StatisticsScreen = ({ navigation }) => {
 
   const { totalHeight: tabBarTotalHeight } = useTabBarHeight();
 
-  // ✅ NEW: Load cached data immediately on mount
+  // ✅ NEW: Load cached data FIRST on mount (instant display)
   useEffect(() => {
     loadCachedDataFirst();
   }, []);
 
-  // ✅ NEW: Reload when screen comes into focus
+  // ✅ Reload when screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      console.log('📊 Statistics screen focused - reloading data...');
-      loadStatistics(false); // Use cache first
+      console.log('📊 Statistics screen focused - refreshing data...');
+      // ✅ CHANGED: Don't show loading spinner, just refresh silently
+      loadStatistics(false, true); // Silent background refresh
     }, [])
   );
 
-  // ✅ NEW: Load cached data first for instant display
+  // ✅ NEW: Load cached data first for INSTANT display
   const loadCachedDataFirst = async () => {
     try {
-      setLoading(true);
+      console.log('⚡ StatisticsScreen: Loading cached data FIRST...');
       
       const user = FirebaseService.currentUser;
       if (!user) {
@@ -62,35 +63,42 @@ const StatisticsScreen = ({ navigation }) => {
       
       if (cached) {
         const cacheData = JSON.parse(cached);
-        console.log('⚡ Statistics: Using cached data (instant load)');
+        console.log('⚡ StatisticsScreen: Displaying cached data INSTANTLY');
         
+        // Display cached data immediately (NO loading spinner)
         setHabits(cacheData.habits || []);
         setUserStats(cacheData.userStats);
         setIsPremium(cacheData.isPremium || false);
         setIsAdmin(cacheData.isAdmin || false);
-        setLoading(false);
         
-        // Load fresh data in background
-        loadStatistics(true);
+        // ✅ Now sync fresh data in background (without blocking UI)
+        loadStatistics(false, true);
       } else {
-        // No cache - load normally
-        await loadStatistics(false);
+        // No cache - load normally with spinner
+        console.log('⚠️ No cached stats, loading from server...');
+        setLoading(true);
+        await loadStatistics(false, false);
+        setLoading(false);
       }
     } catch (error) {
       console.error('Error loading cached stats:', error);
-      await loadStatistics(false);
+      // Fall back to normal loading
+      setLoading(true);
+      await loadStatistics(false, false);
+      setLoading(false);
     }
   };
 
-  // ✅ IMPROVED: Load statistics with caching support
-  const loadStatistics = async (isBackgroundSync = false) => {
+  // ✅ IMPROVED: Load statistics with optional silent background sync
+  const loadStatistics = async (forceRefresh = false, silentSync = false) => {
     try {
-      if (!isBackgroundSync) {
+      // ✅ Only show loading spinner if NOT a silent background sync
+      if (!silentSync && forceRefresh) {
         setLoading(true);
       }
   
-      // ✅ Use cached habits first (from FirebaseService cache)
-      const userHabits = await FirebaseService.getUserHabits(false);
+      // Use cached habits first (from FirebaseService cache)
+      const userHabits = await FirebaseService.getUserHabits(forceRefresh);
       const stats = await FirebaseService.getUserStats();
   
       console.log('📊 Loaded', userHabits ? userHabits.length : 0, 'habits for statistics');
@@ -120,7 +128,7 @@ const StatisticsScreen = ({ navigation }) => {
       setUserStats(stats);
       setIsOffline(false);
 
-      // ✅ NEW: Cache the data
+      // Cache the data
       await cacheStatisticsData({
         habits: userHabits || [],
         userStats: stats,
@@ -131,7 +139,7 @@ const StatisticsScreen = ({ navigation }) => {
     } catch (error) {
       console.error('Error loading statistics:', error);
       
-      // ✅ Better offline detection
+      // Better offline detection
       if (error.message && (error.message.includes('network') || error.message.includes('offline'))) {
         setIsOffline(true);
         console.log('📡 Statistics: Offline mode detected');
@@ -149,7 +157,7 @@ const StatisticsScreen = ({ navigation }) => {
     }
   };
 
-  // ✅ NEW: Cache statistics data
+  // Cache statistics data
   const cacheStatisticsData = async (data) => {
     try {
       const user = FirebaseService.currentUser;
@@ -171,7 +179,7 @@ const StatisticsScreen = ({ navigation }) => {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadStatistics(true); // Force refresh
+    await loadStatistics(true, false); // Force refresh with loading indicator
     setRefreshing(false);
     
     if (!isPremium && !isAdmin) {
@@ -301,7 +309,6 @@ const StatisticsScreen = ({ navigation }) => {
     
     return (
       <View style={styles.overviewContainer}>
-        {/* ✅ NEW: Offline indicator */}
         {isOffline && (
           <View style={styles.offlineBanner}>
             <Icon name="wifi-off" size={16} color="#ffffff" />
@@ -550,7 +557,8 @@ const StatisticsScreen = ({ navigation }) => {
     );
   };
 
-  if (loading) {
+  // ✅ CHANGED: Only show spinner if we're loading AND have no cached data
+  if (loading && habits.length === 0) {
     return (
       <View style={styles.loadingContainer}>
         <Icon name="loading" size={40} color="#4f46e5" />
@@ -611,7 +619,6 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
-  // ✅ NEW: Offline banner
   offlineBanner: {
     flexDirection: 'row',
     alignItems: 'center',

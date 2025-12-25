@@ -25,16 +25,21 @@ import AIService from '../services/AIService';
 
 const HomeScreen = ({ navigation, route }) => {
   const [habits, setHabits] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // ✅ CHANGED: Start with false for instant display
   const [refreshing, setRefreshing] = useState(false);
   const [todayCompletions, setTodayCompletions] = useState(new Set());
   const [motivationalMessage, setMotivationalMessage] = useState('');
-  const [fadeAnim] = useState(new Animated.Value(0));
+  const [fadeAnim] = useState(new Animated.Value(1)); // ✅ CHANGED: Start with 1 (visible)
   const [screenKey, setScreenKey] = useState(0);
   const [isPremium, setIsPremium] = useState(false);
-  const [isOffline, setIsOffline] = useState(false); // ✅ NEW: Offline indicator
+  const [isOffline, setIsOffline] = useState(false);
 
   const { totalHeight: tabBarTotalHeight } = useTabBarHeight();
+
+  // ✅ NEW: Load cached data FIRST on mount (instant display)
+  useEffect(() => {
+    loadCachedDataFirst();
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -44,12 +49,13 @@ const HomeScreen = ({ navigation, route }) => {
       
       const reloadData = async () => {
         try {
-          await loadHabits(false, isActive); // ✅ Use cache first
+          // ✅ CHANGED: Don't set loading=true, just refresh data silently
+          await loadHabits(false, isActive); // Use cache first
           
           if (isActive) {
             Animated.timing(fadeAnim, {
               toValue: 1,
-              duration: 500,
+              duration: 300,
               useNativeDriver: true,
             }).start();
           }
@@ -63,10 +69,66 @@ const HomeScreen = ({ navigation, route }) => {
       return () => {
         console.log('👋 HomeScreen BLURRED - Cleaning up');
         isActive = false;
-        fadeAnim.setValue(0);
       };
     }, [screenKey])
   );
+
+  // ✅ NEW: Load cached data first for INSTANT display
+  const loadCachedDataFirst = async () => {
+    try {
+      console.log('⚡ HomeScreen: Loading cached data FIRST...');
+      
+      // Get cached habits immediately
+      const cachedHabits = await FirebaseService.getCachedHabits();
+      
+      if (cachedHabits && cachedHabits.length > 0) {
+        console.log(`⚡ HomeScreen: Displaying ${cachedHabits.length} cached habits INSTANTLY`);
+        
+        // Display cached data immediately (NO loading spinner)
+        setHabits(cachedHabits);
+        
+        // Calculate completions from cache
+        const today = new Date().toDateString();
+        const completedToday = new Set();
+        cachedHabits.forEach(habit => {
+          if (habit.completions && habit.completions.includes(today)) {
+            completedToday.add(habit.id);
+          }
+        });
+        setTodayCompletions(completedToday);
+        
+        // Load motivational message if we have habits
+        if (cachedHabits.length > 0) {
+          loadMotivationalMessage(cachedHabits, completedToday);
+        }
+        
+        // Try to get premium status from cache too
+        try {
+          const userStats = await FirebaseService.getUserStats();
+          if (userStats?.isPremium) {
+            setIsPremium(true);
+          }
+        } catch (error) {
+          // Ignore errors, will be updated in background sync
+        }
+        
+        // ✅ Now sync fresh data in background (without blocking UI)
+        loadHabits(false, true);
+      } else {
+        // No cache, load normally
+        console.log('⚠️ No cached data, loading from server...');
+        setLoading(true);
+        await loadHabits(false, true);
+        setLoading(false);
+      }
+    } catch (error) {
+      console.error('Error loading cached data:', error);
+      // Fall back to normal loading
+      setLoading(true);
+      await loadHabits(false, true);
+      setLoading(false);
+    }
+  };
 
   const loadHabits = async (forceReload = false, isActive = true) => {
     try {
@@ -76,7 +138,7 @@ const HomeScreen = ({ navigation, route }) => {
     
       console.log('📱 Fetching habits...');
       
-      // ✅ NEW: getUserHabits now uses cache first
+      // Get habits (will use cache if available)
       const userHabits = await FirebaseService.getUserHabits(forceReload);
     
       const userStats = await FirebaseService.getUserStats();
@@ -103,7 +165,6 @@ const HomeScreen = ({ navigation, route }) => {
       console.log(`✅ Loaded ${userHabits ? userHabits.length : 0} habits`);
       console.log(`Premium status: ${premiumStatus}`);
       
-      // ✅ NEW: Check if we're offline (no network errors)
       setIsOffline(false);
     
       if (userHabits && Array.isArray(userHabits)) {
@@ -140,7 +201,6 @@ const HomeScreen = ({ navigation, route }) => {
       console.error('❌ Error loading habits:', error);
     
       if (isActive) {
-        // ✅ NEW: Better offline detection
         if (error.message && (error.message.includes('network') || error.message.includes('offline'))) {
           setIsOffline(true);
           console.log('📡 Offline mode detected');
@@ -194,7 +254,7 @@ const HomeScreen = ({ navigation, route }) => {
     try {
       await new Promise(resolve => setTimeout(resolve, 300));
       
-      // ✅ Force refresh from server
+      // Force refresh from server
       await loadHabits(true);
       
       console.log('[Refresh] Checking ad eligibility - isPremium:', isPremium);
@@ -264,7 +324,7 @@ const HomeScreen = ({ navigation, route }) => {
       setTodayCompletions(newCompletions);
     
       setScreenKey(prev => prev + 1);
-      await loadHabits(false); // ✅ Use cache for faster update
+      await loadHabits(false); // Use cache for faster update
     
     } catch (error) {
       Alert.alert('Error', error.message);
@@ -314,7 +374,7 @@ const HomeScreen = ({ navigation, route }) => {
     try {
       await FirebaseService.deleteHabit(habitId);
       setScreenKey(prev => prev + 1);
-      await loadHabits(false); // ✅ Use cache for faster update
+      await loadHabits(false); // Use cache for faster update
     } catch (error) {
       Alert.alert('Error', 'Failed to delete habit');
     }
@@ -346,7 +406,6 @@ const HomeScreen = ({ navigation, route }) => {
     return (
       <LinearGradient colors={['#4f46e5', '#7c3aed']} style={styles.header}>
         <View style={styles.headerContent}>
-          {/* ✅ NEW: Offline indicator */}
           {isOffline && (
             <View style={styles.offlineBanner}>
               <Icon name="wifi-off" size={16} color="#ffffff" />
@@ -432,7 +491,8 @@ const HomeScreen = ({ navigation, route }) => {
     </View>
   );
 
-  if (loading) {
+  // ✅ CHANGED: Only show spinner if we're loading AND have no cached data
+  if (loading && habits.length === 0) {
     return (
       <View style={styles.loadingContainer}>
         <StatusBar barStyle="light-content" backgroundColor="#4f46e5" />
@@ -537,7 +597,6 @@ const styles = StyleSheet.create({
   headerContent: {
     paddingHorizontal: 20,
   },
-  // ✅ NEW: Offline banner styles
   offlineBanner: {
     flexDirection: 'row',
     alignItems: 'center',

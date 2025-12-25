@@ -14,7 +14,8 @@ import {
   increment,
   Timestamp,
   getDocsFromServer,
-  getDocsFromCache
+  getDocsFromCache,
+  setDoc
 } from 'firebase/firestore';
 import { 
   createUserWithEmailAndPassword, 
@@ -29,11 +30,10 @@ import {
 import { db, auth } from '../config/firebase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import testAccountService from './TestAccountService';
 
-// ✅ FIXED: Single declaration (removed duplicate)
 let adMobService = null;
 
-// ✅ ADD THIS FUNCTION after imports
 function getAdMobService() {
   if (!adMobService) {
     try {
@@ -45,28 +45,24 @@ function getAdMobService() {
   return adMobService;
 }
 
-
 class FirebaseService {
   constructor() {
     this.currentUser = null;
     this.authStateChangedListeners = [];
-    this.habitsCache = null; // ✅ NEW: In-memory cache
+    this.habitsCache = null;
     this.lastCacheTime = null;
-    this.CACHE_DURATION = 30000; // 30 seconds
+    this.CACHE_DURATION = 30000;
     
-    // Listen to auth state changes
     onAuthStateChanged(auth, (user) => {
       this.currentUser = user;
       this.authStateChangedListeners.forEach(listener => listener(user));
       
-      // ✅ NEW: Clear cache on logout
       if (!user) {
         this.clearHabitsCache();
       }
     });
   }
 
-  // ✅ NEW: Cache management methods
   async cacheHabits(habits) {
     try {
       if (!this.currentUser) return;
@@ -82,9 +78,9 @@ class FirebaseService {
       this.habitsCache = habits;
       this.lastCacheTime = Date.now();
       
-      console.log(`✅ Cached ${habits.length} habits to AsyncStorage`);
+      console.log(`✅ Cached ${habits.length} habits`);
     } catch (error) {
-      console.error('❌ Error caching habits:', error);
+      console.error('Error caching habits:', error);
     }
   }
 
@@ -92,23 +88,20 @@ class FirebaseService {
     try {
       if (!this.currentUser) return null;
       
-      // Check in-memory cache first (fastest)
       if (this.habitsCache && this.lastCacheTime && 
           (Date.now() - this.lastCacheTime < this.CACHE_DURATION)) {
         console.log('⚡ Using in-memory cache');
         return this.habitsCache;
       }
       
-      // Check AsyncStorage cache
       const cacheKey = `habits_cache_${this.currentUser.uid}`;
       const cached = await AsyncStorage.getItem(cacheKey);
       
       if (cached) {
         const cacheData = JSON.parse(cached);
         
-        // Verify cache is for current user
         if (cacheData.userId === this.currentUser.uid) {
-          console.log(`⚡ Using AsyncStorage cache (${cacheData.habits.length} habits)`);
+          console.log(`⚡ Using cache (${cacheData.habits.length} habits)`);
           this.habitsCache = cacheData.habits;
           this.lastCacheTime = cacheData.timestamp;
           return cacheData.habits;
@@ -117,7 +110,7 @@ class FirebaseService {
       
       return null;
     } catch (error) {
-      console.error('❌ Error getting cached habits:', error);
+      console.error('Error getting cache:', error);
       return null;
     }
   }
@@ -130,16 +123,15 @@ class FirebaseService {
       }
       this.habitsCache = null;
       this.lastCacheTime = null;
-      console.log('🗑️ Habits cache cleared');
+      console.log('🗑️ Cache cleared');
     } catch (error) {
-      console.error('❌ Error clearing cache:', error);
+      console.error('Error clearing cache:', error);
     }
   }
 
-  // Authentication Methods
   async signUp(email, password, displayName) {
     try {
-      console.log('Starting sign up process...');
+      console.log('Starting sign up...');
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
       
@@ -148,6 +140,12 @@ class FirebaseService {
       
       console.log('Creating user document...');
       await this.createUserDocument(user);
+      
+      // ✅ CHECK FOR TEST ACCOUNT
+      if (testAccountService.isTestAccount(email)) {
+        console.log('🎁 Test account detected, granting premium');
+        await testAccountService.grantTestAccountPremium(email, user.uid);
+      }
       
       console.log('Sign up complete!');
       return user;
@@ -159,27 +157,32 @@ class FirebaseService {
 
   async signIn(email, password) {
     try {
-      console.log('Starting sign in process...');
-      console.log('Email:', email);
+      console.log('Starting sign in...');
       
       if (!email || !password) {
-        throw new Error('Email and password are required');
+        throw new Error('Email and password required');
       }
 
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+      
+      // ✅ CHECK FOR TEST ACCOUNT
+      if (testAccountService.isTestAccount(email)) {
+        console.log('🎁 Test account detected, granting premium');
+        await testAccountService.grantTestAccountPremium(email, user.uid);
+      }
+      
       console.log('Sign in successful!');
-      return userCredential.user;
+      return user;
     } catch (error) {
       console.error('Sign in error:', error);
-      console.error('Error code:', error.code);
-      console.error('Error message:', error.message);
       throw this.handleFirebaseError(error);
     }
   }
 
   async signInWithGoogleWeb() {
     try {
-      console.log('Starting Google sign in for web/APK...');
+      console.log('Starting Google sign in...');
       
       const provider = new GoogleAuthProvider();
       provider.addScope('email');
@@ -189,6 +192,13 @@ class FirebaseService {
       
       if (result && result.user) {
         await this.createUserDocument(result.user);
+        
+        // ✅ CHECK FOR TEST ACCOUNT
+        if (result.user.email && testAccountService.isTestAccount(result.user.email)) {
+          console.log('🎁 Test account detected, granting premium');
+          await testAccountService.grantTestAccountPremium(result.user.email, result.user.uid);
+        }
+        
         console.log('Google sign in successful!');
         return result.user;
       }
@@ -202,20 +212,27 @@ class FirebaseService {
 
   async signInWithGoogleCredential(idToken) {
     try {
-      console.log('Starting Google sign in with credential...');
+      console.log('Starting Google credential sign in...');
       
       const credential = GoogleAuthProvider.credential(idToken);
       const result = await signInWithCredential(auth, credential);
       
       if (result && result.user) {
         await this.createUserDocument(result.user);
+        
+        // ✅ CHECK FOR TEST ACCOUNT
+        if (result.user.email && testAccountService.isTestAccount(result.user.email)) {
+          console.log('🎁 Test account detected, granting premium');
+          await testAccountService.grantTestAccountPremium(result.user.email, result.user.uid);
+        }
+        
         console.log('Google credential sign in successful!');
         return result.user;
       }
       
       return null;
     } catch (error) {
-      console.error('Google credential sign in error:', error);
+      console.error('Google credential error:', error);
       throw this.handleFirebaseError(error);
     }
   }
@@ -223,7 +240,7 @@ class FirebaseService {
   async signOut() {
     try {
       console.log('Signing out...');
-      await this.clearHabitsCache(); // ✅ NEW: Clear cache on logout
+      await this.clearHabitsCache();
       await signOut(auth);
       await AsyncStorage.clear();
       console.log('Sign out successful!');
@@ -275,7 +292,7 @@ class FirebaseService {
         console.log('User document created!');
         return userDoc;
       } else {
-        console.log('User document already exists, updating...');
+        console.log('User document exists, updating...');
         const existingDoc = querySnapshot.docs[0];
         const existingData = existingDoc.data();
         
@@ -298,11 +315,10 @@ class FirebaseService {
         return existingData;
       }
     } catch (error) {
-      console.error('Error creating/updating user document:', error);
+      console.error('Error with user document:', error);
     }
   }
 
-  // ✅ FIXED: Habit creation with proper verification and cache update
   async createHabit(habitData) {
     if (!this.currentUser) {
       throw new Error('User not authenticated');
@@ -326,27 +342,24 @@ class FirebaseService {
       console.log('✅ Creating habit:', habit.name);
       
       const docRef = await addDoc(collection(db, 'habits'), habit);
-      console.log('✅ Habit created with ID:', docRef.id);
+      console.log('✅ Habit created:', docRef.id);
       
-      // Verify the habit was saved
       const savedHabit = await getDoc(docRef);
       if (!savedHabit.exists()) {
-        throw new Error('Failed to verify habit creation');
+        throw new Error('Failed to verify habit');
       }
-      console.log('✅ Habit verified in Firestore');
+      console.log('✅ Habit verified');
       
-      // ✅ NEW: Update cache immediately
       const newHabit = { id: docRef.id, ...habit };
       if (this.habitsCache) {
         this.habitsCache = [newHabit, ...this.habitsCache];
         await this.cacheHabits(this.habitsCache);
       }
       
-      // Update user stats
       try {
         await this.updateUserStats({ totalHabits: increment(1) });
       } catch (statsError) {
-        console.error('⚠️ Failed to update user stats:', statsError);
+        console.error('⚠️ Stats update failed:', statsError);
       }
       
       return newHabit;
@@ -356,7 +369,6 @@ class FirebaseService {
     }
   }
 
-  // ✅ FIXED: Robust habit loading with offline support and caching
   async getUserHabits(forceRefresh = false) {
     if (!this.currentUser) {
       console.log('⚠️ No current user');
@@ -364,21 +376,16 @@ class FirebaseService {
     }
 
     try {
-      // ✅ Step 1: Try to get cached habits first (for instant display)
       if (!forceRefresh) {
         const cachedHabits = await this.getCachedHabits();
         if (cachedHabits && cachedHabits.length > 0) {
-          console.log(`⚡ Loaded ${cachedHabits.length} habits from cache (instant!)`);
-          
-          // ✅ Background sync: Fetch fresh data in background
+          console.log(`⚡ Loaded ${cachedHabits.length} habits from cache`);
           this.syncHabitsInBackground();
-          
           return cachedHabits;
         }
       }
       
-      // ✅ Step 2: Try to fetch from Firestore
-      console.log('📱 Fetching habits from Firestore...');
+      console.log('📱 Fetching from Firestore...');
       
       const q = query(
         collection(db, 'habits'),
@@ -390,29 +397,25 @@ class FirebaseService {
       let isFromCache = false;
       
       try {
-        // Try to get from server first
         querySnapshot = await getDocsFromServer(q);
         console.log('✅ Fetched from server');
       } catch (networkError) {
         console.log('⚠️ Network error, trying cache...');
         
         try {
-          // Try to get from Firestore cache
           querySnapshot = await getDocsFromCache(q);
           isFromCache = true;
-          console.log('✅ Fetched from Firestore cache');
+          console.log('✅ Using Firestore cache');
         } catch (cacheError) {
-          console.log('⚠️ Firestore cache also failed, using AsyncStorage...');
+          console.log('⚠️ Firestore cache failed...');
           
-          // ✅ Step 3: Fallback to AsyncStorage cache
           const cachedHabits = await this.getCachedHabits();
           if (cachedHabits) {
-            console.log(`✅ Using AsyncStorage cache (offline mode)`);
+            console.log(`✅ Using AsyncStorage cache`);
             return cachedHabits;
           }
           
-          // ✅ Step 4: No data available at all
-          console.log('❌ No cached data available');
+          console.log('❌ No cache available');
           return [];
         }
       }
@@ -420,22 +423,17 @@ class FirebaseService {
       const habits = [];
       querySnapshot.forEach((doc) => {
         const data = doc.data();
-        habits.push({
-          id: doc.id,
-          ...data
-        });
+        habits.push({ id: doc.id, ...data });
       });
       
-      // Sort by createdAt in JavaScript
       habits.sort((a, b) => {
         const dateA = new Date(a.createdAt || 0);
         const dateB = new Date(b.createdAt || 0);
         return dateB - dateA;
       });
       
-      console.log(`✅ Fetched ${habits.length} habits ${isFromCache ? '(from Firestore cache)' : '(from server)'}`);
+      console.log(`✅ Fetched ${habits.length} habits ${isFromCache ? '(cache)' : '(server)'}`);
       
-      // ✅ NEW: Cache the results
       if (habits.length > 0) {
         await this.cacheHabits(habits);
       }
@@ -444,10 +442,9 @@ class FirebaseService {
     } catch (error) {
       console.error('❌ Error fetching habits:', error);
       
-      // ✅ Final fallback: Return cached habits
       const cachedHabits = await this.getCachedHabits();
       if (cachedHabits) {
-        console.log('✅ Returning cached habits as fallback');
+        console.log('✅ Returning cached habits');
         return cachedHabits;
       }
       
@@ -455,10 +452,9 @@ class FirebaseService {
     }
   }
 
-  // ✅ NEW: Background sync method
   async syncHabitsInBackground() {
     try {
-      console.log('🔄 Background sync started...');
+      console.log('🔄 Background sync...');
       
       const q = query(
         collection(db, 'habits'),
@@ -482,7 +478,7 @@ class FirebaseService {
       await this.cacheHabits(habits);
       console.log('✅ Background sync complete');
     } catch (error) {
-      console.log('⚠️ Background sync failed (offline?):', error.message);
+      console.log('⚠️ Background sync failed:', error.message);
     }
   }
 
@@ -493,7 +489,6 @@ class FirebaseService {
       updatedAt: new Date().toISOString()
     });
     
-    // ✅ NEW: Update cache
     if (this.habitsCache) {
       const index = this.habitsCache.findIndex(h => h.id === habitId);
       if (index !== -1) {
@@ -516,7 +511,6 @@ class FirebaseService {
       deletedAt: new Date().toISOString()
     });
     
-    // ✅ NEW: Update cache
     if (this.habitsCache) {
       this.habitsCache = this.habitsCache.filter(h => h.id !== habitId);
       await this.cacheHabits(this.habitsCache);
@@ -539,7 +533,7 @@ class FirebaseService {
     const completions = habit.completions || [];
     
     if (completions.includes(today)) {
-      throw new Error('Habit already completed today');
+      throw new Error('Already completed today');
     }
 
     const newCompletions = [...completions, today];
@@ -557,7 +551,6 @@ class FirebaseService {
 
     await updateDoc(habitRef, updateData);
 
-    // ✅ NEW: Update cache
     if (this.habitsCache) {
       const index = this.habitsCache.findIndex(h => h.id === habitId);
       if (index !== -1) {
@@ -604,7 +597,6 @@ class FirebaseService {
 
     await updateDoc(habitRef, updateData);
 
-    // ✅ NEW: Update cache
     if (this.habitsCache) {
       const index = this.habitsCache.findIndex(h => h.id === habitId);
       if (index !== -1) {
@@ -635,14 +627,13 @@ class FirebaseService {
 
     const userData = querySnapshot.docs[0].data();
   
-    // ✅ FIX: Check if user is admin and grant premium access
     if (userData && this.currentUser.email) {
       try {
         const AdminService = require('./AdminService').default;
         const isAdmin = await AdminService.checkAdminStatus(this.currentUser.email);
       
         if (isAdmin) {
-          console.log('✅ Admin user detected - granting premium access');
+          console.log('✅ Admin user - granting premium');
           userData.isPremium = true;
         
           if (!querySnapshot.docs[0].data().isPremium) {
@@ -654,7 +645,7 @@ class FirebaseService {
           }
         }
       } catch (error) {
-        console.error('Error checking admin status:', error);
+        console.error('Error checking admin:', error);
       }
     }
 
@@ -742,7 +733,7 @@ class FirebaseService {
         platform: Platform.OS
       });
     } catch (error) {
-      console.error('Analytics tracking error:', error);
+      console.error('Analytics error:', error);
     }
   }
 
@@ -787,25 +778,25 @@ class FirebaseService {
     console.error('Firebase error:', error);
     
     const errorMessages = {
-      'auth/email-already-in-use': 'This email is already registered',
+      'auth/email-already-in-use': 'Email already registered',
       'auth/invalid-email': 'Invalid email address',
       'auth/operation-not-allowed': 'Operation not allowed',
-      'auth/weak-password': 'Password is too weak (minimum 6 characters)',
-      'auth/user-disabled': 'User account has been disabled',
-      'auth/user-not-found': 'No user found with this email',
+      'auth/weak-password': 'Password too weak (min 6 chars)',
+      'auth/user-disabled': 'User account disabled',
+      'auth/user-not-found': 'No user found',
       'auth/wrong-password': 'Incorrect password',
-      'auth/invalid-credential': 'Invalid email or password',
-      'auth/too-many-requests': 'Too many attempts. Please try again later',
-      'auth/popup-closed-by-user': 'Sign-in popup was closed before completion',
-      'auth/popup-blocked': 'Sign-in popup was blocked by the browser',
-      'auth/cancelled-popup-request': 'Multiple popup requests detected',
-      'auth/account-exists-with-different-credential': 'An account already exists with the same email but different sign-in credentials',
-      'auth/network-request-failed': 'Network error. Please check your internet connection and try again',
-      'auth/invalid-api-key': 'Invalid API key. Please check your Firebase configuration',
-      'auth/app-not-authorized': 'App not authorized. Please check your Firebase configuration'
+      'auth/invalid-credential': 'Invalid credentials',
+      'auth/too-many-requests': 'Too many attempts. Try later',
+      'auth/popup-closed-by-user': 'Sign-in popup closed',
+      'auth/popup-blocked': 'Sign-in popup blocked',
+      'auth/cancelled-popup-request': 'Multiple popup requests',
+      'auth/account-exists-with-different-credential': 'Account exists with different credentials',
+      'auth/network-request-failed': 'Network error. Check internet',
+      'auth/invalid-api-key': 'Invalid API key',
+      'auth/app-not-authorized': 'App not authorized'
     };
 
-    const message = errorMessages[error.code] || error.message || 'An unexpected error occurred';
+    const message = errorMessages[error.code] || error.message || 'Unexpected error';
     return new Error(message);
   }
 
@@ -829,12 +820,11 @@ class FirebaseService {
           premiumUpdatedAt: new Date().toISOString()
         });
     
-        console.log(`✅ Firebase premium status updated to: ${isPremium}`);
+        console.log(`✅ Premium status: ${isPremium}`);
       
         const adMob = getAdMobService();
         if (adMob) {
           const isAdmin = await this.checkIfUserIsAdmin(this.currentUser.email);
-          console.log(`✅ Updating AdMobService: premium=${isPremium}, admin=${isAdmin}`);
           await adMob.setPremiumStatus(isPremium, isAdmin);
         }
       
@@ -843,7 +833,7 @@ class FirebaseService {
   
       return false;
     } catch (error) {
-      console.error('Error updating premium status:', error);
+      console.error('Error updating premium:', error);
       throw error;
     }
   }
