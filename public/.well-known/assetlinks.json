@@ -1,0 +1,10 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.mugash4.habitowl",
+    "sha256_cert_fingerprints": [
+      "B6:85:B2:DE:EA:B3:2D:DB:81:20:71:4E:4C:3B:D9:94:F3:CB:7D:8F:1A:39:89:D1:7A:2D:46:A6:7F:2D:6F:96"
+    ]
+  }
+}]
