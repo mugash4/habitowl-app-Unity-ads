@@ -131,7 +131,7 @@ const ConsentScreen = ({ onConsentGiven, userEmail }) => {
         dateOfBirth: dateOfBirth.toISOString(),
         isOver13: isOver13,
         platform: Platform.OS,
-        appVersion: Constants.expoConfig?.version || '1.3.0'
+        appVersion: Constants.expoConfig?.version || '1.7.0'
       });
 
       console.log('✅ Consent recorded successfully');
