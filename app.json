@@ -181,7 +181,7 @@
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "com.google.android.gms.permission.AD_ID"
       ],
-      "versionCode": 20,
+      "versionCode": 21,
       "googleServicesFile": "./google-services.json",
       "intentFilters": [
         {
@@ -217,6 +217,7 @@
             "minSdkVersion": 24,
             "kotlinVersion": "2.0.21",
             "ndkVersion": "27.1.12297006",
+            "enable16kPageSupport": true,
             "packagingOptions": {
               "jniLibs": {
                 "useLegacyPackaging": false
@@ -258,6 +259,6 @@
     "owner": "augustinemwathi6",
     "description": "HabitOwl - Smart Habit Tracker. Developed and managed by Astraea Labs.",
     "developedBy": "Astraea Labs",
-    "copyright": " 2025 Astraea Labs. All rights reserved."
+    "copyright": "© 2025 Astraea Labs. All rights reserved."
   }
 }
