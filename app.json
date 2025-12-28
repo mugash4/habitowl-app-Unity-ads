@@ -181,7 +181,7 @@
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "com.google.android.gms.permission.AD_ID"
       ],
-      "versionCode": 21,
+      "versionCode": 22,
       "googleServicesFile": "./google-services.json",
       "intentFilters": [
         {
@@ -193,7 +193,10 @@
               "host": "habitowl-3405d.web.app"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -210,14 +213,13 @@
         "expo-build-properties",
         {
           "android": {
-            "androidGradlePluginVersion": "8.3.2",
+            "androidGradlePluginVersion": "8.7.0",
             "compileSdkVersion": 35,
             "targetSdkVersion": 35,
             "buildToolsVersion": "35.0.0",
             "minSdkVersion": 24,
             "kotlinVersion": "2.0.21",
             "ndkVersion": "27.1.12297006",
-            "enable16kPageSupport": true,
             "packagingOptions": {
               "jniLibs": {
                 "useLegacyPackaging": false
@@ -249,7 +251,9 @@
           "androidAppId": "ca-app-pub-2371616866592450~9516891462",
           "iosAppId": "ca-app-pub-2371616866592450~9516891462"
         }
-      ]
+      ],
+      "expo-font",
+      "expo-web-browser"
     ],
     "extra": {
       "eas": {
