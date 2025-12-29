@@ -49,3 +49,13 @@ dist/
 
 # FCM Service Account (NEVER commit this!)
 fcm-service-account.json
+
+# Android Keystore files
+*.jks
+*.keystore
+
+# Credentials
+credentials.json
+
+# Or be more specific with your exact filenames
+@affiliateswitch74__habitowl.jks
