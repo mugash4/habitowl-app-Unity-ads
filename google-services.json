@@ -14,11 +14,27 @@
       },
       "oauth_client": [
         {
+          "client_id": "387609126713-cqbd8jc7qmd82hqn6fkvad83ga26nnar.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mugash4.habitowl",
+            "certificate_hash": "94:FE:85:D4:E2:F2:C7:AC:3E:AC:5B:72:7C:9E:39:9F:2F:25:09:69"
+          }
+        },
+        {
           "client_id": "387609126713-mma0gpbtledtuan5p7jkf72pskc9j9nm.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.mugash4.habitowl",
-            "certificate_hash": "35:99:66:04:E5:74:B3:23:5B:8C:22:47:88:FF:9D:29:81:0E:D0:E9"
+            "certificate_hash": "35996604e574b3235b8c224788ff9d29810ed0e9"
+          }
+        },
+        {
+          "client_id": "387609126713-r4e5pds07502u5odlrcsp26kjbg83m30.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mugash4.habitowl",
+            "certificate_hash": "441b730796e513604b50563cedafec967310e020"
           }
         },
         {

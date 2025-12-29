@@ -181,7 +181,7 @@
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "com.google.android.gms.permission.AD_ID"
       ],
-      "versionCode": 22,
+      "versionCode": 23,
       "googleServicesFile": "./google-services.json",
       "intentFilters": [
         {
