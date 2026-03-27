@@ -319,8 +319,8 @@ const SettingsScreen = ({ navigation }) => {
     trackInteractionAndShowAd('smart_coaching');
     if (!isPremium && !isAdmin) {
       Alert.alert(
-        'Premium Feature',
-        'Smart Coaching is available for Premium subscribers only. Upgrade now to get personalized AI-powered habit coaching!',
+        'AI Coaching',
+        'Free users get 2 AI coaching uses per day. Upgrade to Premium for unlimited coaching and full access.',
         [
           { text: 'Maybe Later', style: 'cancel' },
           { text: 'Upgrade to Premium', onPress: handlePremiumUpgrade }

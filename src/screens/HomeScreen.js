@@ -397,6 +397,12 @@ const HomeScreen = ({ navigation, route }) => {
     };
   };
 
+  const shouldRenderInlineBanner = (index) => {
+    if (isPremium) return false;
+    if (habits.length < 2) return false;
+    return (index + 1) % 2 === 0 && index < habits.length - 1;
+  };
+
   const renderHeader = () => {
     const completionRate = getCompletionRate();
     const streakStats = getStreakStats();
@@ -550,14 +556,21 @@ const HomeScreen = ({ navigation, route }) => {
           <>
             <Text style={styles.sectionTitle}>Your Habits ({habits.length})</Text>
             {habits.map((habit, index) => (
-              <HabitCard
-                key={`${habit.id}-${index}-${screenKey}`}
-                habit={habit}
-                isCompleted={todayCompletions.has(habit.id)}
-                onComplete={handleHabitComplete}
-                onEdit={handleEditHabit}
-                onDelete={handleDeleteHabit}
-              />
+              <React.Fragment key={`${habit.id}-${index}-${screenKey}`}>
+                <HabitCard
+                  habit={habit}
+                  isCompleted={todayCompletions.has(habit.id)}
+                  onComplete={handleHabitComplete}
+                  onEdit={handleEditHabit}
+                  onDelete={handleDeleteHabit}
+                />
+
+                {shouldRenderInlineBanner(index) && (
+                  <View style={styles.inlineAdContainer}>
+                    <AdMobBanner />
+                  </View>
+                )}
+              </React.Fragment>
             ))}
           </>
         )}
@@ -709,6 +722,15 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginTop: 16,
     marginBottom: 8,
+  },
+  inlineAdContainer: {
+    marginHorizontal: 16,
+    marginTop: 4,
+    marginBottom: 10,
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: '#ffffff',
+    elevation: 2,
   },
   emptyState: {
     alignItems: 'center',

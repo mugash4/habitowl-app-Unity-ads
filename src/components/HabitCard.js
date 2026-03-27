@@ -57,25 +57,6 @@ const HabitCard = ({
   };
 
   const handleAICoaching = () => {
-    const hasAccess = isPremium || isAdmin;
-    
-    if (!hasAccess) {
-      Alert.alert(
-        '🤖 AI Coaching - Premium Feature',
-        'Smart Coaching with AI-powered insights is available for Premium subscribers!\n\nUpgrade now to get:\n• Personalized habit advice\n• Progress analysis\n• Custom recommendations\n• Unlimited coaching sessions',
-        [
-          { text: 'Maybe Later', style: 'cancel' },
-          { 
-            text: 'Upgrade to Premium', 
-            onPress: () => {
-              Alert.alert('Premium', 'Please upgrade from Settings → Premium');
-            }
-          }
-        ]
-      );
-      return;
-    }
-
     setShowAICoaching(true);
   };
 
@@ -213,7 +194,7 @@ const HabitCard = ({
                     <Icon 
                       name="lightbulb" 
                       size={24} 
-                      color={hasAIAccess ? '#f59e0b' : '#9ca3af'} 
+                      color={hasAIAccess ? '#f59e0b' : '#4f46e5'} 
                     />
                   </TouchableOpacity>
                 </View>

@@ -124,8 +124,8 @@ const PremiumScreen = ({ navigation }) => {
     },
     {
       icon: 'robot',
-      title: 'Advanced AI Coaching',
-      description: 'Get personalized insights and motivation',
+      title: 'Unlimited AI Coaching',
+      description: 'Free users get 2 uses/day — Premium unlocks unlimited coaching',
       premium: true
     },
     {

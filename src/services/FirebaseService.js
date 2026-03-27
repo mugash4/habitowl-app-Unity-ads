@@ -20,6 +20,7 @@ import {
 import { 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
+  signInAnonymously,
   signOut,
   onAuthStateChanged,
   updateProfile,
@@ -240,12 +241,36 @@ class FirebaseService {
   async signOut() {
     try {
       console.log('Signing out...');
+      const onboardingCompleted = await AsyncStorage.getItem('habitowl_onboarding_completed');
       await this.clearHabitsCache();
       await signOut(auth);
       await AsyncStorage.clear();
+      if (onboardingCompleted === 'true') {
+        await AsyncStorage.setItem('habitowl_onboarding_completed', 'true');
+      }
       console.log('Sign out successful!');
     } catch (error) {
       console.error('Sign out error:', error);
+      throw this.handleFirebaseError(error);
+    }
+  }
+
+  async ensureAnonymousUser() {
+    try {
+      if (auth.currentUser) {
+        this.currentUser = auth.currentUser;
+        await this.createUserDocument(auth.currentUser);
+        return auth.currentUser;
+      }
+
+      console.log('Starting anonymous sign in...');
+      const userCredential = await signInAnonymously(auth);
+      const user = userCredential.user;
+      await this.createUserDocument(user);
+      console.log('Anonymous sign in successful!');
+      return user;
+    } catch (error) {
+      console.error('Anonymous sign in error:', error);
       throw this.handleFirebaseError(error);
     }
   }
@@ -273,10 +298,12 @@ class FirebaseService {
       
       if (querySnapshot.empty) {
         console.log('Creating new user document...');
+        const derivedDisplayName = user.displayName || user.email?.split('@')[0] || 'HabitOwl User';
+
         const userDoc = {
           uid: user.uid,
-          email: user.email,
-          displayName: user.displayName || user.email.split('@')[0],
+          email: user.email || null,
+          displayName: derivedDisplayName,
           photoURL: user.photoURL || null,
           createdAt: new Date().toISOString(),
           isPremium: false,
@@ -285,7 +312,11 @@ class FirebaseService {
           referralCode: this.generateReferralCode(),
           referredBy: null,
           referralCount: 0,
-          authProvider: user.providerData[0]?.providerId || 'password'
+          aiCoachingUsage: {
+            dateKey: '',
+            count: 0
+          },
+          authProvider: user.isAnonymous ? 'anonymous' : (user.providerData[0]?.providerId || 'password')
         };
 
         await addDoc(collection(db, 'users'), userDoc);
@@ -303,6 +334,18 @@ class FirebaseService {
         if (user.photoURL && !existingData.photoURL) {
           updates.photoURL = user.photoURL;
         }
+        if (!existingData.displayName) {
+          updates.displayName = user.displayName || user.email?.split('@')[0] || 'HabitOwl User';
+        }
+        if (!existingData.authProvider) {
+          updates.authProvider = user.isAnonymous ? 'anonymous' : (user.providerData[0]?.providerId || 'password');
+        }
+        if (!existingData.aiCoachingUsage) {
+          updates.aiCoachingUsage = {
+            dateKey: '',
+            count: 0
+          };
+        }
         
         if (Object.keys(updates).length > 0) {
           await updateDoc(existingDoc.ref, {
@@ -312,7 +355,10 @@ class FirebaseService {
           console.log('User document updated!');
         }
         
-        return existingData;
+        return {
+          ...existingData,
+          ...updates
+        };
       }
     } catch (error) {
       console.error('Error with user document:', error);
@@ -668,6 +714,79 @@ class FirebaseService {
         updatedAt: new Date().toISOString()
       });
     }
+  }
+
+  async getAICoachingUsageStatus(limit = 2) {
+    if (!this.currentUser) {
+      return {
+        dateKey: new Date().toISOString().split('T')[0],
+        count: 0,
+        limit,
+        remaining: limit
+      };
+    }
+
+    const userStats = await this.getUserStats();
+    const dateKey = new Date().toISOString().split('T')[0];
+    const usage = userStats?.aiCoachingUsage || {};
+    const count = usage.dateKey === dateKey ? (usage.count || 0) : 0;
+
+    return {
+      dateKey,
+      count,
+      limit,
+      remaining: Math.max(limit - count, 0)
+    };
+  }
+
+  async consumeAICoachingUse(limit = 2) {
+    if (!this.currentUser) {
+      throw new Error('User not authenticated');
+    }
+
+    const dateKey = new Date().toISOString().split('T')[0];
+    const userQuery = query(
+      collection(db, 'users'),
+      where('uid', '==', this.currentUser.uid)
+    );
+
+    const querySnapshot = await getDocs(userQuery);
+    if (querySnapshot.empty) {
+      throw new Error('User profile not found');
+    }
+
+    const userDoc = querySnapshot.docs[0];
+    const userData = userDoc.data();
+    const usage = userData?.aiCoachingUsage || {};
+    const currentCount = usage.dateKey === dateKey ? (usage.count || 0) : 0;
+
+    if (currentCount >= limit) {
+      return {
+        allowed: false,
+        dateKey,
+        count: currentCount,
+        limit,
+        remaining: 0
+      };
+    }
+
+    const nextCount = currentCount + 1;
+
+    await updateDoc(userDoc.ref, {
+      aiCoachingUsage: {
+        dateKey,
+        count: nextCount
+      },
+      updatedAt: new Date().toISOString()
+    });
+
+    return {
+      allowed: true,
+      dateKey,
+      count: nextCount,
+      limit,
+      remaining: Math.max(limit - nextCount, 0)
+    };
   }
 
   async processReferral(referralCode) {

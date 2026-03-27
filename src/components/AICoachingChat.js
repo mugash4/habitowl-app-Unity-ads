@@ -29,6 +29,8 @@ import SecureAIService from '../services/SecureAIService';
  * - Improved modal rendering
  * - Works for both Premium users AND Admins
  */
+const FREE_DAILY_LIMIT = 2;
+
 const AICoachingChat = ({ visible, onDismiss, habit }) => {
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -37,6 +39,11 @@ const AICoachingChat = ({ visible, onDismiss, habit }) => {
   const [isPremium, setIsPremium] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [conversationHistory, setConversationHistory] = useState([]);
+  const [usageStatus, setUsageStatus] = useState({
+    count: 0,
+    limit: FREE_DAILY_LIMIT,
+    remaining: FREE_DAILY_LIMIT,
+  });
 
   useEffect(() => {
     if (visible) {
@@ -52,31 +59,39 @@ const AICoachingChat = ({ visible, onDismiss, habit }) => {
   const checkAccessStatus = async () => {
     try {
       console.log('🔍 AICoachingChat: Checking user access status...');
-      
-      // Check premium status
+
       const userStats = await FirebaseService.getUserStats();
       const premiumStatus = userStats?.isPremium || false;
-      setIsPremium(premiumStatus);
-      console.log('💎 Premium status:', premiumStatus);
-      
-      // Check admin status
+      let adminStatus = false;
+
       const user = FirebaseService.currentUser;
       if (user && user.email) {
         const AdminService = require('../services/AdminService').default;
-        const adminStatus = await AdminService.checkAdminStatus(user.email);
-        setIsAdmin(adminStatus);
-        console.log('👑 Admin status:', adminStatus);
-        
-        // Grant premium access to admins
-        if (adminStatus && !premiumStatus) {
-          console.log('✅ Admin detected, granting AI access');
-          setIsPremium(true);
-        }
+        adminStatus = await AdminService.checkAdminStatus(user.email);
+      }
+
+      setIsPremium(premiumStatus || adminStatus);
+      setIsAdmin(adminStatus);
+
+      if (!premiumStatus && !adminStatus) {
+        const freeUsageStatus = await FirebaseService.getAICoachingUsageStatus(FREE_DAILY_LIMIT);
+        setUsageStatus(freeUsageStatus);
+      } else {
+        setUsageStatus({
+          count: 0,
+          limit: FREE_DAILY_LIMIT,
+          remaining: FREE_DAILY_LIMIT,
+        });
       }
     } catch (error) {
       console.error('❌ Error checking access status:', error);
       setIsPremium(false);
       setIsAdmin(false);
+      setUsageStatus({
+        count: 0,
+        limit: FREE_DAILY_LIMIT,
+        remaining: FREE_DAILY_LIMIT,
+      });
     }
   };
 
@@ -84,23 +99,19 @@ const AICoachingChat = ({ visible, onDismiss, habit }) => {
   const handleSendMessage = async (customMessage = null) => {
     const messageToSend = customMessage || message;
     
-    // Check access (premium OR admin)
-    const hasAccess = isPremium || isAdmin;
-    
+    const hasUnlimitedAccess = isPremium || isAdmin;
+
     console.log('🚀 Send message clicked');
     console.log('📝 Message:', messageToSend);
-    console.log('🔐 Has access:', hasAccess);
+    console.log('💎 Unlimited access:', hasUnlimitedAccess);
     console.log('👤 Is premium:', isPremium);
     console.log('👑 Is admin:', isAdmin);
-    
-    if (!hasAccess) {
+
+    if (!hasUnlimitedAccess && usageStatus.remaining <= 0) {
       Alert.alert(
-        '🔒 Premium Feature',
-        'AI Coaching is available for Premium subscribers only. Upgrade now to get personalized habit coaching!',
-        [
-          { text: 'Maybe Later', style: 'cancel' },
-          { text: 'Upgrade to Premium', onPress: onDismiss }
-        ]
+        'Daily Coaching Limit Reached',
+        'Free users get 2 AI coaching uses per day. Upgrade to Premium for unlimited coaching anytime.',
+        [{ text: 'OK', style: 'cancel' }]
       );
       return;
     }
@@ -134,7 +145,22 @@ const AICoachingChat = ({ visible, onDismiss, habit }) => {
 
       console.log('✅ AI coaching received successfully');
 
-      // Add to conversation history
+      let updatedUsageStatus = usageStatus;
+      if (!hasUnlimitedAccess) {
+        updatedUsageStatus = await FirebaseService.consumeAICoachingUse(FREE_DAILY_LIMIT);
+
+        if (!updatedUsageStatus.allowed) {
+          setUsageStatus(updatedUsageStatus);
+          Alert.alert(
+            'Daily Coaching Limit Reached',
+            'You have already used your 2 free coaching sessions today. Upgrade to Premium for unlimited access.'
+          );
+          return;
+        }
+
+        setUsageStatus(updatedUsageStatus);
+      }
+
       const newHistory = [
         ...conversationHistory,
         { type: 'user', text: messageToSend.trim() },
@@ -144,13 +170,14 @@ const AICoachingChat = ({ visible, onDismiss, habit }) => {
 
       setAiResponse(response);
       setShowResponse(true);
-      setMessage(''); // Clear input after successful send
+      setMessage('');
 
-      // Track event
       await FirebaseService.trackEvent('ai_coaching_used', {
         habit_name: habit.name,
         habit_category: habit.category,
         is_admin: isAdmin,
+        is_premium: isPremium,
+        remaining_free_uses: hasUnlimitedAccess ? null : updatedUsageStatus.remaining,
         message_length: messageToSend.trim().length
       }).catch(() => {});
 
@@ -174,11 +201,25 @@ const AICoachingChat = ({ visible, onDismiss, habit }) => {
 
       Alert.alert(errorTitle, errorMessage, [{ text: 'OK' }]);
 
-      // Show fallback response
       const fallback = getFallbackCoaching(habit);
+
+      if (!hasUnlimitedAccess) {
+        try {
+          const updatedUsageStatus = await FirebaseService.consumeAICoachingUse(FREE_DAILY_LIMIT);
+          if (updatedUsageStatus.allowed) {
+            setUsageStatus(updatedUsageStatus);
+          } else {
+            setUsageStatus(updatedUsageStatus);
+            return;
+          }
+        } catch (usageError) {
+          console.log('Could not update free usage count:', usageError.message);
+        }
+      }
+
       setAiResponse(fallback);
       setShowResponse(true);
-      setMessage(''); // Clear input even on error
+      setMessage('');
 
     } finally {
       setIsLoading(false);
@@ -353,8 +394,16 @@ YOUR COACHING:`;
             </View>
 
             {!showResponse ? (
-              // Input Form
               <>
+                {!isPremium && !isAdmin && (
+                  <View style={styles.freePlanBanner}>
+                    <Icon name="ticket-percent-outline" size={18} color="#4f46e5" />
+                    <Text style={styles.freePlanBannerText}>
+                      Free plan: {usageStatus.count}/{usageStatus.limit} used today • {usageStatus.remaining} left
+                    </Text>
+                  </View>
+                )}
+
                 <Text style={styles.sectionTitle}>Ask your AI coach:</Text>
 
                 {/* Quick Suggestions */}
@@ -577,6 +626,24 @@ const styles = StyleSheet.create({
   },
   textArea: {
     marginBottom: 16,
+  },
+  freePlanBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#eef2ff',
+    borderWidth: 1,
+    borderColor: '#c7d2fe',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginBottom: 16,
+  },
+  freePlanBannerText: {
+    marginLeft: 8,
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#4338ca',
   },
   tipContainer: {
     flexDirection: 'row',
