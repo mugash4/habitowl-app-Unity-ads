@@ -223,7 +223,13 @@ const MainTabNavigator = () => {
 
     determineUserType();
 
-    const unsubscribe = AdMobService.onPremiumStatusChange(() => {
+    const premiumStatusUnsubscribe = AdMobService.onPremiumStatusChange(() => {
+      if (isMounted) {
+        determineUserType();
+      }
+    });
+
+    const authUnsubscribe = FirebaseService.onAuthStateChanged(() => {
       if (isMounted) {
         determineUserType();
       }
@@ -231,7 +237,8 @@ const MainTabNavigator = () => {
 
     return () => {
       isMounted = false;
-      unsubscribe();
+      premiumStatusUnsubscribe();
+      authUnsubscribe();
     };
   }, []);
 
@@ -241,7 +248,11 @@ const MainTabNavigator = () => {
 
   return (
     <View style={{ flex: 1 }}>
-      <Tab.Navigator tabBar={(props) => <FloatingTabBar {...props} />} screenOptions={{ headerShown: false }}>
+      <Tab.Navigator
+        initialRouteName="Home"
+        tabBar={(props) => <FloatingTabBar {...props} />}
+        screenOptions={{ headerShown: false }}
+      >
         <Tab.Screen name="Home" component={HomeScreen} options={{ tabBarLabel: 'Habits' }} />
         <Tab.Screen name="Statistics" component={StatisticsScreen} options={{ tabBarLabel: 'Stats' }} />
         <Tab.Screen name="Settings" component={SettingsScreen} options={{ tabBarLabel: 'Settings' }} />
@@ -253,8 +264,6 @@ const MainTabNavigator = () => {
 const AppNavigator = () => {
   const [onboardingChecked, setOnboardingChecked] = useState(false);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(null);
-  const [bootstrappingGuest, setBootstrappingGuest] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -264,9 +273,10 @@ const AppNavigator = () => {
     });
 
     const unsubscribe = FirebaseService.onAuthStateChanged((user) => {
-      if (!isMounted) return;
       console.log('[AppNav] Auth state changed:', user ? 'SIGNED_IN' : 'SIGNED_OUT');
-      setIsAuthenticated(!!user);
+      if (user) {
+        FirebaseService.syncPendingHabitsInBackground();
+      }
     });
 
     const checkOnboarding = async () => {
@@ -295,36 +305,29 @@ const AppNavigator = () => {
   }, []);
 
   useEffect(() => {
-    const bootstrapGuestUser = async () => {
-      if (!onboardingChecked || !hasCompletedOnboarding || bootstrappingGuest) {
-        return;
-      }
+    if (!onboardingChecked || !hasCompletedOnboarding) {
+      return;
+    }
 
-      if (isAuthenticated === false || (isAuthenticated === null && !FirebaseService.currentUser)) {
-        try {
-          setBootstrappingGuest(true);
-          await FirebaseService.ensureAnonymousUser();
-        } catch (error) {
-          console.error('[AppNav] Failed to create guest session:', error);
-        } finally {
-          setBootstrappingGuest(false);
-        }
-      }
-    };
-
-    bootstrapGuestUser();
-  }, [onboardingChecked, hasCompletedOnboarding, isAuthenticated, bootstrappingGuest]);
+    FirebaseService.ensureAnonymousUser()
+      .then(() => FirebaseService.syncPendingHabitsInBackground())
+      .catch((error) => {
+        console.log('[AppNav] Running in local offline mode until auth is available:', error.message);
+      });
+  }, [onboardingChecked, hasCompletedOnboarding]);
 
   const handleOnboardingDone = async () => {
     try {
       await AsyncStorage.setItem(ONBOARDING_STORAGE_KEY, 'true');
       setHasCompletedOnboarding(true);
-      setBootstrappingGuest(true);
-      await FirebaseService.ensureAnonymousUser();
+
+      FirebaseService.ensureAnonymousUser()
+        .then(() => FirebaseService.syncPendingHabitsInBackground())
+        .catch((error) => {
+          console.log('[AppNav] Continuing without network auth for now:', error.message);
+        });
     } catch (error) {
       console.error('[AppNav] Failed to finish onboarding:', error);
-    } finally {
-      setBootstrappingGuest(false);
     }
   };
 
@@ -348,21 +351,12 @@ const AppNavigator = () => {
     );
   }
 
-  if (bootstrappingGuest || !isAuthenticated) {
-    return (
-      <PaperProvider theme={theme}>
-        <Portal.Host>
-          <LoadingScreen label="Creating your personal habit space..." />
-        </Portal.Host>
-      </PaperProvider>
-    );
-  }
-
   return (
     <PaperProvider theme={theme}>
       <Portal.Host>
         <NavigationContainer>
           <Stack.Navigator
+            initialRouteName="Main"
             screenOptions={{
               headerShown: false,
               cardStyle: { backgroundColor: '#f8fafc' },

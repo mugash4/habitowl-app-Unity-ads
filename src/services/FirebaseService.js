@@ -1,36 +1,31 @@
-import { 
-  collection, 
-  doc, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  getDocs, 
-  getDoc,
-  query, 
-  where, 
-  orderBy,
-  onSnapshot,
-  serverTimestamp,
-  increment,
-  Timestamp,
+import {
+  collection,
+  doc,
+  addDoc,
+  updateDoc,
+  getDocs,
   getDocsFromServer,
   getDocsFromCache,
-  setDoc
+  query,
+  where,
+  orderBy,
+  setDoc,
 } from 'firebase/firestore';
-import { 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
   signInAnonymously,
   signOut,
   onAuthStateChanged,
   updateProfile,
   GoogleAuthProvider,
   signInWithCredential,
-  signInWithPopup
+  signInWithPopup,
 } from 'firebase/auth';
-import { db, auth } from '../config/firebase';
+import { AppState, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
+
+import { db, auth } from '../config/firebase';
 import testAccountService from './TestAccountService';
 
 let adMobService = null;
@@ -46,40 +41,140 @@ function getAdMobService() {
   return adMobService;
 }
 
+const ONBOARDING_STORAGE_KEY = 'habitowl_onboarding_completed';
+const LOCAL_DEVICE_ID_KEY = 'habitowl_local_device_id';
+const LOCAL_HABITS_KEY = 'habitowl_local_habits';
+const LOCAL_USER_CACHE_KEY = 'habitowl_user_cache';
+const CACHE_DURATION = 30000;
+const SYNC_INTERVAL_MS = 15000;
+
 class FirebaseService {
   constructor() {
-    this.currentUser = null;
+    this.currentUser = auth.currentUser || null;
     this.authStateChangedListeners = [];
     this.habitsCache = null;
     this.lastCacheTime = null;
-    this.CACHE_DURATION = 30000;
-    
-    onAuthStateChanged(auth, (user) => {
+    this.deviceId = null;
+    this.syncInFlight = false;
+    this.authBootstrapInFlight = false;
+
+    onAuthStateChanged(auth, async (user) => {
       this.currentUser = user;
-      this.authStateChangedListeners.forEach(listener => listener(user));
-      
-      if (!user) {
-        this.clearHabitsCache();
+      this.habitsCache = null;
+      this.lastCacheTime = null;
+
+      if (user) {
+        try {
+          await this.createUserDocument(user);
+        } catch (error) {
+          console.log('User document sync deferred:', error.message);
+        }
+      }
+
+      this.authStateChangedListeners.forEach((listener) => listener(user));
+
+      if (user) {
+        this.syncPendingHabitsInBackground();
       }
     });
+
+    this.appStateSubscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        this.ensureAnonymousUser().catch(() => {});
+        this.syncPendingHabitsInBackground();
+      }
+    });
+
+    this.syncInterval = setInterval(() => {
+      this.syncPendingHabitsInBackground();
+    }, SYNC_INTERVAL_MS);
+  }
+
+  async getDeviceId() {
+    if (this.deviceId) {
+      return this.deviceId;
+    }
+
+    const storedId = await AsyncStorage.getItem(LOCAL_DEVICE_ID_KEY);
+    if (storedId) {
+      this.deviceId = storedId;
+      return storedId;
+    }
+
+    const newId = `device_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    await AsyncStorage.setItem(LOCAL_DEVICE_ID_KEY, newId);
+    this.deviceId = newId;
+    return newId;
+  }
+
+  async loadLocalHabits() {
+    try {
+      const stored = await AsyncStorage.getItem(LOCAL_HABITS_KEY);
+      if (!stored) {
+        return [];
+      }
+
+      const parsed = JSON.parse(stored);
+      if (!Array.isArray(parsed)) {
+        return [];
+      }
+
+      return parsed.map((habit) => this.normalizeLocalHabit(habit));
+    } catch (error) {
+      console.error('Error loading local habits:', error);
+      return [];
+    }
+  }
+
+  async persistLocalHabits(habits) {
+    const normalizedHabits = habits
+      .map((habit) => this.normalizeLocalHabit(habit))
+      .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+
+    await AsyncStorage.setItem(LOCAL_HABITS_KEY, JSON.stringify(normalizedHabits));
+    this.habitsCache = this.getVisibleHabits(normalizedHabits);
+    this.lastCacheTime = Date.now();
+  }
+
+  normalizeLocalHabit(habit) {
+    return {
+      id: habit.id,
+      name: habit.name || '',
+      description: habit.description || '',
+      category: habit.category || 'wellness',
+      difficulty: habit.difficulty || 2,
+      estimatedTime: habit.estimatedTime || '5 min',
+      reminderEnabled: !!habit.reminderEnabled,
+      reminderTime: habit.reminderTime || null,
+      reminderMessage: habit.reminderMessage || null,
+      createdAt: habit.createdAt || new Date().toISOString(),
+      updatedAt: habit.updatedAt || new Date().toISOString(),
+      userId: habit.userId || null,
+      currentStreak: habit.currentStreak || 0,
+      longestStreak: habit.longestStreak || 0,
+      totalCompletions: habit.totalCompletions || 0,
+      completions: Array.isArray(habit.completions) ? habit.completions : [],
+      isActive: habit.isActive !== false,
+      lastCompletedAt: habit.lastCompletedAt || null,
+      deletedAt: habit.deletedAt || null,
+      syncStatus: habit.syncStatus || 'synced',
+      pendingDelete: !!habit.pendingDelete,
+      isSyncedToRemote: !!habit.isSyncedToRemote,
+      lastSyncedAt: habit.lastSyncedAt || null,
+    };
+  }
+
+  getVisibleHabits(habits) {
+    return habits
+      .filter((habit) => habit.isActive !== false && !habit.pendingDelete)
+      .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+      .map((habit) => ({ ...habit }));
   }
 
   async cacheHabits(habits) {
     try {
-      if (!this.currentUser) return;
-      
-      const cacheKey = `habits_cache_${this.currentUser.uid}`;
-      const cacheData = {
-        habits: habits,
-        timestamp: Date.now(),
-        userId: this.currentUser.uid
-      };
-      
-      await AsyncStorage.setItem(cacheKey, JSON.stringify(cacheData));
-      this.habitsCache = habits;
-      this.lastCacheTime = Date.now();
-      
-      console.log(`✅ Cached ${habits.length} habits`);
+      await this.persistLocalHabits(habits);
+      console.log(`✅ Cached ${habits.length} habits locally`);
     } catch (error) {
       console.error('Error caching habits:', error);
     }
@@ -87,68 +182,102 @@ class FirebaseService {
 
   async getCachedHabits() {
     try {
-      if (!this.currentUser) return null;
-      
-      if (this.habitsCache && this.lastCacheTime && 
-          (Date.now() - this.lastCacheTime < this.CACHE_DURATION)) {
-        console.log('⚡ Using in-memory cache');
+      if (this.habitsCache && this.lastCacheTime && Date.now() - this.lastCacheTime < CACHE_DURATION) {
         return this.habitsCache;
       }
-      
-      const cacheKey = `habits_cache_${this.currentUser.uid}`;
-      const cached = await AsyncStorage.getItem(cacheKey);
-      
-      if (cached) {
-        const cacheData = JSON.parse(cached);
-        
-        if (cacheData.userId === this.currentUser.uid) {
-          console.log(`⚡ Using cache (${cacheData.habits.length} habits)`);
-          this.habitsCache = cacheData.habits;
-          this.lastCacheTime = cacheData.timestamp;
-          return cacheData.habits;
-        }
-      }
-      
-      return null;
+
+      const habits = await this.loadLocalHabits();
+      const visibleHabits = this.getVisibleHabits(habits);
+      this.habitsCache = visibleHabits;
+      this.lastCacheTime = Date.now();
+      return visibleHabits;
     } catch (error) {
-      console.error('Error getting cache:', error);
-      return null;
+      console.error('Error getting cached habits:', error);
+      return [];
     }
   }
 
   async clearHabitsCache() {
     try {
-      if (this.currentUser) {
-        const cacheKey = `habits_cache_${this.currentUser.uid}`;
-        await AsyncStorage.removeItem(cacheKey);
-      }
       this.habitsCache = null;
       this.lastCacheTime = null;
-      console.log('🗑️ Cache cleared');
+      console.log('🗑️ In-memory habits cache cleared');
     } catch (error) {
       console.error('Error clearing cache:', error);
     }
   }
 
+  async getCachedUserProfile() {
+    try {
+      const stored = await AsyncStorage.getItem(LOCAL_USER_CACHE_KEY);
+      return stored ? JSON.parse(stored) : {};
+    } catch (error) {
+      console.error('Error reading cached user profile:', error);
+      return {};
+    }
+  }
+
+  async cacheUserProfile(profile) {
+    try {
+      const current = await this.getCachedUserProfile();
+      const nextProfile = {
+        ...current,
+        ...profile,
+        cachedAt: new Date().toISOString(),
+      };
+      await AsyncStorage.setItem(LOCAL_USER_CACHE_KEY, JSON.stringify(nextProfile));
+      return nextProfile;
+    } catch (error) {
+      console.error('Error caching user profile:', error);
+      return profile;
+    }
+  }
+
+  async buildLocalUserStats() {
+    const localHabits = await this.loadLocalHabits();
+    const visibleHabits = this.getVisibleHabits(localHabits);
+    const cachedProfile = await this.getCachedUserProfile();
+
+    const computedLongestStreak = visibleHabits.reduce(
+      (best, habit) => Math.max(best, habit.longestStreak || 0),
+      0
+    );
+
+    return {
+      displayName:
+        this.currentUser?.displayName ||
+        cachedProfile.displayName ||
+        this.currentUser?.email?.split('@')[0] ||
+        'HabitOwl User',
+      email: this.currentUser?.email || cachedProfile.email || '',
+      photoURL: this.currentUser?.photoURL || cachedProfile.photoURL || null,
+      isPremium: !!cachedProfile.isPremium,
+      referralCount: cachedProfile.referralCount || 0,
+      referralCode: cachedProfile.referralCode || this.generateReferralCode(),
+      aiCoachingUsage: cachedProfile.aiCoachingUsage || {
+        dateKey: '',
+        count: 0,
+      },
+      totalHabits: visibleHabits.length,
+      longestStreak: Math.max(cachedProfile.longestStreak || 0, computedLongestStreak),
+      authProvider: cachedProfile.authProvider || (this.currentUser?.isAnonymous ? 'anonymous' : 'password'),
+      uid: this.currentUser?.uid || cachedProfile.uid || null,
+    };
+  }
+
   async signUp(email, password, displayName) {
     try {
-      console.log('Starting sign up...');
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
-      
-      console.log('User created, updating profile...');
+
       await updateProfile(user, { displayName });
-      
-      console.log('Creating user document...');
-      await this.createUserDocument(user);
-      
-      // ✅ CHECK FOR TEST ACCOUNT
+      await this.createUserDocument({ ...user, displayName });
+
       if (testAccountService.isTestAccount(email)) {
-        console.log('🎁 Test account detected, granting premium');
         await testAccountService.grantTestAccountPremium(email, user.uid);
       }
-      
-      console.log('Sign up complete!');
+
+      this.syncPendingHabitsInBackground();
       return user;
     } catch (error) {
       console.error('Sign up error:', error);
@@ -158,22 +287,18 @@ class FirebaseService {
 
   async signIn(email, password) {
     try {
-      console.log('Starting sign in...');
-      
       if (!email || !password) {
         throw new Error('Email and password required');
       }
 
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
-      
-      // ✅ CHECK FOR TEST ACCOUNT
+
       if (testAccountService.isTestAccount(email)) {
-        console.log('🎁 Test account detected, granting premium');
         await testAccountService.grantTestAccountPremium(email, user.uid);
       }
-      
-      console.log('Sign in successful!');
+
+      this.syncPendingHabitsInBackground();
       return user;
     } catch (error) {
       console.error('Sign in error:', error);
@@ -183,27 +308,23 @@ class FirebaseService {
 
   async signInWithGoogleWeb() {
     try {
-      console.log('Starting Google sign in...');
-      
       const provider = new GoogleAuthProvider();
       provider.addScope('email');
       provider.addScope('profile');
-      
+
       const result = await signInWithPopup(auth, provider);
-      
-      if (result && result.user) {
+
+      if (result?.user) {
         await this.createUserDocument(result.user);
-        
-        // ✅ CHECK FOR TEST ACCOUNT
+
         if (result.user.email && testAccountService.isTestAccount(result.user.email)) {
-          console.log('🎁 Test account detected, granting premium');
           await testAccountService.grantTestAccountPremium(result.user.email, result.user.uid);
         }
-        
-        console.log('Google sign in successful!');
+
+        this.syncPendingHabitsInBackground();
         return result.user;
       }
-      
+
       return null;
     } catch (error) {
       console.error('Google sign in error:', error);
@@ -213,24 +334,20 @@ class FirebaseService {
 
   async signInWithGoogleCredential(idToken) {
     try {
-      console.log('Starting Google credential sign in...');
-      
       const credential = GoogleAuthProvider.credential(idToken);
       const result = await signInWithCredential(auth, credential);
-      
-      if (result && result.user) {
+
+      if (result?.user) {
         await this.createUserDocument(result.user);
-        
-        // ✅ CHECK FOR TEST ACCOUNT
+
         if (result.user.email && testAccountService.isTestAccount(result.user.email)) {
-          console.log('🎁 Test account detected, granting premium');
           await testAccountService.grantTestAccountPremium(result.user.email, result.user.uid);
         }
-        
-        console.log('Google credential sign in successful!');
+
+        this.syncPendingHabitsInBackground();
         return result.user;
       }
-      
+
       return null;
     } catch (error) {
       console.error('Google credential error:', error);
@@ -240,15 +357,18 @@ class FirebaseService {
 
   async signOut() {
     try {
-      console.log('Signing out...');
-      const onboardingCompleted = await AsyncStorage.getItem('habitowl_onboarding_completed');
-      await this.clearHabitsCache();
+      const onboardingCompleted = await AsyncStorage.getItem(ONBOARDING_STORAGE_KEY);
       await signOut(auth);
       await AsyncStorage.clear();
+
       if (onboardingCompleted === 'true') {
-        await AsyncStorage.setItem('habitowl_onboarding_completed', 'true');
+        await AsyncStorage.setItem(ONBOARDING_STORAGE_KEY, 'true');
       }
-      console.log('Sign out successful!');
+
+      this.deviceId = null;
+      this.habitsCache = null;
+      this.lastCacheTime = null;
+      console.log('Sign out successful');
     } catch (error) {
       console.error('Sign out error:', error);
       throw this.handleFirebaseError(error);
@@ -263,176 +383,109 @@ class FirebaseService {
         return auth.currentUser;
       }
 
-      console.log('Starting anonymous sign in...');
+      if (this.authBootstrapInFlight) {
+        return null;
+      }
+
+      this.authBootstrapInFlight = true;
       const userCredential = await signInAnonymously(auth);
       const user = userCredential.user;
+      this.currentUser = user;
       await this.createUserDocument(user);
-      console.log('Anonymous sign in successful!');
       return user;
     } catch (error) {
       console.error('Anonymous sign in error:', error);
       throw this.handleFirebaseError(error);
+    } finally {
+      this.authBootstrapInFlight = false;
     }
   }
 
   onAuthStateChanged(callback) {
     this.authStateChangedListeners.push(callback);
     callback(this.currentUser);
+
     return () => {
       this.authStateChangedListeners = this.authStateChangedListeners.filter(
-        listener => listener !== callback
+        (listener) => listener !== callback
       );
     };
   }
 
   async createUserDocument(user) {
     try {
-      console.log('Creating/updating user document for:', user.uid);
-      
-      const q = query(
-        collection(db, 'users'),
-        where('uid', '==', user.uid)
-      );
-      
-      const querySnapshot = await getDocs(q);
-      
-      if (querySnapshot.empty) {
-        console.log('Creating new user document...');
-        const derivedDisplayName = user.displayName || user.email?.split('@')[0] || 'HabitOwl User';
+      const localStats = await this.buildLocalUserStats();
+      const derivedDisplayName = user.displayName || user.email?.split('@')[0] || localStats.displayName;
 
-        const userDoc = {
-          uid: user.uid,
-          email: user.email || null,
-          displayName: derivedDisplayName,
-          photoURL: user.photoURL || null,
-          createdAt: new Date().toISOString(),
-          isPremium: false,
-          totalHabits: 0,
-          longestStreak: 0,
-          referralCode: this.generateReferralCode(),
-          referredBy: null,
-          referralCount: 0,
-          aiCoachingUsage: {
-            dateKey: '',
-            count: 0
-          },
-          authProvider: user.isAnonymous ? 'anonymous' : (user.providerData[0]?.providerId || 'password')
-        };
-
-        await addDoc(collection(db, 'users'), userDoc);
-        console.log('User document created!');
-        return userDoc;
-      } else {
-        console.log('User document exists, updating...');
-        const existingDoc = querySnapshot.docs[0];
-        const existingData = existingDoc.data();
-        
-        const updates = {};
-        if (user.displayName && !existingData.displayName) {
-          updates.displayName = user.displayName;
-        }
-        if (user.photoURL && !existingData.photoURL) {
-          updates.photoURL = user.photoURL;
-        }
-        if (!existingData.displayName) {
-          updates.displayName = user.displayName || user.email?.split('@')[0] || 'HabitOwl User';
-        }
-        if (!existingData.authProvider) {
-          updates.authProvider = user.isAnonymous ? 'anonymous' : (user.providerData[0]?.providerId || 'password');
-        }
-        if (!existingData.aiCoachingUsage) {
-          updates.aiCoachingUsage = {
-            dateKey: '',
-            count: 0
-          };
-        }
-        
-        if (Object.keys(updates).length > 0) {
-          await updateDoc(existingDoc.ref, {
-            ...updates,
-            updatedAt: new Date().toISOString()
-          });
-          console.log('User document updated!');
-        }
-        
-        return {
-          ...existingData,
-          ...updates
-        };
-      }
-    } catch (error) {
-      console.error('Error with user document:', error);
-    }
-  }
-
-  async createHabit(habitData) {
-    if (!this.currentUser) {
-      throw new Error('User not authenticated');
-    }
-
-    try {
-      const now = new Date().toISOString();
-      
-      const habit = {
-        ...habitData,
-        userId: this.currentUser.uid,
-        createdAt: now,
-        updatedAt: now,
-        currentStreak: 0,
-        longestStreak: 0,
-        totalCompletions: 0,
-        isActive: true,
-        completions: []
+      const baseUserDoc = {
+        uid: user.uid,
+        email: user.email || null,
+        displayName: derivedDisplayName,
+        photoURL: user.photoURL || null,
+        createdAt: localStats.createdAt || new Date().toISOString(),
+        isPremium: !!localStats.isPremium,
+        totalHabits: localStats.totalHabits || 0,
+        longestStreak: localStats.longestStreak || 0,
+        referralCode: localStats.referralCode || this.generateReferralCode(),
+        referredBy: localStats.referredBy || null,
+        referralCount: localStats.referralCount || 0,
+        aiCoachingUsage: localStats.aiCoachingUsage || {
+          dateKey: '',
+          count: 0,
+        },
+        authProvider: user.isAnonymous ? 'anonymous' : user.providerData?.[0]?.providerId || 'password',
       };
 
-      console.log('✅ Creating habit:', habit.name);
-      
-      const docRef = await addDoc(collection(db, 'habits'), habit);
-      console.log('✅ Habit created:', docRef.id);
-      
-      const savedHabit = await getDoc(docRef);
-      if (!savedHabit.exists()) {
-        throw new Error('Failed to verify habit');
+      const q = query(collection(db, 'users'), where('uid', '==', user.uid));
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        await addDoc(collection(db, 'users'), baseUserDoc);
+        await this.cacheUserProfile(baseUserDoc);
+        return baseUserDoc;
       }
-      console.log('✅ Habit verified');
-      
-      const newHabit = { id: docRef.id, ...habit };
-      if (this.habitsCache) {
-        this.habitsCache = [newHabit, ...this.habitsCache];
-        await this.cacheHabits(this.habitsCache);
-      }
-      
-      try {
-        await this.updateUserStats({ totalHabits: increment(1) });
-      } catch (statsError) {
-        console.error('⚠️ Stats update failed:', statsError);
-      }
-      
-      return newHabit;
+
+      const existingDoc = querySnapshot.docs[0];
+      const existingData = existingDoc.data();
+      const mergedUserDoc = {
+        ...existingData,
+        ...baseUserDoc,
+        createdAt: existingData.createdAt || baseUserDoc.createdAt,
+        isPremium: existingData.isPremium ?? baseUserDoc.isPremium,
+        referralCode: existingData.referralCode || baseUserDoc.referralCode,
+        referralCount: existingData.referralCount || 0,
+        aiCoachingUsage: existingData.aiCoachingUsage || baseUserDoc.aiCoachingUsage,
+      };
+
+      await updateDoc(existingDoc.ref, {
+        ...mergedUserDoc,
+        updatedAt: new Date().toISOString(),
+      });
+
+      await this.cacheUserProfile(mergedUserDoc);
+      return mergedUserDoc;
     } catch (error) {
-      console.error('❌ Error creating habit:', error);
-      throw new Error(error.message || 'Failed to create habit');
+      console.error('Error with user document:', error);
+
+      const fallbackProfile = {
+        uid: user.uid,
+        email: user.email || null,
+        displayName: user.displayName || user.email?.split('@')[0] || 'HabitOwl User',
+        photoURL: user.photoURL || null,
+        authProvider: user.isAnonymous ? 'anonymous' : user.providerData?.[0]?.providerId || 'password',
+      };
+
+      await this.cacheUserProfile(fallbackProfile);
+      return fallbackProfile;
     }
   }
 
-  async getUserHabits(forceRefresh = false) {
+  async pullRemoteHabits() {
     if (!this.currentUser) {
-      console.log('⚠️ No current user');
-      return [];
+      return this.getCachedHabits();
     }
 
     try {
-      if (!forceRefresh) {
-        const cachedHabits = await this.getCachedHabits();
-        if (cachedHabits && cachedHabits.length > 0) {
-          console.log(`⚡ Loaded ${cachedHabits.length} habits from cache`);
-          this.syncHabitsInBackground();
-          return cachedHabits;
-        }
-      }
-      
-      console.log('📱 Fetching from Firestore...');
-      
       const q = query(
         collection(db, 'habits'),
         where('userId', '==', this.currentUser.uid),
@@ -440,363 +493,514 @@ class FirebaseService {
       );
 
       let querySnapshot;
-      let isFromCache = false;
-      
       try {
         querySnapshot = await getDocsFromServer(q);
-        console.log('✅ Fetched from server');
-      } catch (networkError) {
-        console.log('⚠️ Network error, trying cache...');
-        
-        try {
-          querySnapshot = await getDocsFromCache(q);
-          isFromCache = true;
-          console.log('✅ Using Firestore cache');
-        } catch (cacheError) {
-          console.log('⚠️ Firestore cache failed...');
-          
-          const cachedHabits = await this.getCachedHabits();
-          if (cachedHabits) {
-            console.log(`✅ Using AsyncStorage cache`);
-            return cachedHabits;
+      } catch (serverError) {
+        querySnapshot = await getDocsFromCache(q);
+      }
+
+      const remoteHabits = [];
+      querySnapshot.forEach((snapshot) => {
+        remoteHabits.push(
+          this.normalizeLocalHabit({
+            id: snapshot.id,
+            ...snapshot.data(),
+            syncStatus: 'synced',
+            pendingDelete: false,
+            isSyncedToRemote: true,
+            lastSyncedAt: new Date().toISOString(),
+          })
+        );
+      });
+
+      const localHabits = await this.loadLocalHabits();
+      const mergedMap = new Map();
+
+      localHabits.forEach((habit) => {
+        mergedMap.set(habit.id, habit);
+      });
+
+      remoteHabits.forEach((remoteHabit) => {
+        const localHabit = mergedMap.get(remoteHabit.id);
+
+        if (!localHabit) {
+          mergedMap.set(remoteHabit.id, remoteHabit);
+          return;
+        }
+
+        if (localHabit.pendingDelete || localHabit.syncStatus === 'pending') {
+          return;
+        }
+
+        mergedMap.set(remoteHabit.id, remoteHabit);
+      });
+
+      const mergedHabits = Array.from(mergedMap.values());
+      await this.persistLocalHabits(mergedHabits);
+      return this.getVisibleHabits(mergedHabits);
+    } catch (error) {
+      console.log('Remote habits pull skipped:', error.message);
+      return this.getCachedHabits();
+    }
+  }
+
+  async syncPendingHabitsInBackground() {
+    this.syncPendingHabits().catch((error) => {
+      console.log('Background habit sync postponed:', error.message);
+    });
+  }
+
+  serializeHabitForRemote(habit) {
+    return {
+      name: habit.name,
+      description: habit.description,
+      category: habit.category,
+      difficulty: habit.difficulty,
+      estimatedTime: habit.estimatedTime,
+      reminderEnabled: habit.reminderEnabled,
+      reminderTime: habit.reminderTime,
+      reminderMessage: habit.reminderMessage,
+      createdAt: habit.createdAt,
+      updatedAt: habit.updatedAt,
+      userId: this.currentUser?.uid || habit.userId,
+      currentStreak: habit.currentStreak || 0,
+      longestStreak: habit.longestStreak || 0,
+      totalCompletions: habit.totalCompletions || 0,
+      completions: Array.isArray(habit.completions) ? habit.completions : [],
+      isActive: habit.isActive !== false,
+      lastCompletedAt: habit.lastCompletedAt || null,
+      deletedAt: habit.deletedAt || null,
+    };
+  }
+
+  async syncPendingHabits() {
+    if (this.syncInFlight) {
+      return;
+    }
+
+    if (!this.currentUser) {
+      try {
+        await this.ensureAnonymousUser();
+      } catch (error) {
+        return;
+      }
+    }
+
+    if (!this.currentUser) {
+      return;
+    }
+
+    this.syncInFlight = true;
+
+    try {
+      let localHabits = await this.loadLocalHabits();
+      let changed = false;
+
+      for (const habit of [...localHabits]) {
+        if (habit.pendingDelete) {
+          if (habit.isSyncedToRemote) {
+            await setDoc(
+              doc(db, 'habits', habit.id),
+              {
+                ...this.serializeHabitForRemote({
+                  ...habit,
+                  isActive: false,
+                  deletedAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                }),
+              },
+              { merge: true }
+            );
           }
-          
-          console.log('❌ No cache available');
-          return [];
+
+          localHabits = localHabits.filter((item) => item.id !== habit.id);
+          changed = true;
+          continue;
+        }
+
+        if (habit.syncStatus !== 'pending') {
+          continue;
+        }
+
+        await setDoc(doc(db, 'habits', habit.id), this.serializeHabitForRemote(habit), { merge: true });
+
+        const index = localHabits.findIndex((item) => item.id === habit.id);
+        if (index !== -1) {
+          localHabits[index] = {
+            ...localHabits[index],
+            userId: this.currentUser.uid,
+            syncStatus: 'synced',
+            isSyncedToRemote: true,
+            lastSyncedAt: new Date().toISOString(),
+          };
+          changed = true;
         }
       }
-      
-      const habits = [];
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        habits.push({ id: doc.id, ...data });
-      });
-      
-      habits.sort((a, b) => {
-        const dateA = new Date(a.createdAt || 0);
-        const dateB = new Date(b.createdAt || 0);
-        return dateB - dateA;
-      });
-      
-      console.log(`✅ Fetched ${habits.length} habits ${isFromCache ? '(cache)' : '(server)'}`);
-      
-      if (habits.length > 0) {
-        await this.cacheHabits(habits);
+
+      if (changed) {
+        await this.persistLocalHabits(localHabits);
       }
-      
-      return habits;
+
+      await this.syncUserStatsFromLocal(localHabits);
+      await this.pullRemoteHabits();
+    } finally {
+      this.syncInFlight = false;
+    }
+  }
+
+  async syncUserStatsFromLocal(habits) {
+    if (!this.currentUser) {
+      return;
+    }
+
+    try {
+      const visibleHabits = this.getVisibleHabits(habits);
+      const longestStreak = visibleHabits.reduce(
+        (best, habit) => Math.max(best, habit.longestStreak || 0),
+        0
+      );
+
+      const q = query(collection(db, 'users'), where('uid', '==', this.currentUser.uid));
+      const querySnapshot = await getDocs(q);
+      if (querySnapshot.empty) {
+        await this.createUserDocument(this.currentUser);
+        return;
+      }
+
+      const userDoc = querySnapshot.docs[0];
+      await updateDoc(userDoc.ref, {
+        totalHabits: visibleHabits.length,
+        longestStreak,
+        updatedAt: new Date().toISOString(),
+      });
+
+      await this.cacheUserProfile({
+        totalHabits: visibleHabits.length,
+        longestStreak,
+      });
     } catch (error) {
-      console.error('❌ Error fetching habits:', error);
-      
-      const cachedHabits = await this.getCachedHabits();
-      if (cachedHabits) {
-        console.log('✅ Returning cached habits');
-        return cachedHabits;
+      console.log('User stats sync skipped:', error.message);
+    }
+  }
+
+  generateHabitId() {
+    return `habit_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  async createHabit(habitData) {
+    try {
+      const now = new Date().toISOString();
+      const ownerId = this.currentUser?.uid || (await this.getDeviceId());
+      const newHabit = this.normalizeLocalHabit({
+        ...habitData,
+        id: this.generateHabitId(),
+        userId: ownerId,
+        createdAt: habitData.createdAt || now,
+        updatedAt: now,
+        currentStreak: 0,
+        longestStreak: 0,
+        totalCompletions: 0,
+        isActive: true,
+        completions: [],
+        syncStatus: 'pending',
+        pendingDelete: false,
+        isSyncedToRemote: false,
+      });
+
+      const habits = await this.loadLocalHabits();
+      habits.unshift(newHabit);
+      await this.persistLocalHabits(habits);
+      this.syncPendingHabitsInBackground();
+      return newHabit;
+    } catch (error) {
+      console.error('Error creating habit:', error);
+      throw new Error(error.message || 'Failed to create habit');
+    }
+  }
+
+  async getUserHabits(forceRefresh = false) {
+    try {
+      if (forceRefresh) {
+        await this.pullRemoteHabits();
+      } else {
+        const cachedHabits = await this.getCachedHabits();
+        if (cachedHabits.length === 0 && this.currentUser) {
+          await this.pullRemoteHabits();
+        }
       }
-      
-      return [];
+
+      this.syncPendingHabitsInBackground();
+      return await this.getCachedHabits();
+    } catch (error) {
+      console.error('Error fetching habits:', error);
+      return this.getCachedHabits();
     }
   }
 
   async syncHabitsInBackground() {
-    try {
-      console.log('🔄 Background sync...');
-      
-      const q = query(
-        collection(db, 'habits'),
-        where('userId', '==', this.currentUser.uid),
-        where('isActive', '==', true)
-      );
-
-      const querySnapshot = await getDocsFromServer(q);
-      const habits = [];
-      
-      querySnapshot.forEach((doc) => {
-        habits.push({ id: doc.id, ...doc.data() });
-      });
-      
-      habits.sort((a, b) => {
-        const dateA = new Date(a.createdAt || 0);
-        const dateB = new Date(b.createdAt || 0);
-        return dateB - dateA;
-      });
-      
-      await this.cacheHabits(habits);
-      console.log('✅ Background sync complete');
-    } catch (error) {
-      console.log('⚠️ Background sync failed:', error.message);
-    }
+    await this.pullRemoteHabits();
+    this.syncPendingHabitsInBackground();
   }
 
   async updateHabit(habitId, updates) {
-    const habitRef = doc(db, 'habits', habitId);
-    await updateDoc(habitRef, {
-      ...updates,
-      updatedAt: new Date().toISOString()
-    });
-    
-    if (this.habitsCache) {
-      const index = this.habitsCache.findIndex(h => h.id === habitId);
-      if (index !== -1) {
-        this.habitsCache[index] = {
-          ...this.habitsCache[index],
-          ...updates,
-          updatedAt: new Date().toISOString()
-        };
-        await this.cacheHabits(this.habitsCache);
-      }
+    const habits = await this.loadLocalHabits();
+    const index = habits.findIndex((habit) => habit.id === habitId);
+
+    if (index === -1) {
+      throw new Error('Habit not found');
     }
-    
-    await new Promise(resolve => setTimeout(resolve, 200));
+
+    habits[index] = this.normalizeLocalHabit({
+      ...habits[index],
+      ...updates,
+      updatedAt: new Date().toISOString(),
+      syncStatus: 'pending',
+      pendingDelete: false,
+    });
+
+    await this.persistLocalHabits(habits);
+    this.syncPendingHabitsInBackground();
+    return habits[index];
   }
 
   async deleteHabit(habitId) {
-    const habitRef = doc(db, 'habits', habitId);
-    await updateDoc(habitRef, {
-      isActive: false,
-      deletedAt: new Date().toISOString()
-    });
-    
-    if (this.habitsCache) {
-      this.habitsCache = this.habitsCache.filter(h => h.id !== habitId);
-      await this.cacheHabits(this.habitsCache);
+    const habits = await this.loadLocalHabits();
+    const index = habits.findIndex((habit) => habit.id === habitId);
+
+    if (index === -1) {
+      throw new Error('Habit not found');
     }
-    
-    await this.updateUserStats({ totalHabits: increment(-1) });
-    await new Promise(resolve => setTimeout(resolve, 200));
+
+    const targetHabit = habits[index];
+
+    if (!targetHabit.isSyncedToRemote) {
+      const remainingHabits = habits.filter((habit) => habit.id !== habitId);
+      await this.persistLocalHabits(remainingHabits);
+      return true;
+    }
+
+    habits[index] = this.normalizeLocalHabit({
+      ...targetHabit,
+      isActive: false,
+      pendingDelete: true,
+      syncStatus: 'pending',
+      deletedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    await this.persistLocalHabits(habits);
+    this.syncPendingHabitsInBackground();
+    return true;
   }
 
   async completeHabit(habitId) {
-    if (!this.currentUser) throw new Error('User not authenticated');
+    const habits = await this.loadLocalHabits();
+    const index = habits.findIndex((habit) => habit.id === habitId);
 
-    const habitRef = doc(db, 'habits', habitId);
-    const habitDoc = await getDoc(habitRef);
-    
-    if (!habitDoc.exists()) throw new Error('Habit not found');
-    
-    const habit = habitDoc.data();
+    if (index === -1) {
+      throw new Error('Habit not found');
+    }
+
+    const habit = habits[index];
     const today = new Date().toDateString();
-    const completions = habit.completions || [];
-    
+    const completions = Array.isArray(habit.completions) ? [...habit.completions] : [];
+
     if (completions.includes(today)) {
       throw new Error('Already completed today');
     }
 
-    const newCompletions = [...completions, today];
-    const newStreak = this.calculateStreak(newCompletions);
+    completions.push(today);
+    const newStreak = this.calculateStreak(completions);
     const newLongestStreak = Math.max(habit.longestStreak || 0, newStreak);
 
-    const updateData = {
-      completions: newCompletions,
+    habits[index] = this.normalizeLocalHabit({
+      ...habit,
+      completions,
       currentStreak: newStreak,
       longestStreak: newLongestStreak,
-      totalCompletions: increment(1),
+      totalCompletions: (habit.totalCompletions || 0) + 1,
       lastCompletedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
+      updatedAt: new Date().toISOString(),
+      syncStatus: 'pending',
+    });
 
-    await updateDoc(habitRef, updateData);
-
-    if (this.habitsCache) {
-      const index = this.habitsCache.findIndex(h => h.id === habitId);
-      if (index !== -1) {
-        this.habitsCache[index] = {
-          ...this.habitsCache[index],
-          ...updateData,
-          totalCompletions: (this.habitsCache[index].totalCompletions || 0) + 1
-        };
-        await this.cacheHabits(this.habitsCache);
-      }
-    }
-
-    const userStats = await this.getUserStats();
-    if (newLongestStreak > (userStats.longestStreak || 0)) {
-      await this.updateUserStats({ longestStreak: newLongestStreak });
-    }
-
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await this.persistLocalHabits(habits);
+    this.syncPendingHabitsInBackground();
 
     return { newStreak, newLongestStreak };
   }
 
   async uncompleteHabit(habitId) {
-    if (!this.currentUser) throw new Error('User not authenticated');
+    const habits = await this.loadLocalHabits();
+    const index = habits.findIndex((habit) => habit.id === habitId);
 
-    const habitRef = doc(db, 'habits', habitId);
-    const habitDoc = await getDoc(habitRef);
-    
-    if (!habitDoc.exists()) throw new Error('Habit not found');
-    
-    const habit = habitDoc.data();
-    const today = new Date().toDateString();
-    const completions = habit.completions || [];
-    
-    const newCompletions = completions.filter(date => date !== today);
-    const newStreak = this.calculateStreak(newCompletions);
-
-    const updateData = {
-      completions: newCompletions,
-      currentStreak: newStreak,
-      totalCompletions: increment(-1),
-      updatedAt: new Date().toISOString()
-    };
-
-    await updateDoc(habitRef, updateData);
-
-    if (this.habitsCache) {
-      const index = this.habitsCache.findIndex(h => h.id === habitId);
-      if (index !== -1) {
-        this.habitsCache[index] = {
-          ...this.habitsCache[index],
-          ...updateData,
-          totalCompletions: Math.max(0, (this.habitsCache[index].totalCompletions || 0) - 1)
-        };
-        await this.cacheHabits(this.habitsCache);
-      }
+    if (index === -1) {
+      throw new Error('Habit not found');
     }
 
-    await new Promise(resolve => setTimeout(resolve, 200));
+    const habit = habits[index];
+    const today = new Date().toDateString();
+    const completions = (habit.completions || []).filter((date) => date !== today);
+    const newStreak = this.calculateStreak(completions);
+
+    habits[index] = this.normalizeLocalHabit({
+      ...habit,
+      completions,
+      currentStreak: newStreak,
+      totalCompletions: Math.max(0, (habit.totalCompletions || 0) - 1),
+      updatedAt: new Date().toISOString(),
+      syncStatus: 'pending',
+    });
+
+    await this.persistLocalHabits(habits);
+    this.syncPendingHabitsInBackground();
 
     return { newStreak };
   }
 
   async getUserStats() {
-    if (!this.currentUser) return null;
+    const localStats = await this.buildLocalUserStats();
 
-    const q = query(
-      collection(db, 'users'),
-      where('uid', '==', this.currentUser.uid)
-    );
+    if (!this.currentUser) {
+      return localStats;
+    }
 
-    const querySnapshot = await getDocs(q);
-    if (querySnapshot.empty) return null;
+    try {
+      const q = query(collection(db, 'users'), where('uid', '==', this.currentUser.uid));
+      const querySnapshot = await getDocs(q);
 
-    const userData = querySnapshot.docs[0].data();
-  
-    if (userData && this.currentUser.email) {
-      try {
-        const AdminService = require('./AdminService').default;
-        const isAdmin = await AdminService.checkAdminStatus(this.currentUser.email);
-      
-        if (isAdmin) {
-          console.log('✅ Admin user - granting premium');
-          userData.isPremium = true;
-        
-          if (!querySnapshot.docs[0].data().isPremium) {
+      if (querySnapshot.empty) {
+        const createdProfile = await this.createUserDocument(this.currentUser);
+        return {
+          ...localStats,
+          ...createdProfile,
+          totalHabits: localStats.totalHabits,
+          longestStreak: Math.max(localStats.longestStreak, createdProfile.longestStreak || 0),
+        };
+      }
+
+      const userData = querySnapshot.docs[0].data();
+      let mergedUserData = {
+        ...userData,
+        displayName: userData.displayName || localStats.displayName,
+        email: userData.email || localStats.email,
+        totalHabits: localStats.totalHabits,
+        longestStreak: Math.max(userData.longestStreak || 0, localStats.longestStreak || 0),
+      };
+
+      if (this.currentUser.email) {
+        try {
+          const AdminService = require('./AdminService').default;
+          const isAdmin = await AdminService.checkAdminStatus(this.currentUser.email);
+          if (isAdmin && !mergedUserData.isPremium) {
+            mergedUserData = {
+              ...mergedUserData,
+              isPremium: true,
+              premiumReason: 'admin_access',
+            };
+
             await updateDoc(querySnapshot.docs[0].ref, {
               isPremium: true,
               premiumUpdatedAt: new Date().toISOString(),
-              premiumReason: 'admin_access'
+              premiumReason: 'admin_access',
             });
           }
+        } catch (error) {
+          console.log('Admin status check skipped:', error.message);
         }
-      } catch (error) {
-        console.error('Error checking admin:', error);
       }
-    }
 
-    return userData;
+      await this.cacheUserProfile(mergedUserData);
+      return {
+        ...localStats,
+        ...mergedUserData,
+        totalHabits: localStats.totalHabits,
+        longestStreak: Math.max(localStats.longestStreak, mergedUserData.longestStreak || 0),
+      };
+    } catch (error) {
+      console.log('Using cached local user stats:', error.message);
+      return localStats;
+    }
   }
 
   async updateUserStats(updates) {
-    if (!this.currentUser) return;
+    const cachedProfile = await this.getCachedUserProfile();
+    const localStats = await this.buildLocalUserStats();
+    const nextProfile = {
+      ...cachedProfile,
+      ...updates,
+      totalHabits: localStats.totalHabits,
+      longestStreak: localStats.longestStreak,
+      updatedAt: new Date().toISOString(),
+    };
 
-    const q = query(
-      collection(db, 'users'),
-      where('uid', '==', this.currentUser.uid)
-    );
+    await this.cacheUserProfile(nextProfile);
 
-    const querySnapshot = await getDocs(q);
-    if (!querySnapshot.empty) {
-      const userDoc = querySnapshot.docs[0];
-      await updateDoc(userDoc.ref, {
-        ...updates,
-        updatedAt: new Date().toISOString()
-      });
+    if (!this.currentUser) {
+      return;
+    }
+
+    try {
+      const q = query(collection(db, 'users'), where('uid', '==', this.currentUser.uid));
+      const querySnapshot = await getDocs(q);
+      if (!querySnapshot.empty) {
+        const userDoc = querySnapshot.docs[0];
+        await updateDoc(userDoc.ref, nextProfile);
+      }
+    } catch (error) {
+      console.log('User stats remote update deferred:', error.message);
     }
   }
 
   async getAICoachingUsageStatus(limit = 2) {
-    if (!this.currentUser) {
-      return {
-        dateKey: new Date().toISOString().split('T')[0],
-        count: 0,
-        limit,
-        remaining: limit
-      };
-    }
-
     const userStats = await this.getUserStats();
     const dateKey = new Date().toISOString().split('T')[0];
     const usage = userStats?.aiCoachingUsage || {};
-    const count = usage.dateKey === dateKey ? (usage.count || 0) : 0;
+    const count = usage.dateKey === dateKey ? usage.count || 0 : 0;
 
     return {
       dateKey,
       count,
       limit,
-      remaining: Math.max(limit - count, 0)
+      remaining: Math.max(limit - count, 0),
     };
   }
 
   async consumeAICoachingUse(limit = 2) {
-    if (!this.currentUser) {
-      throw new Error('User not authenticated');
-    }
+    const usageStatus = await this.getAICoachingUsageStatus(limit);
 
-    const dateKey = new Date().toISOString().split('T')[0];
-    const userQuery = query(
-      collection(db, 'users'),
-      where('uid', '==', this.currentUser.uid)
-    );
-
-    const querySnapshot = await getDocs(userQuery);
-    if (querySnapshot.empty) {
-      throw new Error('User profile not found');
-    }
-
-    const userDoc = querySnapshot.docs[0];
-    const userData = userDoc.data();
-    const usage = userData?.aiCoachingUsage || {};
-    const currentCount = usage.dateKey === dateKey ? (usage.count || 0) : 0;
-
-    if (currentCount >= limit) {
+    if (usageStatus.count >= limit) {
       return {
         allowed: false,
-        dateKey,
-        count: currentCount,
-        limit,
-        remaining: 0
+        ...usageStatus,
       };
     }
 
-    const nextCount = currentCount + 1;
+    const nextCount = usageStatus.count + 1;
+    const updatedUsage = {
+      dateKey: usageStatus.dateKey,
+      count: nextCount,
+    };
 
-    await updateDoc(userDoc.ref, {
-      aiCoachingUsage: {
-        dateKey,
-        count: nextCount
-      },
-      updatedAt: new Date().toISOString()
+    await this.updateUserStats({
+      aiCoachingUsage: updatedUsage,
     });
 
     return {
       allowed: true,
-      dateKey,
+      dateKey: usageStatus.dateKey,
       count: nextCount,
       limit,
-      remaining: Math.max(limit - nextCount, 0)
+      remaining: Math.max(limit - nextCount, 0),
     };
   }
 
   async processReferral(referralCode) {
-    if (!this.currentUser) throw new Error('User not authenticated');
+    if (!this.currentUser) {
+      throw new Error('You need internet connection to use referral codes');
+    }
 
-    const q = query(
-      collection(db, 'users'),
-      where('referralCode', '==', referralCode)
-    );
-
+    const q = query(collection(db, 'users'), where('referralCode', '==', referralCode));
     const querySnapshot = await getDocs(q);
     if (querySnapshot.empty) {
       throw new Error('Invalid referral code');
@@ -812,22 +1016,24 @@ class FirebaseService {
     await this.updateUserStats({ referredBy: referrerId });
 
     await updateDoc(referrerDoc.ref, {
-      referralCount: increment(1),
-      updatedAt: new Date().toISOString()
+      referralCount: (referrerDoc.data().referralCount || 0) + 1,
+      updatedAt: new Date().toISOString(),
     });
 
     await addDoc(collection(db, 'referrals'), {
-      referrerId: referrerId,
+      referrerId,
       referredUserId: this.currentUser.uid,
       createdAt: new Date().toISOString(),
-      status: 'completed'
+      status: 'completed',
     });
 
     return true;
   }
 
   async getUserReferrals() {
-    if (!this.currentUser) return [];
+    if (!this.currentUser) {
+      return [];
+    }
 
     const q = query(
       collection(db, 'referrals'),
@@ -836,20 +1042,24 @@ class FirebaseService {
     );
 
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
+    return querySnapshot.docs.map((snapshot) => ({
+      id: snapshot.id,
+      ...snapshot.data(),
     }));
   }
 
   async trackEvent(eventName, parameters = {}) {
     try {
+      if (!this.currentUser) {
+        return;
+      }
+
       await addDoc(collection(db, 'analytics'), {
-        userId: this.currentUser?.uid || 'anonymous',
+        userId: this.currentUser.uid,
         eventName,
         parameters,
         timestamp: new Date().toISOString(),
-        platform: Platform.OS
+        platform: Platform.OS,
       });
     } catch (error) {
       console.error('Analytics error:', error);
@@ -857,25 +1067,27 @@ class FirebaseService {
   }
 
   calculateStreak(completions) {
-    if (!completions || completions.length === 0) return 0;
+    if (!completions || completions.length === 0) {
+      return 0;
+    }
 
     const sortedDates = completions
-      .map(dateStr => new Date(dateStr))
+      .map((dateStr) => new Date(dateStr))
       .sort((a, b) => b - a);
 
     let streak = 0;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    for (let i = 0; i < sortedDates.length; i++) {
+    for (let i = 0; i < sortedDates.length; i += 1) {
       const currentDate = new Date(sortedDates[i]);
       currentDate.setHours(0, 0, 0, 0);
-      
+
       const expectedDate = new Date(today);
       expectedDate.setDate(today.getDate() - i);
 
       if (currentDate.getTime() === expectedDate.getTime()) {
-        streak++;
+        streak += 1;
       } else {
         break;
       }
@@ -887,15 +1099,13 @@ class FirebaseService {
   generateReferralCode() {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let result = 'OWL';
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 3; i += 1) {
       result += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     return result;
   }
 
   handleFirebaseError(error) {
-    console.error('Firebase error:', error);
-    
     const errorMessages = {
       'auth/email-already-in-use': 'Email already registered',
       'auth/invalid-email': 'Invalid email address',
@@ -912,7 +1122,7 @@ class FirebaseService {
       'auth/account-exists-with-different-credential': 'Account exists with different credentials',
       'auth/network-request-failed': 'Network error. Check internet',
       'auth/invalid-api-key': 'Invalid API key',
-      'auth/app-not-authorized': 'App not authorized'
+      'auth/app-not-authorized': 'App not authorized',
     };
 
     const message = errorMessages[error.code] || error.message || 'Unexpected error';
@@ -921,36 +1131,33 @@ class FirebaseService {
 
   async updateUserPremiumStatus(isPremium) {
     try {
+      await this.cacheUserProfile({
+        isPremium,
+        premiumUpdatedAt: new Date().toISOString(),
+      });
+
       if (!this.currentUser) {
-        throw new Error('No user logged in');
+        return true;
       }
 
-      const userQuery = query(
-        collection(db, 'users'),
-        where('uid', '==', this.currentUser.uid)
-      );
-  
+      const userQuery = query(collection(db, 'users'), where('uid', '==', this.currentUser.uid));
       const querySnapshot = await getDocs(userQuery);
-  
+
       if (!querySnapshot.empty) {
         const userDoc = querySnapshot.docs[0];
         await updateDoc(userDoc.ref, {
-          isPremium: isPremium,
-          premiumUpdatedAt: new Date().toISOString()
+          isPremium,
+          premiumUpdatedAt: new Date().toISOString(),
         });
-    
-        console.log(`✅ Premium status: ${isPremium}`);
-      
-        const adMob = getAdMobService();
-        if (adMob) {
-          const isAdmin = await this.checkIfUserIsAdmin(this.currentUser.email);
-          await adMob.setPremiumStatus(isPremium, isAdmin);
-        }
-      
-        return true;
       }
-  
-      return false;
+
+      const adMob = getAdMobService();
+      if (adMob) {
+        const isAdmin = await this.checkIfUserIsAdmin(this.currentUser.email);
+        await adMob.setPremiumStatus(isPremium, isAdmin);
+      }
+
+      return true;
     } catch (error) {
       console.error('Error updating premium:', error);
       throw error;

@@ -2,14 +2,14 @@
   "expo": {
     "name": "HabitOwl",
     "slug": "habitowl",
-    "version": "1.7.0",
+    "version": "1.7.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "scheme": "habitowl",
     "splash": {
       "image": "./assets/splash.png",
-      "resizeMode": "contain"
+      "resizeMode": "cover"
     },
     "updates": {
       "fallbackToCacheTimeout": 0
@@ -181,7 +181,7 @@
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "com.google.android.gms.permission.AD_ID"
       ],
-      "versionCode": 23,
+      "versionCode": 24,
       "googleServicesFile": "./google-services.json",
       "intentFilters": [
         {

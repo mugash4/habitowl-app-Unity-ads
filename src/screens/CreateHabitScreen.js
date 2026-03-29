@@ -232,8 +232,8 @@ const CreateHabitScreen = ({ navigation, route }) => {
         reminderTime: reminderEnabled ? reminderTime.toTimeString().slice(0, 5) : null,
         reminderMessage: customMessage.trim() || null,
         createdAt: new Date().toISOString(),
-        userId: FirebaseService.currentUser.uid,
       };
+
 
       console.log('✅ Creating habit with data:', habitData.name);
       
