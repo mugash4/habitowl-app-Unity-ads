@@ -21,6 +21,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import FirebaseService from '../services/FirebaseService';
 import SecureAIService from '../services/SecureAIService';
+import { checkInternetConnection, showInternetRequiredAlert } from '../utils/networkUtils';
 
 /**
  * ✅ FIXED: AI Coaching Chat for Habits
@@ -55,6 +56,17 @@ const AICoachingChat = ({ visible, onDismiss, habit }) => {
       setConversationHistory([]);
     }
   }, [visible]);
+
+  const ensureInternetForCoaching = async () => {
+    const hasInternet = await checkInternetConnection();
+
+    if (!hasInternet) {
+      showInternetRequiredAlert('AI Coaching');
+      return false;
+    }
+
+    return true;
+  };
 
   const checkAccessStatus = async () => {
     try {
@@ -118,6 +130,11 @@ const AICoachingChat = ({ visible, onDismiss, habit }) => {
 
     if (!messageToSend || !messageToSend.trim()) {
       Alert.alert('Required', 'Please enter a question or select a quick suggestion');
+      return;
+    }
+
+    const hasInternet = await ensureInternetForCoaching();
+    if (!hasInternet) {
       return;
     }
 

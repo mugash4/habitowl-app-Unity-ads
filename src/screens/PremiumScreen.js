@@ -22,6 +22,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 import FirebaseService from '../services/FirebaseService';
 import SubscriptionService from '../services/SubscriptionService';
+import { checkInternetConnection, showInternetRequiredAlert } from '../utils/networkUtils';
 
 const { height } = Dimensions.get('window');
 
@@ -30,6 +31,7 @@ const PremiumScreen = ({ navigation }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [subscriptions, setSubscriptions] = useState([]);
+  const [hasInternet, setHasInternet] = useState(true);
   const [fadeAnim] = useState(new Animated.Value(0));
 
   useEffect(() => {
@@ -42,9 +44,26 @@ const PremiumScreen = ({ navigation }) => {
     }).start();
   }, []);
 
+  const ensureInternetForPremium = async (showAlert = true) => {
+    const online = await checkInternetConnection();
+    setHasInternet(online);
+
+    if (!online && showAlert) {
+      showInternetRequiredAlert('Premium subscriptions');
+    }
+
+    return online;
+  };
+
   const initializeSubscriptions = async () => {
     try {
       setIsLoading(true);
+
+      const online = await ensureInternetForPremium();
+      if (!online) {
+        setSubscriptions([]);
+        return;
+      }
       
       // Initialize IAP
       const initialized = await SubscriptionService.initialize();
@@ -150,6 +169,11 @@ const PremiumScreen = ({ navigation }) => {
 
   const handleSubscribe = async () => {
     try {
+      const online = await ensureInternetForPremium();
+      if (!online) {
+        return;
+      }
+
       setIsPurchasing(true);
       
       const selectedProductId = plans[selectedPlan].productId;
@@ -193,6 +217,11 @@ const PremiumScreen = ({ navigation }) => {
 
   const handleRestorePurchases = async () => {
     try {
+      const online = await ensureInternetForPremium();
+      if (!online) {
+        return;
+      }
+
       setIsPurchasing(true);
       await SubscriptionService.restorePurchases();
     } catch (error) {
@@ -304,6 +333,29 @@ const PremiumScreen = ({ navigation }) => {
             </Card.Content>
           </Card>
 
+          {!hasInternet && (
+            <Card style={styles.offlineCard}>
+              <Card.Content>
+                <View style={styles.offlineHeader}>
+                  <Icon name="wifi-off" size={24} color="#dc2626" />
+                  <Text style={styles.offlineTitle}>Internet required</Text>
+                </View>
+                <Text style={styles.offlineDescription}>
+                  Premium subscriptions need an internet connection to load plans, connect to Google Play, and start your trial.
+                </Text>
+                <Button
+                  mode="contained"
+                  onPress={initializeSubscriptions}
+                  style={styles.retryButton}
+                  buttonColor="#4f46e5"
+                  textColor="#ffffff"
+                >
+                  Retry
+                </Button>
+              </Card.Content>
+            </Card>
+          )}
+
           {/* Pricing Plans */}
           <View style={styles.plansContainer}>
             <Text style={styles.sectionTitle}>Choose Your Plan</Text>
@@ -348,7 +400,7 @@ const PremiumScreen = ({ navigation }) => {
               mode="contained"
               onPress={handleSubscribe}
               loading={isPurchasing}
-              disabled={isPurchasing || subscriptions.length === 0}
+              disabled={isPurchasing || subscriptions.length === 0 || !hasInternet}
               style={styles.subscribeButton}
               contentStyle={styles.subscribeButtonContent}
               textColor="#ffffff"
@@ -358,7 +410,9 @@ const PremiumScreen = ({ navigation }) => {
             </Button>
             
             <Text style={styles.subscribeNote}>
-              Then {plans[selectedPlan].price}{plans[selectedPlan].period}. Cancel anytime.
+              {hasInternet
+                ? `Then ${plans[selectedPlan].price}${plans[selectedPlan].period}. Cancel anytime.`
+                : 'Turn on internet to load plans and start your free trial.'}
             </Text>
 
             <Button
@@ -366,7 +420,7 @@ const PremiumScreen = ({ navigation }) => {
               onPress={handleRestorePurchases}
               style={styles.restoreButton}
               labelStyle={styles.restoreButtonText}
-              disabled={isPurchasing}
+              disabled={isPurchasing || !hasInternet}
             >
               Restore Purchases
             </Button>
@@ -465,6 +519,35 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#78350f',
     lineHeight: 22,
+  },
+  offlineCard: {
+    marginHorizontal: 20,
+    marginTop: 20,
+    marginBottom: 8,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  offlineHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  offlineTitle: {
+    marginLeft: 10,
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#991b1b',
+  },
+  offlineDescription: {
+    fontSize: 14,
+    lineHeight: 21,
+    color: '#7f1d1d',
+    marginBottom: 14,
+  },
+  retryButton: {
+    alignSelf: 'flex-start',
+    borderRadius: 12,
   },
   plansContainer: {
     padding: 20,

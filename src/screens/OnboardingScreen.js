@@ -46,22 +46,18 @@ const onboardingSlides = [
   },
 ];
 
-const SlideGraphic = ({ slide, colors, heroSize, compactMode }) => {
-  const shellSize = heroSize + (compactMode ? 34 : 46);
-  const bubbleSize = compactMode ? 40 : 44;
-  const badgeIconSize = compactMode ? 18 : 20;
-
+const SlideGraphic = ({ slide, colors, heroSize, shellSize, bubbleSize, badgeIconSize, graphicHeight }) => {
   if (slide.id === 'welcome') {
     return (
-      <View style={[styles.graphicWrapper, { height: compactMode ? 234 : 286 }]}>
+      <View style={[styles.graphicWrapper, { height: graphicHeight }]}> 
         <LinearGradient
           colors={colors}
           style={[
             styles.logoGlow,
             {
-              width: shellSize + 50,
-              height: shellSize + 50,
-              borderRadius: (shellSize + 50) / 2,
+              width: shellSize + 48,
+              height: shellSize + 48,
+              borderRadius: (shellSize + 48) / 2,
             },
           ]}
         />
@@ -70,9 +66,9 @@ const SlideGraphic = ({ slide, colors, heroSize, compactMode }) => {
           style={[
             styles.logoHalo,
             {
-              width: shellSize + 22,
-              height: shellSize + 22,
-              borderRadius: (shellSize + 22) / 2,
+              width: shellSize + 20,
+              height: shellSize + 20,
+              borderRadius: (shellSize + 20) / 2,
             },
           ]}
         />
@@ -141,7 +137,7 @@ const SlideGraphic = ({ slide, colors, heroSize, compactMode }) => {
   }
 
   return (
-    <View style={[styles.graphicWrapper, { height: compactMode ? 234 : 286 }]}>
+    <View style={[styles.graphicWrapper, { height: graphicHeight }]}> 
       <LinearGradient
         colors={colors}
         style={[
@@ -158,9 +154,9 @@ const SlideGraphic = ({ slide, colors, heroSize, compactMode }) => {
           styles.graphicRing,
           styles.graphicRingOuter,
           {
-            width: shellSize + 36,
-            height: shellSize + 36,
-            borderRadius: (shellSize + 36) / 2,
+            width: shellSize + 34,
+            height: shellSize + 34,
+            borderRadius: (shellSize + 34) / 2,
           },
         ]}
       />
@@ -186,8 +182,9 @@ const SlideGraphic = ({ slide, colors, heroSize, compactMode }) => {
           },
         ]}
       >
-        <Icon name={slide.icon} size={compactMode ? 60 : 68} color="#ffffff" />
+        <Icon name={slide.icon} size={Math.max(48, heroSize * 0.52)} color="#ffffff" />
       </LinearGradient>
+
       <View
         style={[
           styles.floatingBubble,
@@ -201,6 +198,7 @@ const SlideGraphic = ({ slide, colors, heroSize, compactMode }) => {
       >
         <Icon name="check-circle" size={badgeIconSize} color="#10b981" />
       </View>
+
       <View
         style={[
           styles.floatingBubble,
@@ -214,6 +212,7 @@ const SlideGraphic = ({ slide, colors, heroSize, compactMode }) => {
       >
         <Icon name="fire" size={badgeIconSize} color="#f59e0b" />
       </View>
+
       <View
         style={[
           styles.floatingBubble,
@@ -238,13 +237,26 @@ const OnboardingScreen = ({ onDone }) => {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
 
-  const compactMode = height < 760;
-  const veryCompactMode = height < 700;
-  const heroSize = veryCompactMode ? 112 : compactMode ? 128 : 150;
-  const titleSize = veryCompactMode ? 26 : compactMode ? 28 : 30;
-  const titleLineHeight = veryCompactMode ? 34 : compactMode ? 36 : 38;
-  const descriptionSize = compactMode ? 15 : 16;
-  const descriptionLineHeight = compactMode ? 23 : 25;
+  const usableHeight = height - insets.top - insets.bottom;
+  const microCompactMode = usableHeight < 670;
+  const veryCompactMode = usableHeight < 720;
+  const compactMode = usableHeight < 780;
+
+  const heroSize = microCompactMode ? 84 : veryCompactMode ? 96 : compactMode ? 112 : 136;
+  const shellSize = heroSize + (microCompactMode ? 28 : veryCompactMode ? 32 : 42);
+  const bubbleSize = microCompactMode ? 34 : compactMode ? 38 : 42;
+  const badgeIconSize = microCompactMode ? 15 : compactMode ? 17 : 19;
+  const graphicHeight = microCompactMode ? 148 : veryCompactMode ? 170 : compactMode ? 198 : 236;
+
+  const titleSize = microCompactMode ? 22 : veryCompactMode ? 24 : compactMode ? 27 : 30;
+  const titleLineHeight = microCompactMode ? 28 : veryCompactMode ? 31 : compactMode ? 35 : 38;
+  const descriptionSize = microCompactMode ? 13 : veryCompactMode ? 14 : compactMode ? 15 : 16;
+  const descriptionLineHeight = microCompactMode ? 19 : veryCompactMode ? 21 : compactMode ? 23 : 25;
+  const pointTextSize = microCompactMode ? 13 : compactMode ? 14 : 15;
+  const pointCardPadding = microCompactMode ? 14 : compactMode ? 16 : 20;
+  const footerNoteSize = microCompactMode ? 10.5 : 12;
+  const footerNoteLineHeight = microCompactMode ? 15 : 18;
+  const buttonHeight = microCompactMode ? 48 : 54;
 
   const isLastSlide = useMemo(
     () => currentIndex === onboardingSlides.length - 1,
@@ -275,15 +287,7 @@ const OnboardingScreen = ({ onDone }) => {
       <StatusBar barStyle="dark-content" backgroundColor="#eef2ff" />
 
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-        <View style={[styles.topRow, { paddingTop: 6, minHeight: 56 }]}>
-          <View style={styles.brandSlot}>
-            {currentIndex === 0 ? (
-              <Image source={habitOwlLogo} style={styles.headerLogo} resizeMode="contain" />
-            ) : (
-              <View style={styles.headerLogoSpacer} />
-            )}
-          </View>
-
+        <View style={[styles.topRow, { minHeight: microCompactMode ? 34 : 42 }]}> 
           {!isLastSlide ? (
             <TouchableOpacity onPress={onDone} activeOpacity={0.8} style={styles.skipButton}>
               <Text style={styles.skipText}>Skip</Text>
@@ -304,52 +308,60 @@ const OnboardingScreen = ({ onDone }) => {
             style={styles.horizontalPager}
           >
             {onboardingSlides.map((slide) => (
-              <View key={slide.id} style={[styles.slide, { width }]}>
-                <ScrollView
-                  bounces={false}
-                  nestedScrollEnabled
-                  showsVerticalScrollIndicator={false}
-                  contentContainerStyle={[
-                    styles.slideScrollContent,
-                    { paddingBottom: 16, paddingTop: compactMode ? 4 : 10 },
-                  ]}
-                >
-                  <SlideGraphic
-                    slide={slide}
-                    colors={slide.accent}
-                    heroSize={heroSize}
-                    compactMode={compactMode}
-                  />
+              <View key={slide.id} style={[styles.slide, { width }]}> 
+                <View style={styles.slideContent}>
+                  <View>
+                    <SlideGraphic
+                      slide={slide}
+                      colors={slide.accent}
+                      heroSize={heroSize}
+                      shellSize={shellSize}
+                      bubbleSize={bubbleSize}
+                      badgeIconSize={badgeIconSize}
+                      graphicHeight={graphicHeight}
+                    />
 
-                  <View style={styles.textBlock}>
-                    <Text style={[styles.title, { fontSize: titleSize, lineHeight: titleLineHeight }]}>
-                      {slide.title}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.description,
-                        { fontSize: descriptionSize, lineHeight: descriptionLineHeight },
-                      ]}
-                    >
-                      {slide.description}
-                    </Text>
+                    <View style={[styles.textBlock, { marginBottom: microCompactMode ? 14 : 18 }]}> 
+                      <Text style={[styles.title, { fontSize: titleSize, lineHeight: titleLineHeight }]}> 
+                        {slide.title}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.description,
+                          { fontSize: descriptionSize, lineHeight: descriptionLineHeight },
+                        ]}
+                      >
+                        {slide.description}
+                      </Text>
+                    </View>
                   </View>
 
-                  <View style={[styles.pointsCard, compactMode && styles.pointsCardCompact]}>
+                  <View
+                    style={[
+                      styles.pointsCard,
+                      {
+                        padding: pointCardPadding,
+                        borderRadius: microCompactMode ? 18 : 24,
+                      },
+                    ]}
+                  >
                     {slide.points.map((point, index) => (
                       <View
                         key={point}
                         style={[
                           styles.pointRow,
                           index === slide.points.length - 1 && styles.pointRowLast,
+                          { marginBottom: microCompactMode ? 10 : 12 },
                         ]}
                       >
-                        <Icon name="check-circle-outline" size={18} color="#4f46e5" />
-                        <Text style={styles.pointText}>{point}</Text>
+                        <Icon name="check-circle-outline" size={microCompactMode ? 16 : 18} color="#4f46e5" />
+                        <Text style={[styles.pointText, { fontSize: pointTextSize }]}> 
+                          {point}
+                        </Text>
                       </View>
                     ))}
                   </View>
-                </ScrollView>
+                </View>
               </View>
             ))}
           </ScrollView>
@@ -359,11 +371,12 @@ const OnboardingScreen = ({ onDone }) => {
           style={[
             styles.footer,
             {
-              paddingBottom: Math.max(insets.bottom, 12) + 10,
+              paddingTop: microCompactMode ? 8 : 12,
+              paddingBottom: Math.max(insets.bottom, microCompactMode ? 8 : 10) + 6,
             },
           ]}
         >
-          <View style={styles.pagination}>
+          <View style={[styles.pagination, { marginBottom: microCompactMode ? 14 : 20 }]}> 
             {onboardingSlides.map((slide, index) => (
               <View key={slide.id} style={[styles.dot, index === currentIndex && styles.dotActive]} />
             ))}
@@ -372,15 +385,20 @@ const OnboardingScreen = ({ onDone }) => {
           <Button
             mode="contained"
             onPress={handleNext}
-            contentStyle={styles.primaryButtonContent}
-            style={styles.primaryButton}
+            contentStyle={[styles.primaryButtonContent, { height: buttonHeight }]}
+            style={[styles.primaryButton, { marginBottom: microCompactMode ? 10 : 14 }]}
             buttonColor="#4f46e5"
             icon={isLastSlide ? 'rocket-launch' : 'arrow-right'}
           >
             {isLastSlide ? 'Get Started' : 'Next'}
           </Button>
 
-          <Text style={styles.footerNote}>
+          <Text
+            style={[
+              styles.footerNote,
+              { fontSize: footerNoteSize, lineHeight: footerNoteLineHeight },
+            ]}
+          >
             By continuing, you accept HabitOwl&apos;s in-app experience and can start tracking habits right away.
           </Text>
         </View>
@@ -400,21 +418,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  brandSlot: {
-    justifyContent: 'center',
-    alignItems: 'flex-start',
-    minHeight: 44,
-  },
-  headerLogo: {
-    width: 46,
-    height: 46,
-    borderRadius: 12,
-  },
-  headerLogoSpacer: {
-    width: 46,
-    height: 46,
+    justifyContent: 'flex-end',
   },
   skipButton: {
     minWidth: 52,
@@ -441,14 +445,16 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 24,
   },
-  slideScrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
+  slideContent: {
+    flex: 1,
+    justifyContent: 'space-between',
+    paddingTop: 2,
+    paddingBottom: 4,
   },
   graphicWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 22,
+    marginBottom: 14,
   },
   logoGlow: {
     position: 'absolute',
@@ -502,26 +508,25 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   bubbleTopLeft: {
-    top: 34,
+    top: 20,
     left: 42,
   },
   bubbleTopRight: {
-    top: 62,
+    top: 38,
     right: 46,
   },
   bubbleBottom: {
-    bottom: 36,
+    bottom: 20,
     left: '50%',
   },
   textBlock: {
     alignItems: 'center',
-    marginBottom: 22,
   },
   title: {
     fontWeight: '800',
     color: '#111827',
     textAlign: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   description: {
     color: '#6b7280',
@@ -530,41 +535,33 @@ const styles = StyleSheet.create({
   },
   pointsCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 24,
-    padding: 20,
     shadowColor: '#111827',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.06,
     shadowRadius: 18,
     elevation: 4,
   },
-  pointsCardCompact: {
-    padding: 18,
-  },
   pointRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    marginBottom: 12,
   },
   pointRowLast: {
     marginBottom: 0,
   },
   pointText: {
     flex: 1,
-    fontSize: 15,
     color: '#374151',
     fontWeight: '500',
+    lineHeight: 20,
   },
   footer: {
     paddingHorizontal: 24,
-    paddingTop: 12,
   },
   pagination: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
   },
   dot: {
     width: 10,
@@ -579,14 +576,11 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     borderRadius: 16,
-    marginBottom: 14,
   },
   primaryButtonContent: {
     height: 54,
   },
   footerNote: {
-    fontSize: 12,
-    lineHeight: 18,
     color: '#9ca3af',
     textAlign: 'center',
   },

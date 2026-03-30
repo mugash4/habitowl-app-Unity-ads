@@ -5,7 +5,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Animated,
-  Alert
+  Alert,
 } from 'react-native';
 import { Card, Button, Chip, ProgressBar } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -13,14 +13,15 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import * as Haptics from 'expo-haptics';
 import FirebaseService from '../services/FirebaseService';
 import AICoachingChat from './AICoachingChat';
+import { checkInternetConnection, showInternetRequiredAlert } from '../utils/networkUtils';
 
-const HabitCard = ({ 
-  habit, 
-  onComplete, 
-  onEdit, 
-  onDelete, 
+const HabitCard = ({
+  habit,
+  onComplete,
+  onEdit,
+  onDelete,
   isCompleted,
-  showActions = true 
+  showActions = true,
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [scaleAnim] = useState(new Animated.Value(1));
@@ -37,13 +38,13 @@ const HabitCard = ({
       const userStats = await FirebaseService.getUserStats();
       const premiumStatus = userStats?.isPremium || false;
       setIsPremium(premiumStatus);
-      
+
       const user = FirebaseService.currentUser;
       if (user && user.email) {
         const AdminService = require('../services/AdminService').default;
         const adminStatus = await AdminService.checkAdminStatus(user.email);
         setIsAdmin(adminStatus);
-        
+
         if (adminStatus && !premiumStatus) {
           console.log('✅ Admin detected in HabitCard, granting AI coaching access');
           setIsPremium(true);
@@ -56,13 +57,20 @@ const HabitCard = ({
     }
   };
 
-  const handleAICoaching = () => {
+  const handleAICoaching = async () => {
+    const hasInternet = await checkInternetConnection();
+
+    if (!hasInternet) {
+      showInternetRequiredAlert('AI Coaching');
+      return;
+    }
+
     setShowAICoaching(true);
   };
 
   const handleComplete = async () => {
     if (isLoading) return;
-    
+
     if (!habit || !habit.id) {
       console.error('Invalid habit object:', habit);
       Alert.alert('Error', 'Invalid habit data. Please refresh and try again.');
@@ -71,9 +79,9 @@ const HabitCard = ({
 
     try {
       setIsLoading(true);
-      
+
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      
+
       Animated.sequence([
         Animated.timing(scaleAnim, {
           toValue: 0.95,
@@ -92,7 +100,7 @@ const HabitCard = ({
       } else {
         await FirebaseService.completeHabit(habit.id);
       }
-      
+
       if (onComplete && typeof onComplete === 'function') {
         onComplete(habit, !isCompleted);
       }
@@ -105,18 +113,14 @@ const HabitCard = ({
   };
 
   const handleDelete = () => {
-    Alert.alert(
-      'Delete Habit',
-      `Are you sure you want to delete "${habit.name}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => onDelete && onDelete(habit.id)
-        }
-      ]
-    );
+    Alert.alert('Delete Habit', `Are you sure you want to delete "${habit.name}"?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => onDelete && onDelete(habit.id),
+      },
+    ]);
   };
 
   const getStreakColor = (streak) => {
@@ -137,7 +141,7 @@ const HabitCard = ({
       creativity: 'palette',
       social: 'account-group',
       finance: 'currency-usd',
-      default: 'target'
+      default: 'target',
     };
     return icons[category] || icons.default;
   };
@@ -148,28 +152,31 @@ const HabitCard = ({
       2: '#06b6d4',
       3: '#f59e0b',
       4: '#ef4444',
-      5: '#8b5cf6'
+      5: '#8b5cf6',
     };
     return colors[difficulty] || colors[1];
   };
 
   const getProgressPercentage = () => {
     if (!habit.completions) return 0;
+
     const last7Days = 7;
-    const completionsLast7Days = habit.completions.filter(date => {
+    const completionsLast7Days = habit.completions.filter((date) => {
       const completionDate = new Date(date);
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
       return completionDate >= sevenDaysAgo;
     }).length;
+
     return (completionsLast7Days / last7Days) * 100;
   };
 
   const hasAIAccess = isPremium || isAdmin;
+  const weeklyProgress = Math.round(getProgressPercentage());
 
   return (
     <>
-      <Animated.View style={[styles.container, { transform: [{ scale: scaleAnim }] }]}>
+      <Animated.View style={[styles.container, { transform: [{ scale: scaleAnim }] }]}> 
         <Card style={[styles.card, isCompleted && styles.completedCard]}>
           <LinearGradient
             colors={isCompleted ? ['#10b981', '#059669'] : ['#ffffff', '#f9fafb']}
@@ -178,32 +185,32 @@ const HabitCard = ({
             <View style={styles.header}>
               <View style={styles.titleSection}>
                 <View style={styles.titleRow}>
-                  <Icon 
-                    name={getCategoryIcon(habit.category)} 
-                    size={24} 
-                    color={isCompleted ? '#ffffff' : '#4f46e5'} 
+                  <Icon
+                    name={getCategoryIcon(habit.category)}
+                    size={24}
+                    color={isCompleted ? '#ffffff' : '#4f46e5'}
                   />
                   <Text style={[styles.title, isCompleted && styles.completedText]} numberOfLines={2}>
                     {habit.name}
                   </Text>
-                  
-                  <TouchableOpacity 
-                    style={styles.aiButton}
-                    onPress={handleAICoaching}
-                  >
-                    <Icon 
-                      name="lightbulb" 
-                      size={24} 
-                      color={hasAIAccess ? '#f59e0b' : '#4f46e5'} 
+
+                  <TouchableOpacity style={styles.aiButton} onPress={handleAICoaching}>
+                    <Icon
+                      name="lightbulb"
+                      size={24}
+                      color={hasAIAccess ? '#f59e0b' : '#4f46e5'}
                     />
                   </TouchableOpacity>
                 </View>
-                
-                {habit.description && (
-                  <Text style={[styles.description, isCompleted && styles.completedText]} numberOfLines={2}>
+
+                {habit.description ? (
+                  <Text
+                    style={[styles.description, isCompleted && styles.completedText]}
+                    numberOfLines={2}
+                  >
                     {habit.description}
                   </Text>
-                )}
+                ) : null}
               </View>
 
               <TouchableOpacity
@@ -211,10 +218,10 @@ const HabitCard = ({
                 onPress={handleComplete}
                 disabled={isLoading}
               >
-                <Icon 
-                  name={isCompleted ? 'check-circle' : 'circle-outline'} 
-                  size={32} 
-                  color={isCompleted ? '#ffffff' : '#4f46e5'} 
+                <Icon
+                  name={isCompleted ? 'check-circle' : 'circle-outline'}
+                  size={32}
+                  color={isCompleted ? '#ffffff' : '#4f46e5'}
                 />
               </TouchableOpacity>
             </View>
@@ -222,76 +229,71 @@ const HabitCard = ({
             <View style={styles.statsRow}>
               <View style={styles.stat}>
                 <Icon name="fire" size={16} color={getStreakColor(habit?.currentStreak || 0)} />
-                <Text style={[styles.statText, isCompleted && styles.completedText]} numberOfLines={1}>
+                <Text style={[styles.statText, isCompleted && styles.completedText]}>
                   {habit?.currentStreak || 0} day streak
                 </Text>
               </View>
 
               <View style={styles.stat}>
                 <Icon name="trophy" size={16} color={getStreakColor(habit?.longestStreak || 0)} />
-                <Text style={[styles.statText, isCompleted && styles.completedText]} numberOfLines={1}>
+                <Text style={[styles.statText, isCompleted && styles.completedText]}>
                   Best: {habit?.longestStreak || 0}
                 </Text>
               </View>
 
               <View style={styles.stat}>
-                <Icon name="check-all" size={16} color="#6b7280" />
-                <Text style={[styles.statText, isCompleted && styles.completedText]} numberOfLines={1}>
+                <Icon name="check-all" size={16} color={isCompleted ? '#ffffff' : '#6b7280'} />
+                <Text style={[styles.statText, isCompleted && styles.completedText]}>
                   {habit?.totalCompletions || 0} total
                 </Text>
               </View>
             </View>
 
             <View style={styles.progressSection}>
-              <Text style={[styles.progressLabel, isCompleted && styles.completedText]}>
-                Weekly Progress
-              </Text>
-              <ProgressBar 
-                progress={getProgressPercentage() / 100} 
+              <View style={styles.progressHeader}>
+                <Text style={[styles.progressLabel, isCompleted && styles.completedText]}>
+                  Weekly Progress
+                </Text>
+                <Text style={[styles.progressText, isCompleted && styles.completedText]}>
+                  {weeklyProgress}%
+                </Text>
+              </View>
+              <ProgressBar
+                progress={weeklyProgress / 100}
                 color={isCompleted ? '#ffffff' : '#4f46e5'}
                 style={styles.progressBar}
               />
-              <Text style={[styles.progressText, isCompleted && styles.completedText]}>
-                {Math.round(getProgressPercentage())}%
-              </Text>
             </View>
 
-            {/* ✅ FIXED: Proper background color and text visibility for chips */}
             <View style={styles.tagsRow}>
               <View style={styles.chipWrapper}>
-                <Chip 
+                <Chip
                   mode="flat"
                   compact
                   textStyle={[
                     styles.chipText,
-                    isCompleted ? styles.chipTextCompleted : styles.chipTextNormal
+                    isCompleted ? styles.chipTextCompleted : styles.chipTextNormal,
                   ]}
-                  style={[
-                    styles.chip,
-                    isCompleted ? styles.chipCompleted : styles.chipNormal
-                  ]}
+                  style={[styles.chip, isCompleted ? styles.chipCompleted : styles.chipNormal]}
                 >
                   {habit.category}
                 </Chip>
               </View>
-              
+
               <View style={styles.chipWrapper}>
-                <Chip 
+                <Chip
                   mode="flat"
                   compact
                   textStyle={[
                     styles.chipText,
-                    isCompleted ? styles.chipTextCompleted : styles.chipTextNormal
+                    isCompleted ? styles.chipTextCompleted : styles.chipTextNormal,
                   ]}
-                  style={[
-                    styles.chip,
-                    isCompleted ? styles.chipCompleted : styles.chipNormal
-                  ]}
+                  style={[styles.chip, isCompleted ? styles.chipCompleted : styles.chipNormal]}
                 >
                   {habit.estimatedTime || '5 min'}
                 </Chip>
               </View>
-              
+
               <View style={styles.difficultyContainer}>
                 {[...Array(5)].map((_, i) => (
                   <Icon
@@ -304,7 +306,7 @@ const HabitCard = ({
               </View>
             </View>
 
-            {showActions && (
+            {showActions ? (
               <View style={styles.actionsRow}>
                 <Button
                   mode="outlined"
@@ -315,7 +317,7 @@ const HabitCard = ({
                 >
                   Edit
                 </Button>
-                
+
                 <Button
                   mode="outlined"
                   compact
@@ -326,16 +328,16 @@ const HabitCard = ({
                   Delete
                 </Button>
 
-                {habit.reminderEnabled && (
+                {habit.reminderEnabled ? (
                   <View style={styles.reminderIndicator}>
                     <Icon name="bell" size={16} color={isCompleted ? '#ffffff' : '#f59e0b'} />
                     <Text style={[styles.reminderText, isCompleted && styles.completedText]}>
                       {habit.reminderTime}
                     </Text>
                   </View>
-                )}
+                ) : null}
               </View>
-            )}
+            ) : null}
           </LinearGradient>
         </Card>
       </Animated.View>
@@ -381,11 +383,12 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   title: {
+    flex: 1,
     fontSize: 18,
+    lineHeight: 24,
     fontWeight: 'bold',
     color: '#1f2937',
     marginLeft: 8,
-    flex: 1,
   },
   aiButton: {
     padding: 4,
@@ -396,6 +399,7 @@ const styles = StyleSheet.create({
   },
   description: {
     fontSize: 14,
+    lineHeight: 20,
     color: '#6b7280',
     marginTop: 4,
   },
@@ -408,27 +412,38 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
     marginBottom: 12,
   },
   stat: {
+    width: '33.33%',
     flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
+    alignItems: 'flex-start',
+    paddingRight: 8,
+    marginBottom: 6,
   },
   statText: {
+    flex: 1,
     fontSize: 12,
+    lineHeight: 16,
     color: '#6b7280',
     marginLeft: 4,
-    flexShrink: 1,
   },
   progressSection: {
     marginBottom: 12,
   },
+  progressHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
   progressLabel: {
+    flex: 1,
     fontSize: 12,
+    lineHeight: 18,
     color: '#6b7280',
-    marginBottom: 4,
+    paddingRight: 8,
   },
   progressBar: {
     height: 6,
@@ -437,11 +452,10 @@ const styles = StyleSheet.create({
   },
   progressText: {
     fontSize: 12,
+    lineHeight: 18,
     color: '#6b7280',
     textAlign: 'right',
-    marginTop: 2,
   },
-  // ✅ FIXED: Proper spacing and visibility
   tagsRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -458,24 +472,22 @@ const styles = StyleSheet.create({
     height: 28,
     marginVertical: 0,
   },
-  // ✅ FIXED: Chip styling for normal state (not completed)
   chipNormal: {
-    backgroundColor: '#f3f4f6', // Light gray background
+    backgroundColor: '#f3f4f6',
   },
   chipTextNormal: {
     fontSize: 11,
-    color: '#374151', // Dark gray text - VISIBLE
+    color: '#374151',
     lineHeight: 16,
   },
-  // ✅ FIXED: Chip styling for completed state
   chipCompleted: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)', // Semi-transparent white background
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
   },
   chipTextCompleted: {
     fontSize: 11,
-    color: '#ffffff', // White text - VISIBLE on semi-transparent background
+    color: '#ffffff',
     lineHeight: 16,
-    fontWeight: '600', // Slightly bolder for better visibility
+    fontWeight: '600',
   },
   chipText: {
     fontSize: 11,
@@ -500,6 +512,7 @@ const styles = StyleSheet.create({
   },
   actionButtonText: {
     fontSize: 12,
+    lineHeight: 16,
     color: '#6b7280',
   },
   reminderIndicator: {
@@ -509,6 +522,7 @@ const styles = StyleSheet.create({
   },
   reminderText: {
     fontSize: 12,
+    lineHeight: 16,
     color: '#f59e0b',
     marginLeft: 4,
   },

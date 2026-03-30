@@ -173,7 +173,7 @@ HabitOwl is a smart habit tracking app with AI coaching, streak tracking, and pr
       status: 'new',
       createdAt: new Date().toISOString(),
       platform: ticketData.platform || 'mobile',
-      appVersion: ticketData.appVersion || '1.7.0'
+      appVersion: ticketData.appVersion || '1.8.0'
     };
 
     const docRef = await addDoc(collection(db, 'support_tickets'), ticket);
