@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -6,14 +6,25 @@ import {
   StyleSheet,
   Animated,
   Alert,
-} from 'react-native';
-import { Card, Button, Chip, ProgressBar } from 'react-native-paper';
-import { LinearGradient } from 'expo-linear-gradient';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import * as Haptics from 'expo-haptics';
-import FirebaseService from '../services/FirebaseService';
-import AICoachingChat from './AICoachingChat';
-import { checkInternetConnection, showInternetRequiredAlert } from '../utils/networkUtils';
+} from "react-native";
+import { Card, Chip, ProgressBar } from "react-native-paper";
+import { LinearGradient } from "expo-linear-gradient";
+import Icon from "react-native-vector-icons/MaterialCommunityIcons";
+import * as Haptics from "expo-haptics";
+
+import FirebaseService from "../services/FirebaseService";
+import AICoachingChat from "./AICoachingChat";
+import TipCard from "./TipCard";
+import {
+  getHabitScheduleLabel,
+  getImplementationPlanText,
+  getWeeklyCompletionPercent,
+  getNextDueLabel,
+} from "../utils/habitHelpers";
+import {
+  checkInternetConnection,
+  showInternetRequiredAlert,
+} from "../utils/networkUtils";
 
 const HabitCard = ({
   habit,
@@ -24,318 +35,454 @@ const HabitCard = ({
   showActions = true,
 }) => {
   const [isLoading, setIsLoading] = useState(false);
-  const [scaleAnim] = useState(new Animated.Value(1));
   const [showAICoaching, setShowAICoaching] = useState(false);
   const [isPremium, setIsPremium] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [showTip, setShowTip] = useState(false);
+  const scaleAnim = useRef(new Animated.Value(1)).current;
 
-  React.useEffect(() => {
-    checkPremiumAndAdminStatus();
+  useEffect(() => {
+    let mounted = true;
+
+    const loadStatus = async () => {
+      try {
+        const userStats = await FirebaseService.getUserStats();
+        const premiumStatus = !!userStats?.isPremium;
+        let adminStatus = false;
+        const user = FirebaseService.currentUser;
+        if (user?.email) {
+          const AdminService = require("../services/AdminService").default;
+          adminStatus = await AdminService.checkAdminStatus(user.email);
+        }
+        if (!mounted) return;
+        setIsPremium(premiumStatus || adminStatus);
+        setIsAdmin(adminStatus);
+      } catch (error) {
+        if (!mounted) return;
+        setIsPremium(false);
+        setIsAdmin(false);
+      }
+    };
+
+    loadStatus();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  const checkPremiumAndAdminStatus = async () => {
-    try {
-      const userStats = await FirebaseService.getUserStats();
-      const premiumStatus = userStats?.isPremium || false;
-      setIsPremium(premiumStatus);
-
-      const user = FirebaseService.currentUser;
-      if (user && user.email) {
-        const AdminService = require('../services/AdminService').default;
-        const adminStatus = await AdminService.checkAdminStatus(user.email);
-        setIsAdmin(adminStatus);
-
-        if (adminStatus && !premiumStatus) {
-          console.log('✅ Admin detected in HabitCard, granting AI coaching access');
-          setIsPremium(true);
-        }
-      }
-    } catch (error) {
-      console.error('Error checking premium/admin status:', error);
-      setIsPremium(false);
-      setIsAdmin(false);
-    }
-  };
+  const weeklyProgress = useMemo(
+    () => getWeeklyCompletionPercent(habit),
+    [habit],
+  );
+  const scheduleLabel = useMemo(() => getHabitScheduleLabel(habit), [habit]);
+  const implementationPlan = useMemo(
+    () => getImplementationPlanText(habit),
+    [habit],
+  );
+  const nextDueLabel = useMemo(() => getNextDueLabel(habit), [habit]);
+  const hasAIAccess = isPremium || isAdmin;
 
   const handleAICoaching = async () => {
-    const hasInternet = await checkInternetConnection();
-
-    if (!hasInternet) {
-      showInternetRequiredAlert('AI Coaching');
+    if (!hasAIAccess) {
+      Alert.alert(
+        "Premium feature",
+        "AI coaching stays visible so free users can see what is included. Upgrade to unlock personalized coaching on every habit.",
+      );
       return;
     }
 
+    const hasInternet = await checkInternetConnection();
+    if (!hasInternet) {
+      showInternetRequiredAlert("AI Coaching");
+      return;
+    }
     setShowAICoaching(true);
   };
 
   const handleComplete = async () => {
     if (isLoading) return;
 
-    if (!habit || !habit.id) {
-      console.error('Invalid habit object:', habit);
-      Alert.alert('Error', 'Invalid habit data. Please refresh and try again.');
-      return;
-    }
-
     try {
       setIsLoading(true);
-
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
       Animated.sequence([
         Animated.timing(scaleAnim, {
-          toValue: 0.95,
-          duration: 150,
+          toValue: 0.96,
+          duration: 120,
           useNativeDriver: true,
         }),
-        Animated.timing(scaleAnim, {
+        Animated.spring(scaleAnim, {
           toValue: 1,
-          duration: 150,
+          friction: 4,
+          tension: 90,
           useNativeDriver: true,
         }),
       ]).start();
 
+      let result;
       if (isCompleted) {
-        await FirebaseService.uncompleteHabit(habit.id);
+        result = await FirebaseService.uncompleteHabit(habit.id);
       } else {
-        await FirebaseService.completeHabit(habit.id);
+        result = await FirebaseService.completeHabit(habit.id);
       }
 
-      if (onComplete && typeof onComplete === 'function') {
-        onComplete(habit, !isCompleted);
+      if (onComplete) {
+        onComplete(habit, !isCompleted, result || {});
       }
     } catch (error) {
-      console.error('Error completing habit:', error);
-      Alert.alert('Error', error.message || 'Failed to update habit. Please try again.');
+      Alert.alert(
+        "Could not update habit",
+        error.message || "Please try again.",
+      );
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleDelete = () => {
-    Alert.alert('Delete Habit', `Are you sure you want to delete "${habit.name}"?`, [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert("Delete habit?", `Remove "${habit.name}" from your list?`, [
+      { text: "Cancel", style: "cancel" },
       {
-        text: 'Delete',
-        style: 'destructive',
+        text: "Delete",
+        style: "destructive",
         onPress: () => onDelete && onDelete(habit.id),
       },
     ]);
   };
 
-  const getStreakColor = (streak) => {
-    if (streak >= 30) return '#f59e0b';
-    if (streak >= 14) return '#8b5cf6';
-    if (streak >= 7) return '#06b6d4';
-    if (streak >= 3) return '#10b981';
-    return '#6b7280';
-  };
-
   const getCategoryIcon = (category) => {
     const icons = {
-      health: 'heart',
-      fitness: 'dumbbell',
-      productivity: 'briefcase',
-      learning: 'book',
-      wellness: 'leaf',
-      creativity: 'palette',
-      social: 'account-group',
-      finance: 'currency-usd',
-      default: 'target',
+      health: "heart-pulse",
+      fitness: "dumbbell",
+      productivity: "briefcase-outline",
+      learning: "book-open-page-variant-outline",
+      wellness: "leaf",
+      creativity: "palette-outline",
+      social: "account-group-outline",
+      finance: "cash-multiple",
     };
-    return icons[category] || icons.default;
+    return icons[category] || "target";
   };
 
-  const getDifficultyColor = (difficulty) => {
-    const colors = {
-      1: '#10b981',
-      2: '#06b6d4',
-      3: '#f59e0b',
-      4: '#ef4444',
-      5: '#8b5cf6',
-    };
-    return colors[difficulty] || colors[1];
+  const getDifficultyColor = (difficulty = 1) => {
+    if (difficulty >= 5) return "#dc2626";
+    if (difficulty >= 4) return "#f97316";
+    if (difficulty >= 3) return "#f59e0b";
+    if (difficulty >= 2) return "#06b6d4";
+    return "#10b981";
   };
-
-  const getProgressPercentage = () => {
-    if (!habit.completions) return 0;
-
-    const last7Days = 7;
-    const completionsLast7Days = habit.completions.filter((date) => {
-      const completionDate = new Date(date);
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      return completionDate >= sevenDaysAgo;
-    }).length;
-
-    return (completionsLast7Days / last7Days) * 100;
-  };
-
-  const hasAIAccess = isPremium || isAdmin;
-  const weeklyProgress = Math.round(getProgressPercentage());
 
   return (
     <>
-      <Animated.View style={[styles.container, { transform: [{ scale: scaleAnim }] }]}> 
+      <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
         <Card style={[styles.card, isCompleted && styles.completedCard]}>
           <LinearGradient
-            colors={isCompleted ? ['#10b981', '#059669'] : ['#ffffff', '#f9fafb']}
+            colors={
+              isCompleted ? ["#10b981", "#059669"] : ["#ffffff", "#f8fafc"]
+            }
             style={styles.gradient}
           >
             <View style={styles.header}>
-              <View style={styles.titleSection}>
+              <View style={styles.titleWrap}>
                 <View style={styles.titleRow}>
-                  <Icon
-                    name={getCategoryIcon(habit.category)}
-                    size={24}
-                    color={isCompleted ? '#ffffff' : '#4f46e5'}
-                  />
-                  <Text style={[styles.title, isCompleted && styles.completedText]} numberOfLines={2}>
-                    {habit.name}
-                  </Text>
-
-                  <TouchableOpacity style={styles.aiButton} onPress={handleAICoaching}>
+                  <View
+                    style={[
+                      styles.iconBadge,
+                      isCompleted && styles.completedIconBadge,
+                    ]}
+                  >
                     <Icon
-                      name="lightbulb"
-                      size={24}
-                      color={hasAIAccess ? '#f59e0b' : '#4f46e5'}
+                      name={getCategoryIcon(habit.category)}
+                      size={20}
+                      color={isCompleted ? "#ffffff" : "#4f46e5"}
+                    />
+                  </View>
+                  <View style={styles.textWrap}>
+                    <Text
+                      style={[
+                        styles.title,
+                        isCompleted && styles.completedText,
+                      ]}
+                      numberOfLines={2}
+                    >
+                      {habit.name}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.subtitle,
+                        isCompleted && styles.completedSubtle,
+                      ]}
+                    >
+                      {nextDueLabel}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.helpButton}
+                    onPress={() => setShowTip((value) => !value)}
+                  >
+                    <Icon
+                      name={
+                        showTip ? "close-circle-outline" : "lightbulb-outline"
+                      }
+                      size={22}
+                      color={isCompleted ? "#ffffff" : "#4f46e5"}
+                    />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.aiButton}
+                    onPress={handleAICoaching}
+                  >
+                    <Icon
+                      name={
+                        hasAIAccess ? "robot-excited-outline" : "lock-outline"
+                      }
+                      size={22}
+                      color={
+                        hasAIAccess
+                          ? "#f59e0b"
+                          : isCompleted
+                            ? "#ffffff"
+                            : "#4f46e5"
+                      }
                     />
                   </TouchableOpacity>
                 </View>
 
-                {habit.description ? (
+                {!!habit.description && (
                   <Text
-                    style={[styles.description, isCompleted && styles.completedText]}
+                    style={[
+                      styles.description,
+                      isCompleted && styles.completedSubtle,
+                    ]}
                     numberOfLines={2}
                   >
                     {habit.description}
                   </Text>
-                ) : null}
+                )}
               </View>
 
               <TouchableOpacity
-                style={[styles.completeButton, isCompleted && styles.completedButton]}
+                style={[
+                  styles.checkButton,
+                  isCompleted && styles.checkButtonDone,
+                ]}
                 onPress={handleComplete}
                 disabled={isLoading}
               >
                 <Icon
-                  name={isCompleted ? 'check-circle' : 'circle-outline'}
-                  size={32}
-                  color={isCompleted ? '#ffffff' : '#4f46e5'}
+                  name={isCompleted ? "check-circle" : "circle-outline"}
+                  size={34}
+                  color={isCompleted ? "#ffffff" : "#4f46e5"}
                 />
               </TouchableOpacity>
             </View>
 
-            <View style={styles.statsRow}>
-              <View style={styles.stat}>
-                <Icon name="fire" size={16} color={getStreakColor(habit?.currentStreak || 0)} />
-                <Text style={[styles.statText, isCompleted && styles.completedText]}>
-                  {habit?.currentStreak || 0} day streak
-                </Text>
-              </View>
-
-              <View style={styles.stat}>
-                <Icon name="trophy" size={16} color={getStreakColor(habit?.longestStreak || 0)} />
-                <Text style={[styles.statText, isCompleted && styles.completedText]}>
-                  Best: {habit?.longestStreak || 0}
-                </Text>
-              </View>
-
-              <View style={styles.stat}>
-                <Icon name="check-all" size={16} color={isCompleted ? '#ffffff' : '#6b7280'} />
-                <Text style={[styles.statText, isCompleted && styles.completedText]}>
-                  {habit?.totalCompletions || 0} total
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.progressSection}>
-              <View style={styles.progressHeader}>
-                <Text style={[styles.progressLabel, isCompleted && styles.completedText]}>
-                  Weekly Progress
-                </Text>
-                <Text style={[styles.progressText, isCompleted && styles.completedText]}>
-                  {weeklyProgress}%
-                </Text>
-              </View>
-              <ProgressBar
-                progress={weeklyProgress / 100}
-                color={isCompleted ? '#ffffff' : '#4f46e5'}
-                style={styles.progressBar}
+            {showTip ? (
+              <TipCard
+                compact
+                icon="lightbulb-on-outline"
+                title="Habit tip"
+                description={
+                  implementationPlan ||
+                  `Make ${habit.name} easier by linking it to a clear cue, place, and small reward.`
+                }
+                onDismiss={() => setShowTip(false)}
+                style={styles.tipCard}
               />
+            ) : null}
+
+            <View style={styles.metricRow}>
+              <View style={styles.metricItem}>
+                <Icon
+                  name="fire"
+                  size={16}
+                  color={isCompleted ? "#ffffff" : "#f97316"}
+                />
+                <Text
+                  style={[
+                    styles.metricText,
+                    isCompleted && styles.completedText,
+                  ]}
+                >
+                  {habit.currentStreak || 0} streak
+                </Text>
+              </View>
+              <View style={styles.metricItem}>
+                <Icon
+                  name="trophy-outline"
+                  size={16}
+                  color={isCompleted ? "#ffffff" : "#8b5cf6"}
+                />
+                <Text
+                  style={[
+                    styles.metricText,
+                    isCompleted && styles.completedText,
+                  ]}
+                >
+                  Best {habit.longestStreak || 0}
+                </Text>
+              </View>
+              <View style={styles.metricItem}>
+                <Icon
+                  name="check-all"
+                  size={16}
+                  color={isCompleted ? "#ffffff" : "#6b7280"}
+                />
+                <Text
+                  style={[
+                    styles.metricText,
+                    isCompleted && styles.completedText,
+                  ]}
+                >
+                  {habit.totalCompletions || 0} done
+                </Text>
+              </View>
             </View>
 
-            <View style={styles.tagsRow}>
-              <View style={styles.chipWrapper}>
-                <Chip
-                  mode="flat"
-                  compact
-                  textStyle={[
-                    styles.chipText,
-                    isCompleted ? styles.chipTextCompleted : styles.chipTextNormal,
-                  ]}
-                  style={[styles.chip, isCompleted ? styles.chipCompleted : styles.chipNormal]}
-                >
-                  {habit.category}
-                </Chip>
-              </View>
-
-              <View style={styles.chipWrapper}>
-                <Chip
-                  mode="flat"
-                  compact
-                  textStyle={[
-                    styles.chipText,
-                    isCompleted ? styles.chipTextCompleted : styles.chipTextNormal,
-                  ]}
-                  style={[styles.chip, isCompleted ? styles.chipCompleted : styles.chipNormal]}
-                >
-                  {habit.estimatedTime || '5 min'}
-                </Chip>
-              </View>
-
-              <View style={styles.difficultyContainer}>
-                {[...Array(5)].map((_, i) => (
-                  <Icon
-                    key={i}
-                    name="star"
-                    size={12}
-                    color={i < habit.difficulty ? getDifficultyColor(habit.difficulty) : '#e5e7eb'}
-                  />
-                ))}
-              </View>
+            <View style={styles.progressHeader}>
+              <Text
+                style={[
+                  styles.progressLabel,
+                  isCompleted && styles.completedText,
+                ]}
+              >
+                This week
+              </Text>
+              <Text
+                style={[
+                  styles.progressValue,
+                  isCompleted && styles.completedText,
+                ]}
+              >
+                {weeklyProgress}%
+              </Text>
             </View>
+            <ProgressBar
+              progress={weeklyProgress / 100}
+              color={isCompleted ? "#ffffff" : "#4f46e5"}
+              style={styles.progressBar}
+            />
+
+            <View style={styles.chipsRow}>
+              <Chip
+                compact
+                style={styles.chip}
+                textStyle={styles.chipText}
+                icon="calendar-week"
+              >
+                {scheduleLabel}
+              </Chip>
+              <Chip
+                compact
+                style={styles.chip}
+                textStyle={styles.chipText}
+                icon="clock-outline"
+              >
+                {habit.estimatedTime || "5 min"}
+              </Chip>
+              <Chip
+                compact
+                style={styles.chip}
+                textStyle={styles.chipText}
+                icon="signal-cellular-2"
+              >
+                {`Difficulty ${habit.difficulty || 1}`}
+              </Chip>
+            </View>
+
+            {implementationPlan ? (
+              <View style={styles.planBox}>
+                <Icon
+                  name="route"
+                  size={16}
+                  color={isCompleted ? "#ffffff" : "#4f46e5"}
+                />
+                <Text
+                  style={[styles.planText, isCompleted && styles.completedText]}
+                  numberOfLines={2}
+                >
+                  {implementationPlan}
+                </Text>
+              </View>
+            ) : null}
+
+            {!hasAIAccess ? (
+              <View style={styles.lockedStrip}>
+                <Icon name="lock-outline" size={16} color="#7c3aed" />
+                <Text style={styles.lockedText}>
+                  AI coaching is visible here but unlocked on Premium only.
+                </Text>
+              </View>
+            ) : null}
 
             {showActions ? (
               <View style={styles.actionsRow}>
-                <Button
-                  mode="outlined"
-                  compact
+                <TouchableOpacity
+                  style={styles.actionButton}
                   onPress={() => onEdit && onEdit(habit)}
-                  style={styles.actionButton}
-                  labelStyle={[styles.actionButtonText, isCompleted && styles.completedText]}
                 >
-                  Edit
-                </Button>
-
-                <Button
-                  mode="outlined"
-                  compact
+                  <Icon
+                    name="pencil-outline"
+                    size={18}
+                    color={isCompleted ? "#ffffff" : "#4f46e5"}
+                  />
+                  <Text
+                    style={[
+                      styles.actionLabel,
+                      isCompleted && styles.completedText,
+                    ]}
+                  >
+                    Edit
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.actionButton}
                   onPress={handleDelete}
-                  style={styles.actionButton}
-                  labelStyle={[styles.actionButtonText, { color: '#ef4444' }]}
                 >
-                  Delete
-                </Button>
-
-                {habit.reminderEnabled ? (
-                  <View style={styles.reminderIndicator}>
-                    <Icon name="bell" size={16} color={isCompleted ? '#ffffff' : '#f59e0b'} />
-                    <Text style={[styles.reminderText, isCompleted && styles.completedText]}>
-                      {habit.reminderTime}
-                    </Text>
-                  </View>
-                ) : null}
+                  <Icon
+                    name="delete-outline"
+                    size={18}
+                    color={isCompleted ? "#ffffff" : "#ef4444"}
+                  />
+                  <Text
+                    style={[
+                      styles.actionLabel,
+                      isCompleted && styles.completedText,
+                    ]}
+                  >
+                    Delete
+                  </Text>
+                </TouchableOpacity>
+                <View
+                  style={[
+                    styles.difficultyPill,
+                    {
+                      backgroundColor: isCompleted
+                        ? "rgba(255,255,255,0.18)"
+                        : `${getDifficultyColor(habit.difficulty)}18`,
+                    },
+                  ]}
+                >
+                  <Icon
+                    name="star-four-points-outline"
+                    size={16}
+                    color={
+                      isCompleted
+                        ? "#ffffff"
+                        : getDifficultyColor(habit.difficulty)
+                    }
+                  />
+                  <Text
+                    style={[
+                      styles.difficultyText,
+                      isCompleted && styles.completedText,
+                    ]}
+                  >
+                    {habit.reminderEnabled ? "Reminder on" : "Reminder off"}
+                  </Text>
+                </View>
               </View>
             ) : null}
           </LinearGradient>
@@ -344,7 +491,7 @@ const HabitCard = ({
 
       <AICoachingChat
         visible={showAICoaching}
-        onDismiss={() => setShowAICoaching(false)}
+        onClose={() => setShowAICoaching(false)}
         habit={habit}
       />
     </>
@@ -352,179 +499,199 @@ const HabitCard = ({
 };
 
 const styles = StyleSheet.create({
-  container: {
-    marginHorizontal: 16,
-    marginVertical: 8,
-  },
   card: {
-    elevation: 3,
-    borderRadius: 16,
-    overflow: 'hidden',
+    borderRadius: 24,
+    overflow: "hidden",
+    marginBottom: 16,
+    backgroundColor: "#ffffff",
   },
   completedCard: {
-    elevation: 6,
+    shadowOpacity: 0.08,
   },
   gradient: {
-    padding: 16,
+    padding: 18,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
   },
-  titleSection: {
+  titleWrap: {
     flex: 1,
-    marginRight: 12,
   },
   titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  iconBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#eef2ff",
+  },
+  completedIconBadge: {
+    backgroundColor: "rgba(255,255,255,0.18)",
+  },
+  textWrap: {
+    flex: 1,
   },
   title: {
-    flex: 1,
     fontSize: 18,
-    lineHeight: 24,
-    fontWeight: 'bold',
-    color: '#1f2937',
-    marginLeft: 8,
+    fontWeight: "800",
+    color: "#111827",
+  },
+  subtitle: {
+    marginTop: 2,
+    fontSize: 12,
+    color: "#6b7280",
+  },
+  description: {
+    marginTop: 10,
+    fontSize: 13,
+    lineHeight: 19,
+    color: "#4b5563",
+  },
+  helpButton: {
+    padding: 4,
   },
   aiButton: {
     padding: 4,
-    marginLeft: 8,
   },
-  completedText: {
-    color: '#ffffff',
+  checkButton: {
+    width: 46,
+    alignItems: "center",
   },
-  description: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#6b7280',
-    marginTop: 4,
+  checkButtonDone: {
+    transform: [{ scale: 1.02 }],
   },
-  completeButton: {
-    padding: 8,
-    borderRadius: 24,
+  tipCard: {
+    marginTop: 14,
+    backgroundColor: "rgba(255,255,255,0.88)",
   },
-  completedButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  metricRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    marginTop: 16,
   },
-  statsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 12,
+  metricItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    minWidth: "28%",
   },
-  stat: {
-    width: '33.33%',
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingRight: 8,
-    marginBottom: 6,
-  },
-  statText: {
-    flex: 1,
+  metricText: {
     fontSize: 12,
-    lineHeight: 16,
-    color: '#6b7280',
-    marginLeft: 4,
-  },
-  progressSection: {
-    marginBottom: 12,
+    color: "#374151",
+    fontWeight: "600",
   },
   progressHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 6,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 16,
+    marginBottom: 8,
   },
   progressLabel: {
+    fontSize: 13,
+    color: "#374151",
+    fontWeight: "700",
+  },
+  progressValue: {
+    fontSize: 13,
+    color: "#111827",
+    fontWeight: "800",
+  },
+  progressBar: {
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.3)",
+  },
+  chipsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 14,
+  },
+  chip: {
+    backgroundColor: "rgba(79,70,229,0.08)",
+  },
+  chipText: {
+    color: "#4338ca",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  planBox: {
+    marginTop: 14,
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.75)",
+    flexDirection: "row",
+    gap: 8,
+  },
+  planText: {
     flex: 1,
     fontSize: 12,
     lineHeight: 18,
-    color: '#6b7280',
-    paddingRight: 8,
+    color: "#374151",
   },
-  progressBar: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#e5e7eb',
+  lockedStrip: {
+    marginTop: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    backgroundColor: "#faf5ff",
+    borderWidth: 1,
+    borderColor: "#e9d5ff",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
-  progressText: {
+  lockedText: {
+    flex: 1,
     fontSize: 12,
-    lineHeight: 18,
-    color: '#6b7280',
-    textAlign: 'right',
-  },
-  tagsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-    flexWrap: 'wrap',
-    minHeight: 36,
-  },
-  chipWrapper: {
-    marginRight: 8,
-    marginBottom: 6,
-    paddingVertical: 2,
-  },
-  chip: {
-    height: 28,
-    marginVertical: 0,
-  },
-  chipNormal: {
-    backgroundColor: '#f3f4f6',
-  },
-  chipTextNormal: {
-    fontSize: 11,
-    color: '#374151',
-    lineHeight: 16,
-  },
-  chipCompleted: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-  },
-  chipTextCompleted: {
-    fontSize: 11,
-    color: '#ffffff',
-    lineHeight: 16,
-    fontWeight: '600',
-  },
-  chipText: {
-    fontSize: 11,
-    lineHeight: 16,
-  },
-  difficultyContainer: {
-    flexDirection: 'row',
-    marginLeft: 'auto',
-    marginBottom: 6,
-    paddingVertical: 2,
+    color: "#5b21b6",
+    fontWeight: "600",
   },
   actionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 0, 0, 0.1)',
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 12,
+    marginTop: 16,
   },
   actionButton: {
-    marginRight: 8,
-    minWidth: 60,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
-  actionButtonText: {
+  actionLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#374151",
+  },
+  difficultyPill: {
+    marginLeft: "auto",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 999,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  difficultyText: {
     fontSize: 12,
-    lineHeight: 16,
-    color: '#6b7280',
+    fontWeight: "700",
+    color: "#374151",
   },
-  reminderIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginLeft: 'auto',
+  completedText: {
+    color: "#ffffff",
   },
-  reminderText: {
-    fontSize: 12,
-    lineHeight: 16,
-    color: '#f59e0b',
-    marginLeft: 4,
+  completedSubtle: {
+    color: "rgba(255,255,255,0.88)",
   },
 });
 

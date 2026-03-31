@@ -1,792 +1,532 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  Dimensions,
-  RefreshControl
-} from 'react-native';
-import { Card, Appbar, Chip, Button } from 'react-native-paper';
-import { LineChart, BarChart, PieChart } from 'react-native-chart-kit';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect } from '@react-navigation/native';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useTabBarHeight } from '../hooks/useTabBarHeight';
+  RefreshControl,
+} from "react-native";
+import { Appbar, Button, Card, Chip } from "react-native-paper";
+import { useFocusEffect } from "@react-navigation/native";
+import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 
-import FirebaseService from '../services/FirebaseService';
-import adMobService from '../services/AdMobService';
-
-const { width: screenWidth } = Dimensions.get('window');
+import FirebaseService from "../services/FirebaseService";
+import TipsService from "../services/TipsService";
+import AdMobBanner from "../components/AdMobBanner";
+import TipCard from "../components/TipCard";
+import PremiumFeatureCard from "../components/PremiumFeatureCard";
+import OfflineAdCard from "../components/OfflineAdCard";
+import { useTabBarHeight } from "../hooks/useTabBarHeight";
+import {
+  getLastNDaysSeries,
+  getCategoryBreakdown,
+  getHeatmapData,
+  getBestCompletionDay,
+  getTodayProgress,
+  isHabitDueOnDate,
+} from "../utils/habitHelpers";
 
 const StatisticsScreen = ({ navigation }) => {
   const [habits, setHabits] = useState([]);
   const [userStats, setUserStats] = useState(null);
-  const [loading, setLoading] = useState(false); // ✅ CHANGED: Start with false for instant display
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedPeriod, setSelectedPeriod] = useState('week');
   const [isPremium, setIsPremium] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
 
   const { totalHeight: tabBarTotalHeight } = useTabBarHeight();
 
-  // ✅ NEW: Load cached data FIRST on mount (instant display)
-  useEffect(() => {
-    loadCachedDataFirst();
-  }, []);
-
-  // ✅ Reload when screen comes into focus
-  useFocusEffect(
-    useCallback(() => {
-      console.log('📊 Statistics screen focused - refreshing data...');
-      // ✅ CHANGED: Don't show loading spinner, just refresh silently
-      loadStatistics(false, true); // Silent background refresh
-    }, [])
-  );
-
-  // ✅ NEW: Load cached data first for INSTANT display
-  const loadCachedDataFirst = async () => {
+  const loadStats = useCallback(async (forceRefresh = false) => {
     try {
-      console.log('⚡ StatisticsScreen: Loading cached data FIRST...');
-      
-      const user = FirebaseService.currentUser;
-      if (!user) {
-        setLoading(false);
-        return;
-      }
-
-      // Load from cache first
-      const cacheKey = `stats_cache_${user.uid}`;
-      const cached = await AsyncStorage.getItem(cacheKey);
-      
-      if (cached) {
-        const cacheData = JSON.parse(cached);
-        console.log('⚡ StatisticsScreen: Displaying cached data INSTANTLY');
-        
-        // Display cached data immediately (NO loading spinner)
-        setHabits(cacheData.habits || []);
-        setUserStats(cacheData.userStats);
-        setIsPremium(cacheData.isPremium || false);
-        setIsAdmin(cacheData.isAdmin || false);
-        
-        // ✅ Now sync fresh data in background (without blocking UI)
-        loadStatistics(false, true);
-      } else {
-        // No cache - load normally with spinner
-        console.log('⚠️ No cached stats, loading from server...');
-        setLoading(true);
-        await loadStatistics(false, false);
-        setLoading(false);
-      }
-    } catch (error) {
-      console.error('Error loading cached stats:', error);
-      // Fall back to normal loading
-      setLoading(true);
-      await loadStatistics(false, false);
-      setLoading(false);
-    }
-  };
-
-  // ✅ IMPROVED: Load statistics with optional silent background sync
-  const loadStatistics = async (forceRefresh = false, silentSync = false) => {
-    try {
-      // ✅ Only show loading spinner if NOT a silent background sync
-      if (!silentSync && forceRefresh) {
-        setLoading(true);
-      }
-  
-      // Use cached habits first (from FirebaseService cache)
-      const userHabits = await FirebaseService.getUserHabits(forceRefresh);
-      const stats = await FirebaseService.getUserStats();
-  
-      console.log('📊 Loaded', userHabits ? userHabits.length : 0, 'habits for statistics');
-  
-      let premiumStatus = stats?.isPremium || false;
-      let adminStatus = false;
-    
-      if (!premiumStatus) {
-        const user = FirebaseService.currentUser;
-        if (user && user.email) {
-          try {
-            const AdminService = require('../services/AdminService').default;
-            adminStatus = await AdminService.checkAdminStatus(user.email);
-            if (adminStatus) {
-              console.log('✅ Admin user - enabling all premium features');
-              premiumStatus = true;
-            }
-          } catch (error) {
-            console.log('⚠️ Admin check failed:', error.message);
-          }
+      if (!forceRefresh) {
+        const cached = await FirebaseService.getCachedHabits();
+        if (cached?.length) {
+          setHabits(cached);
+          setLoading(false);
         }
       }
-    
-      setIsPremium(premiumStatus);
-      setIsAdmin(adminStatus);
+
+      const [userHabits, stats] = await Promise.all([
+        FirebaseService.getUserHabits(forceRefresh),
+        FirebaseService.getUserStats(),
+      ]);
+
+      let adminStatus = false;
+      const currentUser = FirebaseService.currentUser;
+      if (currentUser?.email) {
+        const AdminService = require("../services/AdminService").default;
+        adminStatus = await AdminService.checkAdminStatus(currentUser.email);
+      }
+
       setHabits(userHabits || []);
       setUserStats(stats);
+      setIsPremium(!!stats?.isPremium || adminStatus);
+      setIsAdmin(adminStatus);
       setIsOffline(false);
-
-      // Cache the data
-      await cacheStatisticsData({
-        habits: userHabits || [],
-        userStats: stats,
-        isPremium: premiumStatus,
-        isAdmin: adminStatus
-      });
-
     } catch (error) {
-      console.error('Error loading statistics:', error);
-      
-      // Better offline detection
-      if (error.message && (error.message.includes('network') || error.message.includes('offline'))) {
-        setIsOffline(true);
-        console.log('📡 Statistics: Offline mode detected');
-      }
-      
-      // Keep existing data on error (don't clear)
-      if (habits.length === 0) {
-        setHabits([]);
-      }
-      if (!userStats) {
-        setUserStats(null);
-      }
+      console.error("Statistics load error:", error);
+      setIsOffline(true);
+      const fallback = await FirebaseService.getCachedHabits();
+      setHabits(fallback || []);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, []);
 
-  // Cache statistics data
-  const cacheStatisticsData = async (data) => {
-    try {
-      const user = FirebaseService.currentUser;
-      if (!user) return;
+  useEffect(() => {
+    loadStats();
+    TipsService.hasSeenGuide("statistics_overview").then((seen) =>
+      setShowGuide(!seen),
+    );
+  }, [loadStats]);
 
-      const cacheKey = `stats_cache_${user.uid}`;
-      const cacheData = {
-        ...data,
-        timestamp: Date.now(),
-        userId: user.uid
-      };
+  useFocusEffect(
+    useCallback(() => {
+      loadStats();
+    }, [loadStats]),
+  );
 
-      await AsyncStorage.setItem(cacheKey, JSON.stringify(cacheData));
-      console.log('✅ Statistics data cached');
-    } catch (error) {
-      console.error('❌ Error caching statistics:', error);
-    }
-  };
+  const todayProgress = useMemo(() => getTodayProgress(habits), [habits]);
+  const bestStreak = useMemo(
+    () =>
+      habits.reduce(
+        (best, habit) => Math.max(best, habit.longestStreak || 0),
+        0,
+      ),
+    [habits],
+  );
+  const totalCompletions = useMemo(
+    () => habits.reduce((sum, habit) => sum + (habit.totalCompletions || 0), 0),
+    [habits],
+  );
+  const sevenDaySeries = useMemo(() => getLastNDaysSeries(habits, 7), [habits]);
+  const heatmap = useMemo(() => getHeatmapData(habits, 56), [habits]);
+  const categoryBreakdown = useMemo(
+    () => getCategoryBreakdown(habits),
+    [habits],
+  );
+  const bestDay = useMemo(() => getBestCompletionDay(habits), [habits]);
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await loadStatistics(true, false); // Force refresh with loading indicator
-    setRefreshing(false);
-    
-    if (!isPremium && !isAdmin) {
-      setTimeout(async () => {
-        try {
-          await adMobService.showInterstitialAd('statistics_view');
-        } catch (error) {
-          console.log('[Statistics] Ad not shown:', error);
-        }
-      }, 500);
-    } else {
-      console.log('[Statistics] 👑 Premium/Admin user - no ads on refresh');
-    }
-  };
-
-  const getCompletionData = () => {
-    const days = selectedPeriod === 'week' ? 7 : selectedPeriod === 'month' ? 30 : 365;
-    const data = [];
-    const labels = [];
-    
-    for (let i = days - 1; i >= 0; i--) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      const dateStr = date.toDateString();
-      
-      const completions = habits.reduce((count, habit) => {
-        return count + (habit.completions?.includes(dateStr) ? 1 : 0);
-      }, 0);
-      
-      data.push(completions);
-      
-      if (selectedPeriod === 'week') {
-        labels.push(date.toLocaleDateString('en', { weekday: 'short' }));
-      } else if (selectedPeriod === 'month') {
-        if (i === 0 || i === days - 1 || i % 6 === 0) {
-          labels.push(date.getDate().toString());
-        } else {
-          labels.push('');
-        }
-      } else {
-        if (i % 30 === 0 || i === 0 || i === days - 1) {
-          labels.push(date.toLocaleDateString('en', { month: 'short' }));
-        } else {
-          labels.push('');
+  const consistencyScore = useMemo(() => {
+    if (!habits.length) return 0;
+    const totalDueInstances = habits.reduce((total, habit) => {
+      let dueCount = 0;
+      for (let i = 0; i < 28; i += 1) {
+        const candidate = new Date();
+        candidate.setDate(candidate.getDate() - i);
+        if (isHabitDueOnDate(habit, candidate)) {
+          dueCount += 1;
         }
       }
-    }
-    
-    return { data, labels };
-  };
+      return total + dueCount;
+    }, 0);
 
-  const getCategoryData = () => {
-    const categoryCount = {};
-    habits.forEach(habit => {
-      categoryCount[habit.category] = (categoryCount[habit.category] || 0) + 1;
-    });
-    
-    const colors = [
-      '#4f46e5', '#7c3aed', '#10b981', '#f59e0b', 
-      '#ef4444', '#06b6d4', '#8b5cf6', '#f97316'
-    ];
-    
-    return Object.entries(categoryCount).map(([category, count], index) => ({
-      name: category,
-      population: count,
-      color: colors[index % colors.length],
-      legendFontColor: '#374151',
-      legendFontSize: 11,
-    }));
-  };
+    const completedInstances = habits.reduce((total, habit) => {
+      const completions = (habit.completions || []).filter((dateKey) => {
+        const date = new Date(dateKey);
+        const last28 = new Date();
+        last28.setDate(last28.getDate() - 27);
+        return date >= last28;
+      }).length;
+      return total + completions;
+    }, 0);
 
-  const getStreakData = () => {
-    return habits.slice(0, 6).map(habit => ({
-      name: habit.name.substring(0, 6) + (habit.name.length > 6 ? '..' : ''),
-      current: habit.currentStreak || 0,
-      best: habit.longestStreak || 0,
-    }));
-  };
-
-  const getOverallStats = () => {
-    const totalCompletions = habits.reduce((sum, habit) => 
-      sum + (habit.totalCompletions || 0), 0);
-    
-    const activeHabits = habits.filter(habit => habit.isActive).length;
-    
-    const avgStreak = habits.length > 0 
-      ? Math.round(habits.reduce((sum, habit) => 
-          sum + (habit.currentStreak || 0), 0) / habits.length)
+    return totalDueInstances
+      ? Math.round((completedInstances / totalDueInstances) * 100)
       : 0;
-    
-    const completionRate = habits.length > 0
-      ? Math.round((habits.filter(habit => {
-          const today = new Date().toDateString();
-          return habit.completions?.includes(today);
-        }).length / habits.length) * 100)
-      : 0;
+  }, [habits]);
 
-    return {
-      totalCompletions,
-      activeHabits,
-      avgStreak,
-      completionRate,
-      bestStreak: userStats?.longestStreak || 0
-    };
-  };
-
-  const chartConfig = {
-    backgroundGradientFrom: '#ffffff',
-    backgroundGradientTo: '#ffffff',
-    color: (opacity = 1) => `rgba(79, 70, 229, ${opacity})`,
-    strokeWidth: 3,
-    barPercentage: 0.6,
-    decimalPlaces: 0,
-    propsForDots: {
-      r: '4',
-      strokeWidth: '2',
-      stroke: '#4f46e5'
-    },
-    propsForLabels: {
-      fontSize: 9,
-      fontWeight: '500'
+  const heatmapColumns = useMemo(() => {
+    const weeks = [];
+    for (let i = 0; i < heatmap.length; i += 7) {
+      weeks.push(heatmap.slice(i, i + 7));
     }
-  };
+    return weeks;
+  }, [heatmap]);
 
-  const renderOverviewCards = () => {
-    const stats = getOverallStats();
-    
-    return (
-      <View style={styles.overviewContainer}>
-        {isOffline && (
-          <View style={styles.offlineBanner}>
-            <Icon name="wifi-off" size={16} color="#ffffff" />
-            <Text style={styles.offlineText}>Offline - Using cached data</Text>
-          </View>
-        )}
+  const categoryEntries = Object.entries(categoryBreakdown).sort(
+    (a, b) => b[1] - a[1],
+  );
+  const topCategory = categoryEntries[0]?.[0] || "No category yet";
 
-        <Card style={styles.overviewCard}>
-          <LinearGradient colors={['#4f46e5', '#7c3aed']} style={styles.overviewGradient}>
-            <Icon name="check-all" size={24} color="#ffffff" />
-            <Text style={styles.overviewValue}>{stats.totalCompletions}</Text>
-            <Text style={styles.overviewLabel}>Total Completions</Text>
-          </LinearGradient>
-        </Card>
-
-        <Card style={styles.overviewCard}>
-          <LinearGradient colors={['#10b981', '#059669']} style={styles.overviewGradient}>
-            <Icon name="fire" size={24} color="#ffffff" />
-            <Text style={styles.overviewValue}>{stats.bestStreak}</Text>
-            <Text style={styles.overviewLabel}>Best Streak</Text>
-          </LinearGradient>
-        </Card>
-
-        <Card style={styles.overviewCard}>
-          <LinearGradient colors={['#f59e0b', '#d97706']} style={styles.overviewGradient}>
-            <Icon name="target" size={24} color="#ffffff" />
-            <Text style={styles.overviewValue}>{stats.activeHabits}</Text>
-            <Text style={styles.overviewLabel}>Active Habits</Text>
-          </LinearGradient>
-        </Card>
-
-        <Card style={styles.overviewCard}>
-          <LinearGradient colors={['#ef4444', '#dc2626']} style={styles.overviewGradient}>
-            <Icon name="percent" size={24} color="#ffffff" />
-            <Text style={styles.overviewValue}>{stats.completionRate}%</Text>
-            <Text style={styles.overviewLabel}>Today's Rate</Text>
-          </LinearGradient>
-        </Card>
+  const renderOverviewCard = (icon, label, value, tint) => (
+    <Card style={styles.metricCard}>
+      <View style={[styles.metricIcon, { backgroundColor: `${tint}18` }]}>
+        <Icon name={icon} size={20} color={tint} />
       </View>
-    );
-  };
-
-  const renderCompletionChart = () => {
-    const { data, labels } = getCompletionData();
-    
-    if (data.length === 0) return null;
-
-    const maxValue = Math.max(...data, 1);
-    
-    const chartWidth = selectedPeriod === 'week' 
-      ? screenWidth - 64 
-      : selectedPeriod === 'month' 
-        ? screenWidth - 48
-        : screenWidth - 48;
-
-    return (
-      <Card style={styles.chartCard}>
-        <Card.Content>
-          <View style={styles.chartHeader}>
-            <Text style={styles.chartTitle}>Completion Trend</Text>
-            <Text style={styles.chartSubtitle}>
-              Track your daily habit completions
-            </Text>
-          </View>
-          
-          <View style={styles.periodSelector}>
-            {['week', 'month', 'year'].map(period => (
-              <Chip
-                key={period}
-                selected={selectedPeriod === period}
-                onPress={() => setSelectedPeriod(period)}
-                style={styles.periodChip}
-                textStyle={styles.periodChipText}
-              >
-                {period.charAt(0).toUpperCase() + period.slice(1)}
-              </Chip>
-            ))}
-          </View>
-
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={selectedPeriod !== 'week'}
-            style={styles.chartScrollView}
-          >
-            <LineChart
-              data={{
-                labels,
-                datasets: [{
-                  data,
-                  color: (opacity = 1) => `rgba(79, 70, 229, ${opacity})`,
-                  strokeWidth: 3
-                }],
-              }}
-              width={chartWidth}
-              height={240}
-              yAxisSuffix=" "
-              yAxisInterval={1}
-              chartConfig={{
-                ...chartConfig,
-                formatYLabel: (value) => Math.round(value).toString(),
-                propsForLabels: {
-                  fontSize: selectedPeriod === 'year' ? 8 : 9,
-                  fontWeight: '500'
-                }
-              }}
-              style={styles.chart}
-              bezier
-              fromZero
-              segments={Math.min(maxValue, 5)}
-              withInnerLines={true}
-              withOuterLines={true}
-              withVerticalLines={false}
-              withHorizontalLines={true}
-              withVerticalLabels={true}
-              withHorizontalLabels={true}
-            />
-          </ScrollView>
-          
-          <View style={styles.chartLegend}>
-            <Icon name="information-outline" size={16} color="#6b7280" />
-            <Text style={styles.chartLegendText}>
-              {selectedPeriod === 'week' 
-                ? 'Showing completed habits per day' 
-                : selectedPeriod === 'month'
-                  ? 'Showing last 30 days - scroll to see all'
-                  : 'Showing last 12 months - scroll to see all'}
-            </Text>
-          </View>
-        </Card.Content>
-      </Card>
-    );
-  };
-
-  const renderCategoryChart = () => {
-    if (!isPremium && !isAdmin) {
-      return (
-        <Card style={styles.chartCard}>
-          <Card.Content>
-            <Text style={styles.chartTitle}>Habits by Category</Text>
-            <View style={styles.premiumLock}>
-              <Icon name="lock" size={48} color="#9ca3af" />
-              <Text style={styles.premiumLockTitle}>Premium Feature</Text>
-              <Text style={styles.premiumLockText}>
-                Upgrade to Premium to view detailed category breakdowns
-              </Text>
-              <Button
-                mode="contained"
-                onPress={() => navigation.navigate('Premium')}
-                style={styles.premiumButton}
-              >
-                Upgrade to Premium
-              </Button>
-            </View>
-          </Card.Content>
-        </Card>
-      );
-    }
-  
-    const categoryData = getCategoryData();
-  
-    if (categoryData.length === 0) return null;
-
-    return (
-      <Card style={styles.chartCard}>
-        <Card.Content>
-          <Text style={styles.chartTitle}>Habits by Category</Text>
-        
-          <PieChart
-            data={categoryData}
-            width={screenWidth - 64}
-            height={220}
-            chartConfig={chartConfig}
-            accessor="population"
-            backgroundColor="transparent"
-            paddingLeft="15"
-            style={styles.chart}
-          />
-        </Card.Content>
-      </Card>
-    );
-  };
-
-  const renderStreakChart = () => {
-    const streakData = getStreakData();
-    
-    if (streakData.length === 0) return null;
-
-    return (
-      <Card style={styles.chartCard}>
-        <Card.Content>
-          <View style={styles.chartHeader}>
-            <Text style={styles.chartTitle}>Streak Comparison</Text>
-            {habits.length > 6 && (
-              <Text style={styles.chartSubtitle}>
-                Showing top 6 habits
-              </Text>
-            )}
-          </View>
-          
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            style={styles.chartScrollView}
-          >
-            <BarChart
-              data={{
-                labels: streakData.map(item => item.name),
-                datasets: [
-                  {
-                    data: streakData.map(item => item.current),
-                    color: (opacity = 1) => `rgba(79, 70, 229, ${opacity})`,
-                  },
-                  {
-                    data: streakData.map(item => item.best),
-                    color: (opacity = 1) => `rgba(16, 185, 129, ${opacity})`,
-                  }
-                ],
-              }}
-              width={Math.max(screenWidth - 64, streakData.length * 80)}
-              height={220}
-              chartConfig={{
-                ...chartConfig,
-                propsForLabels: {
-                  fontSize: 8,
-                  fontWeight: '500'
-                }
-              }}
-              style={styles.chart}
-              showBarTops={false}
-              fromZero
-            />
-          </ScrollView>
-          
-          <View style={styles.legend}>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendColor, { backgroundColor: '#4f46e5' }]} />
-              <Text style={styles.legendText}>Current Streak</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendColor, { backgroundColor: '#10b981' }]} />
-              <Text style={styles.legendText}>Best Streak</Text>
-            </View>
-          </View>
-        </Card.Content>
-      </Card>
-    );
-  };
-
-  // ✅ CHANGED: Only show spinner if we're loading AND have no cached data
-  if (loading && habits.length === 0) {
-    return (
-      <View style={styles.loadingContainer}>
-        <Icon name="loading" size={40} color="#4f46e5" />
-        <Text style={styles.loadingText}>Loading statistics...</Text>
-      </View>
-    );
-  }
+      <Text style={styles.metricValue}>{value}</Text>
+      <Text style={styles.metricLabel}>{label}</Text>
+    </Card>
+  );
 
   return (
     <View style={styles.container}>
-      <Appbar.Header>
-        <Appbar.Content title="Statistics" />
+      <Appbar.Header style={styles.header}>
+        <Appbar.Content
+          title="Statistics"
+          subtitle="Readable, no clipped text"
+        />
+        <Appbar.Action
+          icon="crown-outline"
+          onPress={() => navigation.getParent()?.navigate("Premium")}
+        />
       </Appbar.Header>
 
       <ScrollView
-        style={styles.content}
-        contentContainerStyle={{
-          paddingBottom: tabBarTotalHeight + 20
-        }}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: tabBarTotalHeight + 70 },
+        ]}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              loadStats(true);
+            }}
+          />
         }
         showsVerticalScrollIndicator={false}
       >
-        {habits.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Icon name="chart-line" size={80} color="#9ca3af" />
-            <Text style={styles.emptyTitle}>No Data Yet</Text>
-            <Text style={styles.emptySubtitle}>
-              Create some habits and complete them to see your statistics!
-            </Text>
-            <Button
-              mode="contained"
-              onPress={() => navigation.navigate('Home')}
-              style={styles.emptyButton}
-            >
-              Go to Habits
-            </Button>
+        {showGuide ? (
+          <TipCard
+            title="How to read this screen"
+            description="The top cards answer ‘how am I doing now?’, the review section explains patterns, and Premium reveals deeper breakdowns without hiding the upgrade path."
+            onDismiss={async () => {
+              await TipsService.markGuideSeen("statistics_overview");
+              setShowGuide(false);
+            }}
+            onStopTips={async () => {
+              await TipsService.setTipsEnabled(false);
+              setShowGuide(false);
+            }}
+            style={styles.sectionSpacing}
+          />
+        ) : null}
+
+        <View style={styles.metricsGrid}>
+          {renderOverviewCard(
+            "check-circle-outline",
+            "Total completions",
+            totalCompletions,
+            "#4f46e5",
+          )}
+          {renderOverviewCard(
+            "calendar-check-outline",
+            "Due today",
+            todayProgress.dueToday,
+            "#10b981",
+          )}
+          {renderOverviewCard(
+            "chart-line",
+            "Consistency score",
+            `${consistencyScore}%`,
+            "#f59e0b",
+          )}
+          {renderOverviewCard("fire", "Best streak", bestStreak, "#ef4444")}
+        </View>
+
+        <Card style={styles.sectionCard}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Weekly review</Text>
+            <Chip compact style={styles.sectionChip}>
+              Auto readable
+            </Chip>
           </View>
+          <View style={styles.reviewGrid}>
+            <View style={styles.reviewTile}>
+              <Text style={styles.reviewLabel}>Best day</Text>
+              <Text style={styles.reviewValue}>{bestDay}</Text>
+            </View>
+            <View style={styles.reviewTile}>
+              <Text style={styles.reviewLabel}>Most used category</Text>
+              <Text style={styles.reviewValue}>{topCategory}</Text>
+            </View>
+            <View style={styles.reviewTile}>
+              <Text style={styles.reviewLabel}>Today completion</Text>
+              <Text style={styles.reviewValue}>{todayProgress.percent}%</Text>
+            </View>
+            <View style={styles.reviewTile}>
+              <Text style={styles.reviewLabel}>Active habits</Text>
+              <Text style={styles.reviewValue}>{habits.length}</Text>
+            </View>
+          </View>
+        </Card>
+
+        <Card style={styles.sectionCard}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Last 7 days</Text>
+            <Text style={styles.sectionDescription}>
+              Simple bars instead of cramped charts.
+            </Text>
+          </View>
+          <View style={styles.barChartWrap}>
+            {sevenDaySeries.values.map((value, index) => {
+              const maxValue = Math.max(...sevenDaySeries.values, 1);
+              const heightPercent = `${Math.max(10, (value / maxValue) * 100)}%`;
+              return (
+                <View
+                  key={`${sevenDaySeries.labels[index]}_${index}`}
+                  style={styles.barItem}
+                >
+                  <Text style={styles.barValue}>{value}</Text>
+                  <View style={styles.barTrack}>
+                    <View style={[styles.barFill, { height: heightPercent }]} />
+                  </View>
+                  <Text style={styles.barLabel}>
+                    {sevenDaySeries.labels[index]}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        </Card>
+
+        {!isPremium && !isAdmin ? (
+          <PremiumFeatureCard
+            title="Advanced insights stay visible"
+            description="Free users can preview what Premium unlocks: category distribution, stronger weekly review suggestions, and deeper trend summaries."
+            bullets={[
+              "Category breakdown and comparisons",
+              "Premium-only smart review cards",
+              "Ad-free analytics screen",
+            ]}
+            onPress={() => navigation.getParent()?.navigate("Premium")}
+            style={styles.sectionSpacing}
+          />
         ) : (
-          <>
-            {renderOverviewCards()}
-            {renderCompletionChart()}
-            {renderCategoryChart()}
-            {renderStreakChart()}
-          </>
+          <Card style={styles.sectionCard}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Category breakdown</Text>
+              <Chip compact style={styles.sectionChip}>
+                Premium
+              </Chip>
+            </View>
+            {categoryEntries.length === 0 ? (
+              <Text style={styles.sectionDescription}>
+                No category data yet.
+              </Text>
+            ) : (
+              categoryEntries.map(([category, count]) => {
+                const total = habits.length || 1;
+                const width = `${Math.max(12, (count / total) * 100)}%`;
+                return (
+                  <View key={category} style={styles.categoryRow}>
+                    <View style={styles.categoryTextWrap}>
+                      <Text style={styles.categoryName}>{category}</Text>
+                      <Text style={styles.categoryValue}>{count} habits</Text>
+                    </View>
+                    <View style={styles.categoryTrack}>
+                      <View style={[styles.categoryFill, { width }]} />
+                    </View>
+                  </View>
+                );
+              })
+            )}
+          </Card>
         )}
+
+        <Card style={styles.sectionCard}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Consistency heatmap</Text>
+            <Text style={styles.sectionDescription}>56 days of activity.</Text>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={styles.heatmapRow}>
+              {heatmapColumns.map((week, weekIndex) => (
+                <View key={`week_${weekIndex}`} style={styles.heatmapWeek}>
+                  {week.map((cell) => (
+                    <View
+                      key={cell.key}
+                      style={[
+                        styles.heatmapCell,
+                        cell.intensity === 0 && styles.heatmap0,
+                        cell.intensity === 1 && styles.heatmap1,
+                        cell.intensity === 2 && styles.heatmap2,
+                        cell.intensity === 3 && styles.heatmap3,
+                        cell.intensity >= 4 && styles.heatmap4,
+                      ]}
+                    />
+                  ))}
+                </View>
+              ))}
+            </View>
+          </ScrollView>
+          <View style={styles.legendRow}>
+            <Text style={styles.legendText}>Less</Text>
+            {[0, 1, 2, 3, 4].map((level) => (
+              <View
+                key={level}
+                style={[
+                  styles.legendDot,
+                  level === 0 && styles.heatmap0,
+                  level === 1 && styles.heatmap1,
+                  level === 2 && styles.heatmap2,
+                  level === 3 && styles.heatmap3,
+                  level === 4 && styles.heatmap4,
+                ]}
+              />
+            ))}
+            <Text style={styles.legendText}>More</Text>
+          </View>
+        </Card>
+
+        {!isPremium && !isOffline ? (
+          <View style={styles.sectionSpacing}>
+            <AdMobBanner />
+          </View>
+        ) : null}
+
+        {!isPremium && isOffline ? (
+          <View style={styles.sectionSpacing}>
+            <OfflineAdCard />
+          </View>
+        ) : null}
+
+        <Button
+          mode="contained-tonal"
+          onPress={() => navigation.navigate("Settings")}
+        >
+          Manage tips, reminders, and rate prompt
+        </Button>
       </ScrollView>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-  },
-  content: {
-    flex: 1,
-  },
-  offlineBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#ef4444',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    marginBottom: 12,
-    width: '100%',
-  },
-  offlineText: {
-    color: '#ffffff',
-    fontSize: 13,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  overviewContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    padding: 16,
+  container: { flex: 1, backgroundColor: "#f8fafc" },
+  header: { backgroundColor: "#f8fafc" },
+  content: { padding: 16 },
+  sectionSpacing: { marginBottom: 16 },
+  metricsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 12,
-  },
-  overviewCard: {
-    flex: 1,
-    minWidth: (screenWidth - 56) / 2,
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  overviewGradient: {
-    padding: 16,
-    alignItems: 'center',
-  },
-  overviewValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#ffffff',
-    marginTop: 8,
-  },
-  overviewLabel: {
-    fontSize: 12,
-    color: '#ffffff',
-    opacity: 0.9,
-    marginTop: 4,
-  },
-  chartCard: {
-    margin: 16,
-    marginVertical: 8,
-  },
-  chartTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1f2937',
-    marginBottom: 4,
-  },
-  periodSelector: {
-    flexDirection: 'row',
-    gap: 8,
     marginBottom: 16,
-    marginTop: 8,
   },
-  periodChip: {
-    flex: 1,
+  metricCard: {
+    width: "47%",
+    minWidth: 150,
+    borderRadius: 20,
+    padding: 16,
+    backgroundColor: "#ffffff",
   },
-  periodChipText: {
-    fontSize: 12,
+  metricIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
   },
-  chart: {
-    borderRadius: 8,
+  metricValue: { fontSize: 22, fontWeight: "800", color: "#111827" },
+  metricLabel: { marginTop: 6, fontSize: 13, color: "#6b7280", lineHeight: 19 },
+  sectionCard: {
+    borderRadius: 22,
+    padding: 16,
+    backgroundColor: "#ffffff",
+    marginBottom: 16,
   },
-  chartScrollView: {
-    marginHorizontal: -8,
-  },
-  legend: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 20,
-    marginTop: 16,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  legendColor: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 6,
-  },
-  legendText: {
-    fontSize: 11,
-    color: '#6b7280',
-  },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 40,
-    marginTop: 100,
-  },
-  emptyTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1f2937',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptySubtitle: {
-    fontSize: 16,
-    color: '#6b7280',
-    textAlign: 'center',
-    marginBottom: 32,
-  },
-  emptyButton: {
-    paddingHorizontal: 20,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f8fafc',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#6b7280',
-  },
-  chartHeader: {
-    marginBottom: 8,
-  },
-  chartSubtitle: {
+  sectionHeader: { marginBottom: 14 },
+  sectionTitle: { fontSize: 19, fontWeight: "800", color: "#111827" },
+  sectionDescription: {
+    marginTop: 4,
     fontSize: 13,
-    color: '#6b7280',
-    marginTop: 2,
+    color: "#6b7280",
+    lineHeight: 19,
   },
-  chartLegend: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
+  sectionChip: {
+    alignSelf: "flex-start",
+    marginTop: 8,
+    backgroundColor: "#eef2ff",
   },
-  chartLegendText: {
-    fontSize: 11,
-    color: '#6b7280',
-    marginLeft: 6,
-    flex: 1,
+  reviewGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
+  reviewTile: {
+    width: "47%",
+    minWidth: 150,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: "#f8fafc",
   },
-  premiumLock: {
-    alignItems: 'center',
-    padding: 40,
+  reviewLabel: {
+    fontSize: 12,
+    color: "#6b7280",
+    fontWeight: "700",
+    textTransform: "uppercase",
   },
-  premiumLockTitle: {
+  reviewValue: {
+    marginTop: 8,
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1f2937',
-    marginTop: 16,
-    marginBottom: 8,
+    fontWeight: "800",
+    color: "#111827",
   },
-  premiumLockText: {
+  barChartWrap: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    gap: 10,
+    minHeight: 180,
+  },
+  barItem: { flex: 1, alignItems: "center" },
+  barValue: { fontSize: 12, color: "#6b7280", marginBottom: 6 },
+  barTrack: {
+    width: 22,
+    height: 110,
+    borderRadius: 999,
+    backgroundColor: "#e5e7eb",
+    justifyContent: "flex-end",
+    overflow: "hidden",
+  },
+  barFill: {
+    width: "100%",
+    borderRadius: 999,
+    backgroundColor: "#4f46e5",
+  },
+  barLabel: { marginTop: 8, fontSize: 12, color: "#374151", fontWeight: "700" },
+  categoryRow: { marginBottom: 12 },
+  categoryTextWrap: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 6,
+  },
+  categoryName: {
     fontSize: 14,
-    color: '#6b7280',
-    textAlign: 'center',
-    marginBottom: 20,
+    fontWeight: "700",
+    color: "#111827",
+    textTransform: "capitalize",
   },
-  premiumButton: {
-    backgroundColor: '#4f46e5',
+  categoryValue: { fontSize: 12, color: "#6b7280" },
+  categoryTrack: {
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: "#e5e7eb",
+    overflow: "hidden",
   },
+  categoryFill: {
+    height: "100%",
+    backgroundColor: "#7c3aed",
+    borderRadius: 999,
+  },
+  heatmapRow: { flexDirection: "row", gap: 6 },
+  heatmapWeek: { gap: 6 },
+  heatmapCell: { width: 18, height: 18, borderRadius: 5 },
+  heatmap0: { backgroundColor: "#e5e7eb" },
+  heatmap1: { backgroundColor: "#c7d2fe" },
+  heatmap2: { backgroundColor: "#a5b4fc" },
+  heatmap3: { backgroundColor: "#818cf8" },
+  heatmap4: { backgroundColor: "#4f46e5" },
+  legendRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 12,
+  },
+  legendText: { fontSize: 12, color: "#6b7280" },
+  legendDot: { width: 14, height: 14, borderRadius: 4 },
 });
 
 export default StatisticsScreen;

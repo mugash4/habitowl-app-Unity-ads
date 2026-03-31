@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -6,787 +6,737 @@ import {
   ScrollView,
   RefreshControl,
   Alert,
-  Animated,
-  StatusBar,
-  TouchableOpacity
-} from 'react-native';
-import { FAB, Appbar, Button, Card, Chip, Banner } from 'react-native-paper';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect } from '@react-navigation/native';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { useTabBarHeight } from '../hooks/useTabBarHeight';
+} from "react-native";
+import { Appbar, Button, Card, Chip, FAB, Searchbar } from "react-native-paper";
+import { LinearGradient } from "expo-linear-gradient";
+import { useFocusEffect } from "@react-navigation/native";
+import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 
-import HabitCard from '../components/HabitCard';
-import AdMobBanner from '../components/AdMobBanner';
-import FirebaseService from '../services/FirebaseService';
-import NotificationService from '../services/NotificationService';
-import adMobService from '../services/AdMobService';
-import AIService from '../services/AIService';
+import HabitCard from "../components/HabitCard";
+import AdMobBanner from "../components/AdMobBanner";
+import TipCard from "../components/TipCard";
+import PremiumFeatureCard from "../components/PremiumFeatureCard";
+import CelebrationModal from "../components/CelebrationModal";
+import OfflineAdCard from "../components/OfflineAdCard";
+import FirebaseService from "../services/FirebaseService";
+import NotificationService from "../services/NotificationService";
+import TipsService from "../services/TipsService";
+import RateAppService from "../services/RateAppService";
+import HabitTemplateService from "../services/HabitTemplateService";
+import { useTabBarHeight } from "../hooks/useTabBarHeight";
+import {
+  sortHabitsForDashboard,
+  getTodayProgress,
+  getSuccessMessageForStreak,
+  isHabitDueOnDate,
+} from "../utils/habitHelpers";
 
-const HomeScreen = ({ navigation, route }) => {
+const FREE_HABIT_LIMIT = 5;
+
+const HomeScreen = ({ navigation }) => {
   const [habits, setHabits] = useState([]);
-  const [loading, setLoading] = useState(false); // ✅ CHANGED: Start with false for instant display
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [todayCompletions, setTodayCompletions] = useState(new Set());
-  const [motivationalMessage, setMotivationalMessage] = useState('');
-  const [fadeAnim] = useState(new Animated.Value(1)); // ✅ CHANGED: Start with 1 (visible)
-  const [screenKey, setScreenKey] = useState(0);
+  const [searchQuery, setSearchQuery] = useState("");
   const [isPremium, setIsPremium] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
+  const [showTemplateTip, setShowTemplateTip] = useState(false);
+  const [celebration, setCelebration] = useState({
+    visible: false,
+    title: "",
+    subtitle: "",
+    badge: "",
+  });
 
   const { totalHeight: tabBarTotalHeight } = useTabBarHeight();
 
-  // ✅ NEW: Load cached data FIRST on mount (instant display)
-  useEffect(() => {
-    loadCachedDataFirst();
+  const templates = HabitTemplateService.getTemplates();
+
+  const loadDashboard = useCallback(async (forceRefresh = false) => {
+    try {
+      if (!forceRefresh) {
+        const cached = await FirebaseService.getCachedHabits();
+        if (cached?.length) {
+          setHabits(sortHabitsForDashboard(cached));
+          setLoading(false);
+        }
+      }
+
+      const [userHabits, userStats] = await Promise.all([
+        FirebaseService.getUserHabits(forceRefresh),
+        FirebaseService.getUserStats(),
+      ]);
+
+      let adminStatus = false;
+      const currentUser = FirebaseService.currentUser;
+      if (currentUser?.email) {
+        const AdminService = require("../services/AdminService").default;
+        adminStatus = await AdminService.checkAdminStatus(currentUser.email);
+      }
+
+      setHabits(sortHabitsForDashboard(userHabits || []));
+      setIsPremium(!!userStats?.isPremium || adminStatus);
+      setIsAdmin(adminStatus);
+      setIsOffline(false);
+    } catch (error) {
+      console.error("Home load error:", error);
+      setIsOffline(true);
+      const fallback = await FirebaseService.getCachedHabits();
+      setHabits(sortHabitsForDashboard(fallback || []));
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, []);
+
+  const loadTips = useCallback(async () => {
+    const [seenHomeGuide, showTemplatesTip] = await Promise.all([
+      TipsService.hasSeenGuide("home_overview"),
+      TipsService.shouldShowTip("home_templates"),
+    ]);
+    setShowGuide(!seenHomeGuide);
+    setShowTemplateTip(showTemplatesTip);
+  }, []);
+
+  useEffect(() => {
+    loadDashboard();
+    loadTips();
+  }, [loadDashboard, loadTips]);
 
   useFocusEffect(
     useCallback(() => {
-      console.log('🔄 HomeScreen FOCUSED - Reloading habits...');
-      
-      let isActive = true;
-      
-      const reloadData = async () => {
-        try {
-          // ✅ CHANGED: Don't set loading=true, just refresh data silently
-          await loadHabits(false, isActive); // Use cache first
-          
-          if (isActive) {
-            Animated.timing(fadeAnim, {
-              toValue: 1,
-              duration: 300,
-              useNativeDriver: true,
-            }).start();
-          }
-        } catch (error) {
-          console.error('Error reloading habits:', error);
-        }
-      };
-      
-      reloadData();
-      
-      return () => {
-        console.log('👋 HomeScreen BLURRED - Cleaning up');
-        isActive = false;
-      };
-    }, [screenKey])
+      loadDashboard();
+    }, [loadDashboard]),
   );
 
-  // ✅ NEW: Load cached data first for INSTANT display
-  const loadCachedDataFirst = async () => {
-    try {
-      console.log('⚡ HomeScreen: Loading cached data FIRST...');
-      
-      // Get cached habits immediately
-      const cachedHabits = await FirebaseService.getCachedHabits();
-      
-      if (cachedHabits && cachedHabits.length > 0) {
-        console.log(`⚡ HomeScreen: Displaying ${cachedHabits.length} cached habits INSTANTLY`);
-        
-        // Display cached data immediately (NO loading spinner)
-        setHabits(cachedHabits);
-        
-        // Calculate completions from cache
-        const today = new Date().toDateString();
-        const completedToday = new Set();
-        cachedHabits.forEach(habit => {
-          if (habit.completions && habit.completions.includes(today)) {
-            completedToday.add(habit.id);
-          }
-        });
-        setTodayCompletions(completedToday);
-        
-        // Load motivational message if we have habits
-        if (cachedHabits.length > 0) {
-          loadMotivationalMessage(cachedHabits, completedToday);
-        }
-        
-        // Try to get premium status from cache too
-        try {
-          const userStats = await FirebaseService.getUserStats();
-          if (userStats?.isPremium) {
-            setIsPremium(true);
-          }
-        } catch (error) {
-          // Ignore errors, will be updated in background sync
-        }
-        
-        // ✅ Now sync fresh data in background (without blocking UI)
-        loadHabits(false, true);
-      } else {
-        // No cache, load normally
-        console.log('⚠️ No cached data, loading from server...');
-        setLoading(true);
-        await loadHabits(false, true);
-        setLoading(false);
-      }
-    } catch (error) {
-      console.error('Error loading cached data:', error);
-      // Fall back to normal loading
-      setLoading(true);
-      await loadHabits(false, true);
-      setLoading(false);
-    }
+  const filteredHabits = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return habits;
+    return habits.filter((habit) => {
+      const haystack =
+        `${habit.name} ${habit.description || ""} ${habit.category || ""}`.toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [habits, searchQuery]);
+
+  const dueTodayHabits = useMemo(
+    () => filteredHabits.filter((habit) => isHabitDueOnDate(habit)),
+    [filteredHabits],
+  );
+  const laterHabits = useMemo(
+    () => filteredHabits.filter((habit) => !isHabitDueOnDate(habit)),
+    [filteredHabits],
+  );
+  const todayProgress = useMemo(() => getTodayProgress(habits), [habits]);
+  const completedTodayCount = dueTodayHabits.filter((habit) =>
+    (habit.completions || []).includes(new Date().toDateString()),
+  ).length;
+  const bestStreak = habits.reduce(
+    (best, habit) => Math.max(best, habit.longestStreak || 0),
+    0,
+  );
+
+  const handleStopTips = async () => {
+    await TipsService.setTipsEnabled(false);
+    setShowGuide(false);
+    setShowTemplateTip(false);
   };
 
-  const loadHabits = async (forceReload = false, isActive = true) => {
-    try {
-      if (forceReload) {
-        setLoading(true);
-      }
-    
-      console.log('📱 Fetching habits...');
-      
-      // Get habits (will use cache if available)
-      const userHabits = await FirebaseService.getUserHabits(forceReload);
-    
-      const userStats = await FirebaseService.getUserStats();
-      let premiumStatus = userStats?.isPremium || false;
-    
-      if (!premiumStatus) {
-        const user = FirebaseService.currentUser;
-        if (user && user.email) {
-          const AdminService = require('../services/AdminService').default;
-          const isAdmin = await AdminService.checkAdminStatus(user.email);
-          if (isAdmin) {
-            console.log('✅ Admin detected, granting premium access');
-            premiumStatus = true;
-            await FirebaseService.updateUserPremiumStatus(true);
-          }
-        }
-      }
-    
-      if (!isActive) {
-        console.log('⚠️ Component unmounted, skipping state update');
-        return;
-      }
-    
-      console.log(`✅ Loaded ${userHabits ? userHabits.length : 0} habits`);
-      console.log(`Premium status: ${premiumStatus}`);
-      
-      setIsOffline(false);
-    
-      if (userHabits && Array.isArray(userHabits)) {
-        console.log('📝 Setting habits:', userHabits.map(h => h.name).join(', '));
-      
-        setHabits(userHabits);
-        setIsPremium(premiumStatus);
-      
-        const today = new Date().toDateString();
-        const completedToday = new Set();
-      
-        userHabits.forEach(habit => {
-          if (habit.completions && habit.completions.includes(today)) {
-            completedToday.add(habit.id);
-          }
-        });
-      
-        setTodayCompletions(completedToday);
-      
-        if (userHabits.length > 0) {
-          loadMotivationalMessage(userHabits, completedToday);
-        } else {
-          setMotivationalMessage('');
-        }
-      } else {
-        console.log('⚠️ No habits found, setting empty array');
-        setHabits([]);
-        setTodayCompletions(new Set());
-        setMotivationalMessage('');
-        setIsPremium(premiumStatus);
-      }
-    
-    } catch (error) {
-      console.error('❌ Error loading habits:', error);
-    
-      if (isActive) {
-        if (error.message && (error.message.includes('network') || error.message.includes('offline'))) {
-          setIsOffline(true);
-          console.log('📡 Offline mode detected');
-        }
-        
-        // Don't clear habits on error - keep cached data
-        if (habits.length === 0) {
-          setHabits([]);
-          setTodayCompletions(new Set());
-          setMotivationalMessage('');
-        }
-      }
-    } finally {
-      if (isActive) {
-        setLoading(false);
-        setRefreshing(false);
-      }
-    }
+  const handleDismissHomeGuide = async () => {
+    await TipsService.markGuideSeen("home_overview");
+    setShowGuide(false);
   };
 
-  const loadMotivationalMessage = async (userHabits, completedToday) => {
-    try {
-      const timeOfDay = getTimeOfDay();
-      const totalHabits = userHabits.length;
-      const completedHabits = completedToday.size;
-      
-      const message = await AIService.generateMotivationalMessage(
-        { name: 'daily routine', totalHabits, completedHabits },
-        Math.max(...userHabits.map(h => h.currentStreak || 0)),
-        timeOfDay
-      );
-      setMotivationalMessage(message || '');
-    } catch (error) {
-      console.error('Error loading motivational message:', error);
-      setMotivationalMessage('');
-    }
-  };
-
-  const getTimeOfDay = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'morning';
-    if (hour < 17) return 'afternoon';
-    return 'evening';
-  };
-
-  const onRefresh = async () => {
-    console.log('🔄 Manual refresh triggered');
-    setRefreshing(true);
-    setScreenKey(prev => prev + 1);
-    
-    try {
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
-      // Force refresh from server
-      await loadHabits(true);
-      
-      console.log('[Refresh] Checking ad eligibility - isPremium:', isPremium);
-      
-      if (!isPremium) {
-        const status = adMobService.getStatus();
-        if (!status.isPremium && !status.isAdmin && status.shouldShowAds) {
-          console.log('[Refresh] 💰 FREE user confirmed - showing interstitial ad after refresh');
-          
-          setTimeout(async () => {
-            try {
-              const adShown = await adMobService.showInterstitialAd('homescreen_refresh');
-              if (adShown) {
-                console.log('[Refresh] ✅ Interstitial ad shown successfully');
-              } else {
-                console.log('[Refresh] ⏳ Interstitial ad not ready or cooldown active');
-              }
-            } catch (error) {
-              console.log('[Refresh] ❌ Error showing ad:', error.message);
-            }
-          }, 800);
-        } else {
-          console.log('[Refresh] 👑 Premium/Admin user - no ads after refresh');
-        }
-      } else {
-        console.log('[Refresh] 👑 Premium user - no ads after refresh');
-      }
-    } catch (error) {
-      console.error('[Refresh] Error:', error);
-    }
-  };
-
-  const handleHabitComplete = async (habit, isNowCompleted) => {
-    try {
-      const newCompletions = new Set(todayCompletions);
-      if (isNowCompleted) {
-        newCompletions.add(habit.id);
-      
-        const newStreak = (habit.currentStreak || 0) + 1;
-        if ([3, 7, 14, 30, 60, 100].includes(newStreak)) {
-          await NotificationService.scheduleStreakCelebration(habit, newStreak);
-        }
-      
-        console.log('[Home] Checking ad eligibility - isPremium:', isPremium);
-      
-        if (!isPremium) {
-          const status = adMobService.getStatus();
-          if (!status.isPremium && !status.isAdmin) {
-            console.log('[Home] FREE user confirmed - will show ad after habit completion');
-            setTimeout(async () => {
-              try {
-                await adMobService.showInterstitialAd('habit_completion');
-              } catch (error) {
-                console.log('[Home] Ad not shown:', error);
-              }
-            }, 1000);
-          } else {
-            console.log('[Home] 👑 Premium/Admin status detected by AdMobService - no ads');
-          }
-        } else {
-          console.log('[Home] 👑 Premium user - no ads after habit completion');
-        }
-      } else {
-        newCompletions.delete(habit.id);
-      }
-    
-      setTodayCompletions(newCompletions);
-    
-      setScreenKey(prev => prev + 1);
-      await loadHabits(false); // Use cache for faster update
-    
-    } catch (error) {
-      Alert.alert('Error', error.message);
-      setScreenKey(prev => prev + 1);
-      await loadHabits(false);
-    }
+  const openPremium = () => {
+    navigation.getParent()?.navigate("Premium");
   };
 
   const handleCreateHabit = async () => {
-    const FREE_HABIT_LIMIT = 5;
-    
-    if (!isPremium && habits.length >= FREE_HABIT_LIMIT) {
+    const stats = await FirebaseService.getUserStats();
+    const hasPremiumAccess = !!stats?.isPremium || isAdmin;
+    const currentHabits = await FirebaseService.getUserHabits();
+
+    if (!hasPremiumAccess && currentHabits.length >= FREE_HABIT_LIMIT) {
       Alert.alert(
-        '🔒 Upgrade to Premium',
-        `Free users can create up to ${FREE_HABIT_LIMIT} habits. You currently have ${habits.length} habits.\n\nUpgrade to Premium to create unlimited habits and unlock all features!`,
+        "Free plan limit reached",
+        "You can keep tracking your current habits, or upgrade to Premium to create unlimited habits.",
         [
-          {
-            text: 'Not Now',
-            style: 'cancel'
-          },
-          {
-            text: 'Upgrade to Premium',
-            onPress: () => {
-              navigation.navigate('Premium');
-            }
-          }
-        ]
+          { text: "Not now", style: "cancel" },
+          { text: "See Premium", onPress: openPremium },
+        ],
       );
       return;
     }
-    
-    console.log('📝 Navigating to CreateHabit screen');
-    navigation.navigate('CreateHabit');
+
+    navigation.getParent()?.navigate("CreateHabit");
   };
 
-  const handleEditHabit = (habit) => {
-    navigation.navigate('EditHabit', { 
-      habit,
-      onGoBack: () => {
-        console.log('🔄 Returned from EditHabit - forcing reload');
-        setScreenKey(prev => prev + 1);
-      }
-    });
+  const handleCreateFromTemplate = async (template) => {
+    if (template.premiumOnly && !isPremium && !isAdmin) {
+      Alert.alert(
+        "Premium template",
+        `${template.title} is visible to free users so they can preview it. Upgrade to add it instantly.`,
+      );
+      return openPremium();
+    }
+
+    const habitData = {
+      name: template.title,
+      description: template.description,
+      category: template.category,
+      difficulty: template.difficulty,
+      estimatedTime: template.estimatedTime,
+      scheduleType: template.scheduleType,
+      selectedDays: template.selectedDays || [],
+      weeklyTarget: template.weeklyTarget || 3,
+      cue: template.cue || "",
+      location: template.location || "",
+      reward: template.reward || "",
+      reminderEnabled: false,
+      reminderTime: null,
+      reminderMessage: null,
+      templateId: template.id,
+      isPremiumTemplate: !!template.premiumOnly,
+    };
+
+    try {
+      await FirebaseService.createHabit(habitData);
+      await FirebaseService.trackEvent("template_created", {
+        templateId: template.id,
+        premium: !!template.premiumOnly,
+      });
+      await RateAppService.trackPositiveMoment(1);
+      loadDashboard(true);
+      Alert.alert("Added", `${template.title} was added to your habits.`);
+    } catch (error) {
+      Alert.alert(
+        "Could not add template",
+        error.message || "Please try again.",
+      );
+    }
   };
 
   const handleDeleteHabit = async (habitId) => {
     try {
       await FirebaseService.deleteHabit(habitId);
-      setScreenKey(prev => prev + 1);
-      await loadHabits(false); // Use cache for faster update
+      await NotificationService.cancelHabitNotifications(habitId);
+      await loadDashboard(true);
     } catch (error) {
-      Alert.alert('Error', 'Failed to delete habit');
+      Alert.alert("Delete failed", error.message || "Please try again.");
     }
   };
 
-  const getCompletionRate = () => {
-    if (habits.length === 0) return 0;
-    return Math.round((todayCompletions.size / habits.length) * 100);
+  const handleHabitComplete = async (habit, nextCompleted, result = {}) => {
+    await loadDashboard(true);
+
+    if (!nextCompleted) {
+      return;
+    }
+
+    const newStreak = result?.newStreak || 0;
+    const milestones = [3, 7, 14, 30, 60, 100, 365];
+    const dueNow = await FirebaseService.getUserHabits();
+    const progress = getTodayProgress(dueNow);
+
+    if (milestones.includes(newStreak)) {
+      NotificationService.scheduleStreakCelebration(habit, newStreak).catch(
+        () => {},
+      );
+      setCelebration({
+        visible: true,
+        title: `${habit.name} milestone!`,
+        subtitle: getSuccessMessageForStreak(newStreak),
+        badge: `${newStreak} streak`,
+      });
+      await RateAppService.trackPositiveMoment(2);
+    } else if (
+      progress.dueToday > 0 &&
+      progress.completedToday === progress.dueToday
+    ) {
+      setCelebration({
+        visible: true,
+        title: "Today complete 🎯",
+        subtitle:
+          "You finished every habit scheduled for today. Great job keeping the day clean and simple.",
+        badge: "All due habits done",
+      });
+      await RateAppService.trackPositiveMoment(2);
+    } else {
+      await RateAppService.trackPositiveMoment(1);
+    }
+
+    await RateAppService.promptIfEligible();
   };
 
-  const getStreakStats = () => {
-    if (habits.length === 0) return { current: 0, best: 0 };
-    
-    const currentStreaks = habits.map(h => h.currentStreak || 0);
-    const longestStreaks = habits.map(h => h.longestStreak || 0);
-    
-    return {
-      current: Math.max(...currentStreaks, 0),
-      best: Math.max(...longestStreaks, 0)
-    };
-  };
+  const renderTemplates = () => (
+    <View style={styles.section}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Starter packs</Text>
+        <Chip compact icon="wand-sparkles" style={styles.sectionChip}>
+          One tap
+        </Chip>
+      </View>
 
-  const shouldRenderInlineBanner = (index) => {
-    if (isPremium) return false;
-    if (habits.length < 2) return false;
-    return (index + 1) % 2 === 0 && index < habits.length - 1;
-  };
+      {showTemplateTip ? (
+        <TipCard
+          title="Start faster with templates"
+          description="Use these proven starter packs when you want a habit that feels realistic from day one."
+          onDismiss={async () => {
+            await TipsService.dismissTip("home_templates");
+            setShowTemplateTip(false);
+          }}
+          onStopTips={handleStopTips}
+          style={styles.tipSpacing}
+        />
+      ) : null}
 
-  const renderHeader = () => {
-    const completionRate = getCompletionRate();
-    const streakStats = getStreakStats();
-    const user = FirebaseService.currentUser;
-    const displayName = user?.displayName || 'there';
-    
-    return (
-      <LinearGradient colors={['#4f46e5', '#7c3aed']} style={styles.header}>
-        <View style={styles.headerContent}>
-          {isOffline && (
-            <View style={styles.offlineBanner}>
-              <Icon name="wifi-off" size={16} color="#ffffff" />
-              <Text style={styles.offlineText}>Offline Mode - Using cached data</Text>
-            </View>
-          )}
-          
-          <View style={styles.greetingContainer}>
-            <Text style={styles.greeting}>
-              Good {getTimeOfDay()}, {displayName}! 👋
-            </Text>
-          </View>
-          
-          {motivationalMessage ? (
-            <View style={styles.messageContainer}>
-              <Text style={styles.motivationalMessage}>
-                {motivationalMessage}
-              </Text>
-            </View>
-          ) : null}
-          
-          {!isPremium && (
-            <TouchableOpacity 
-              style={styles.limitBanner}
-              onPress={() => navigation.navigate('Premium')}
-              activeOpacity={0.8}
-            >
-              <Icon name="crown" size={16} color="#f59e0b" />
-              <Text style={styles.limitText}>
-                {habits.length}/5 habits • Upgrade for unlimited
-              </Text>
-              <Icon name="chevron-right" size={16} color="#ffffff" />
-            </TouchableOpacity>
-          )}
-          
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{completionRate}%</Text>
-              <Text style={styles.statLabel}>Today</Text>
-            </View>
-            
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{streakStats.current}</Text>
-              <Text style={styles.statLabel}>Current Streak</Text>
-            </View>
-            
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{streakStats.best}</Text>
-              <Text style={styles.statLabel}>Best Streak</Text>
-            </View>
-            
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{habits.length}</Text>
-              <Text style={styles.statLabel}>Total Habits</Text>
-            </View>
-          </View>
-        </View>
-      </LinearGradient>
-    );
-  };
-
-  const renderEmptyState = () => (
-    <View style={styles.emptyState}>
-      <Icon name="target" size={80} color="#9ca3af" />
-      <Text style={styles.emptyTitle}>No habits yet!</Text>
-      <Text style={styles.emptySubtitle}>
-        Create your first habit and start building a better you
-      </Text>
-      {!isPremium && (
-        <Text style={styles.emptyLimit}>
-          Free users can create up to 5 habits
-        </Text>
-      )}
-      <Button
-        mode="contained"
-        onPress={handleCreateHabit}
-        style={styles.emptyButton}
-        labelStyle={styles.emptyButtonLabel}
-        icon="plus"
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.templateRow}
       >
-        Create Your First Habit
-      </Button>
+        {templates.map((template) => {
+          const locked = template.premiumOnly && !isPremium && !isAdmin;
+          return (
+            <Card
+              key={template.id}
+              style={[styles.templateCard, locked && styles.templateCardLocked]}
+            >
+              <View style={styles.templateBadgeRow}>
+                <Chip
+                  compact
+                  style={styles.smallChip}
+                  textStyle={styles.smallChipText}
+                >
+                  {template.category}
+                </Chip>
+                {locked ? (
+                  <Chip
+                    compact
+                    icon="lock-outline"
+                    style={styles.lockedChip}
+                    textStyle={styles.lockedChipText}
+                  >
+                    Premium
+                  </Chip>
+                ) : null}
+              </View>
+              <Text style={styles.templateTitle}>{template.title}</Text>
+              <Text style={styles.templateDescription}>
+                {template.description}
+              </Text>
+              <View style={styles.templateMeta}>
+                <Icon name="clock-outline" size={14} color="#6b7280" />
+                <Text style={styles.templateMetaText}>
+                  {template.estimatedTime}
+                </Text>
+              </View>
+              <Button
+                mode={locked ? "contained-tonal" : "contained"}
+                onPress={() => handleCreateFromTemplate(template)}
+              >
+                {locked ? "Unlock" : "Add"}
+              </Button>
+            </Card>
+          );
+        })}
+      </ScrollView>
     </View>
   );
 
-  // ✅ CHANGED: Only show spinner if we're loading AND have no cached data
-  if (loading && habits.length === 0) {
-    return (
-      <View style={styles.loadingContainer}>
-        <StatusBar barStyle="light-content" backgroundColor="#4f46e5" />
-        <Icon name="loading" size={40} color="#4f46e5" />
-        <Text style={styles.loadingText}>Loading your habits...</Text>
-      </View>
-    );
-  }
-
   return (
-    <Animated.View style={[styles.container, { opacity: fadeAnim }]} key={screenKey}>
-      <StatusBar barStyle="light-content" backgroundColor="#4f46e5" />
-      
+    <View style={styles.container}>
+      <Appbar.Header style={styles.header}>
+        <Appbar.Content title="HabitOwl" subtitle="Your daily momentum" />
+        <Appbar.Action icon="crown-outline" onPress={openPremium} />
+      </Appbar.Header>
+
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[
-          styles.contentContainer,
-          { paddingBottom: tabBarTotalHeight + 20 }
+          styles.content,
+          { paddingBottom: tabBarTotalHeight + 90 },
         ]}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              loadDashboard(true);
+            }}
+          />
         }
-        showsVerticalScrollIndicator={false}
       >
-        {renderHeader()}
-        
-        {habits.length > 0 && (
-          <Card style={styles.progressCard}>
-            <Card.Content>
-              <Text style={styles.progressTitle}>Today's Progress</Text>
-              <Text style={styles.progressSubtitle}>
-                {todayCompletions.size} of {habits.length} habits completed
+        <LinearGradient colors={["#4f46e5", "#7c3aed"]} style={styles.heroCard}>
+          <View style={styles.heroTopRow}>
+            <View>
+              <Text style={styles.heroEyebrow}>Today</Text>
+              <Text style={styles.heroTitle}>
+                {todayProgress.completedToday}/{todayProgress.dueToday || 0}{" "}
+                habits complete
               </Text>
-              
-              <View style={styles.progressBarContainer}>
-                <View style={styles.progressBarBackground}>
-                  <View 
-                    style={[
-                      styles.progressBarFill, 
-                      { width: `${getCompletionRate()}%` }
-                    ]} 
-                  />
-                </View>
-                <Text style={styles.progressPercentage}>
-                  {getCompletionRate()}%
-                </Text>
-              </View>
-            </Card.Content>
-          </Card>
-        )}
+              <Text style={styles.heroSubtitle}>
+                {todayProgress.percent === 100 && todayProgress.dueToday > 0
+                  ? "You cleared everything due today."
+                  : "Keep the next step obvious and small."}
+              </Text>
+            </View>
+            <View style={styles.heroCircle}>
+              <Text style={styles.heroCircleText}>
+                {todayProgress.percent}%
+              </Text>
+            </View>
+          </View>
 
-        {habits.length === 0 ? (
-          renderEmptyState()
-        ) : (
-          <>
-            <Text style={styles.sectionTitle}>Your Habits ({habits.length})</Text>
-            {habits.map((habit, index) => (
-              <React.Fragment key={`${habit.id}-${index}-${screenKey}`}>
-                <HabitCard
-                  habit={habit}
-                  isCompleted={todayCompletions.has(habit.id)}
-                  onComplete={handleHabitComplete}
-                  onEdit={handleEditHabit}
-                  onDelete={handleDeleteHabit}
-                />
+          <View style={styles.heroStatsRow}>
+            <View style={styles.heroStatPill}>
+              <Icon name="check-circle-outline" size={16} color="#ffffff" />
+              <Text style={styles.heroStatText}>
+                {completedTodayCount} completed
+              </Text>
+            </View>
+            <View style={styles.heroStatPill}>
+              <Icon name="fire" size={16} color="#ffffff" />
+              <Text style={styles.heroStatText}>Best streak {bestStreak}</Text>
+            </View>
+          </View>
+        </LinearGradient>
 
-                {shouldRenderInlineBanner(index) && (
-                  <View style={styles.inlineAdContainer}>
-                    <AdMobBanner />
-                  </View>
+        {showGuide ? (
+          <TipCard
+            title="Welcome to your habit dashboard"
+            description="Use this screen to focus on what is due today first. Later habits stay visible below so users can plan ahead without clutter."
+            actionLabel="Create habit"
+            onAction={handleCreateHabit}
+            onDismiss={handleDismissHomeGuide}
+            onStopTips={handleStopTips}
+            style={styles.tipSpacing}
+          />
+        ) : null}
+
+        <Searchbar
+          placeholder="Search habits"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          style={styles.searchBar}
+          inputStyle={styles.searchInput}
+        />
+
+        {!isPremium && !isAdmin ? (
+          <PremiumFeatureCard
+            title="Premium stays visible"
+            description="Free users can preview advanced features before upgrading. Premium removes all ads and unlocks deeper scheduling + analytics."
+            bullets={[
+              "Unlimited habits",
+              "AI coaching on every habit",
+              "Premium templates and weekly insights",
+            ]}
+            onPress={openPremium}
+            style={styles.section}
+          />
+        ) : null}
+
+        {renderTemplates()}
+
+        {!isPremium && !isOffline ? (
+          <View style={styles.section}>
+            <AdMobBanner />
+          </View>
+        ) : null}
+
+        {!isPremium && isOffline ? (
+          <View style={styles.section}>
+            <OfflineAdCard message="You can keep using HabitOwl fully offline. Ad placements for free users will fill again when the connection returns." />
+          </View>
+        ) : null}
+
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Due today</Text>
+            <Chip compact icon="calendar-today" style={styles.sectionChip}>
+              {dueTodayHabits.length}
+            </Chip>
+          </View>
+
+          {loading ? (
+            <Card style={styles.emptyCard}>
+              <Text style={styles.emptyText}>Loading your habits…</Text>
+            </Card>
+          ) : dueTodayHabits.length === 0 ? (
+            <Card style={styles.emptyCard}>
+              <Icon name="weather-night" size={26} color="#6366f1" />
+              <Text style={styles.emptyTitle}>Nothing due right now</Text>
+              <Text style={styles.emptyText}>
+                Create a habit or browse a starter pack to add something useful.
+              </Text>
+              <Button
+                mode="contained"
+                style={styles.emptyButton}
+                onPress={handleCreateHabit}
+              >
+                Create habit
+              </Button>
+            </Card>
+          ) : (
+            dueTodayHabits.map((habit) => (
+              <HabitCard
+                key={habit.id}
+                habit={habit}
+                isCompleted={(habit.completions || []).includes(
+                  new Date().toDateString(),
                 )}
-              </React.Fragment>
+                onComplete={handleHabitComplete}
+                onEdit={(selectedHabit) =>
+                  navigation
+                    .getParent()
+                    ?.navigate("EditHabit", { habit: selectedHabit })
+                }
+                onDelete={handleDeleteHabit}
+              />
+            ))
+          )}
+        </View>
+
+        {laterHabits.length > 0 ? (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Scheduled later</Text>
+              <Chip compact icon="calendar-clock" style={styles.sectionChip}>
+                {laterHabits.length}
+              </Chip>
+            </View>
+            {laterHabits.map((habit) => (
+              <HabitCard
+                key={habit.id}
+                habit={habit}
+                isCompleted={(habit.completions || []).includes(
+                  new Date().toDateString(),
+                )}
+                onComplete={handleHabitComplete}
+                onEdit={(selectedHabit) =>
+                  navigation
+                    .getParent()
+                    ?.navigate("EditHabit", { habit: selectedHabit })
+                }
+                onDelete={handleDeleteHabit}
+              />
             ))}
-          </>
-        )}
-        
-        <View style={styles.bottomPadding} />
+          </View>
+        ) : null}
       </ScrollView>
 
-      <FAB
-        style={[
-          styles.fab,
-          { bottom: tabBarTotalHeight + 16 }
-        ]}
-        icon="plus"
-        color="#ffffff"
-        onPress={handleCreateHabit}
-        label={habits.length === 0 ? "Add Habit" : undefined}
+      <FAB icon="plus" style={styles.fab} onPress={handleCreateHabit} />
+
+      <CelebrationModal
+        visible={celebration.visible}
+        title={celebration.title}
+        subtitle={celebration.subtitle}
+        badge={celebration.badge}
+        onClose={() =>
+          setCelebration({ visible: false, title: "", subtitle: "", badge: "" })
+        }
       />
-    </Animated.View>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: "#f8fafc",
+  },
+  header: {
+    backgroundColor: "#f8fafc",
   },
   scrollView: {
     flex: 1,
   },
-  contentContainer: {
-    paddingBottom: 20,
+  content: {
+    padding: 16,
   },
-  header: {
-    paddingTop: 50,
-    paddingBottom: 24,
+  heroCard: {
+    borderRadius: 28,
+    padding: 20,
+    marginBottom: 16,
   },
-  headerContent: {
-    paddingHorizontal: 20,
+  heroTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 16,
   },
-  offlineBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(239, 68, 68, 0.9)',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginBottom: 12,
-    gap: 8,
+  heroEyebrow: {
+    color: "rgba(255,255,255,0.82)",
+    fontSize: 12,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
   },
-  offlineText: {
-    color: '#ffffff',
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  greetingContainer: {
-    marginBottom: 8,
-    minHeight: 32,
-  },
-  greeting: {
+  heroTitle: {
+    marginTop: 8,
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#ffffff',
+    fontWeight: "800",
+    color: "#ffffff",
+    maxWidth: 240,
   },
-  messageContainer: {
-    marginBottom: 12,
-    minHeight: 24,
+  heroSubtitle: {
+    marginTop: 8,
+    fontSize: 14,
+    lineHeight: 20,
+    color: "rgba(255,255,255,0.92)",
+    maxWidth: 260,
   },
-  motivationalMessage: {
-    fontSize: 16,
-    color: '#e0e7ff',
-    fontStyle: 'italic',
+  heroCircle: {
+    width: 82,
+    height: 82,
+    borderRadius: 41,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.24)",
   },
-  limitBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  heroCircleText: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#ffffff",
+  },
+  heroStatsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 18,
+  },
+  heroStatPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-    gap: 6,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.14)",
   },
-  limitText: {
-    flex: 1,
+  heroStatText: {
+    color: "#ffffff",
+    fontWeight: "700",
     fontSize: 13,
-    color: '#ffffff',
-    fontWeight: '500',
   },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 4,
+  searchBar: {
+    borderRadius: 18,
+    marginBottom: 12,
+    backgroundColor: "#ffffff",
   },
-  statItem: {
-    alignItems: 'center',
-    flex: 1,
+  searchInput: {
+    minHeight: 42,
   },
-  statValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#ffffff',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#c7d2fe',
-    marginTop: 4,
-  },
-  progressCard: {
-    margin: 16,
+  section: {
+    marginTop: 8,
     marginBottom: 8,
   },
-  progressTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1f2937',
-    marginBottom: 4,
-  },
-  progressSubtitle: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginBottom: 16,
-  },
-  progressBarContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  progressBarBackground: {
-    flex: 1,
-    height: 8,
-    backgroundColor: '#e5e7eb',
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: '#10b981',
-    borderRadius: 4,
-  },
-  progressPercentage: {
-    marginLeft: 12,
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1f2937',
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
   },
   sectionTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1f2937',
-    marginHorizontal: 20,
-    marginTop: 16,
-    marginBottom: 8,
+    fontWeight: "800",
+    color: "#111827",
   },
-  inlineAdContainer: {
-    marginHorizontal: 16,
-    marginTop: 4,
+  sectionChip: {
+    backgroundColor: "#eef2ff",
+  },
+  tipSpacing: {
+    marginBottom: 12,
+  },
+  templateRow: {
+    paddingRight: 8,
+    gap: 12,
+  },
+  templateCard: {
+    width: 260,
+    borderRadius: 20,
+    padding: 16,
+    backgroundColor: "#ffffff",
+  },
+  templateCardLocked: {
+    backgroundColor: "#faf5ff",
+  },
+  templateBadgeRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 8,
     marginBottom: 10,
-    borderRadius: 14,
-    overflow: 'hidden',
-    backgroundColor: '#ffffff',
-    elevation: 2,
   },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 40,
-    marginTop: 60,
+  smallChip: {
+    backgroundColor: "#eef2ff",
+  },
+  smallChipText: {
+    color: "#4338ca",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  lockedChip: {
+    backgroundColor: "#f3e8ff",
+  },
+  lockedChipText: {
+    color: "#7c3aed",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  templateTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#111827",
+  },
+  templateDescription: {
+    marginTop: 8,
+    fontSize: 13,
+    color: "#4b5563",
+    lineHeight: 19,
+    minHeight: 54,
+  },
+  templateMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 10,
+    marginBottom: 14,
+  },
+  templateMetaText: {
+    fontSize: 12,
+    color: "#6b7280",
+    fontWeight: "600",
+  },
+  emptyCard: {
+    padding: 22,
+    borderRadius: 24,
+    backgroundColor: "#ffffff",
+    alignItems: "center",
   },
   emptyTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1f2937',
-    marginTop: 16,
-    marginBottom: 8,
+    marginTop: 10,
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#111827",
   },
-  emptySubtitle: {
-    fontSize: 16,
-    color: '#6b7280',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  emptyLimit: {
+  emptyText: {
+    marginTop: 8,
     fontSize: 14,
-    color: '#9ca3af',
-    textAlign: 'center',
-    marginBottom: 24,
-    fontStyle: 'italic',
+    lineHeight: 20,
+    color: "#6b7280",
+    textAlign: "center",
   },
   emptyButton: {
-    backgroundColor: '#4f46e5',
-    paddingHorizontal: 24,
-  },
-  emptyButtonLabel: {
-    color: '#ffffff',
-    fontWeight: '600',
-    fontSize: 16,
-  },
-  bottomPadding: {
-    height: 20,
+    marginTop: 14,
   },
   fab: {
-    position: 'absolute',
-    margin: 16,
-    right: 0,
-    bottom: 80,
-    backgroundColor: '#4f46e5',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f8fafc',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#6b7280',
+    position: "absolute",
+    right: 20,
+    bottom: 26,
+    backgroundColor: "#4f46e5",
   },
 });
 

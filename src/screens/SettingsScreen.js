@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -7,719 +7,392 @@ import {
   Alert,
   Share,
   Linking,
-  Platform,
-} from 'react-native';
+} from "react-native";
 import {
-  List,
   Card,
-  Button,
+  List,
   Switch,
+  Button,
   Dialog,
   Portal,
   TextInput,
-} from 'react-native-paper';
-import { LinearGradient } from 'expo-linear-gradient';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { useTabBarHeight } from '../hooks/useTabBarHeight';
+} from "react-native-paper";
 
-import FirebaseService from '../services/FirebaseService';
-import SecureAIService from '../services/SecureAIService';
-import NotificationService from '../services/NotificationService';
-import ContactSupport from '../components/ContactSupport';
-import AdminService from '../services/AdminService';
-import adMobService from '../services/AdMobService';
-import PrivacyComplianceService from '../services/PrivacyComplianceService'; // ✅ NEW
+import FirebaseService from "../services/FirebaseService";
+import SecureAIService from "../services/SecureAIService";
+import NotificationService from "../services/NotificationService";
+import AdminService from "../services/AdminService";
+import TipsService from "../services/TipsService";
+import RateAppService from "../services/RateAppService";
+import PrivacyComplianceService from "../services/PrivacyComplianceService";
+import AdMobBanner from "../components/AdMobBanner";
+import TipCard from "../components/TipCard";
+import PremiumFeatureCard from "../components/PremiumFeatureCard";
+import OfflineAdCard from "../components/OfflineAdCard";
+import { useTabBarHeight } from "../hooks/useTabBarHeight";
 
-let PromoOfferBanner = null;
-try {
-  const PromoModule = require('../components/PromoOfferBanner');
-  PromoOfferBanner = PromoModule.default || PromoModule;
-  console.log('✅ PromoOfferBanner loaded');
-} catch (error) {
-  console.log('ℹ️ PromoOfferBanner not available (non-critical)');
-}
+const PLAY_STORE_URL =
+  "https://play.google.com/store/apps/details?id=com.mugash4.habitowl";
 
 const SettingsScreen = ({ navigation }) => {
   const user = FirebaseService.currentUser;
   const [userStats, setUserStats] = useState({
-    displayName: user?.displayName || 'User',
-    email: user?.email || '',
+    displayName: user?.displayName || "HabitOwl User",
+    email: user?.email || "",
     totalHabits: 0,
     longestStreak: 0,
-    referralCount: 0,
-    referralCode: ''
+    referralCode: "",
   });
-  
   const [isPremium, setIsPremium] = useState(false);
-  const [showReferralDialog, setShowReferralDialog] = useState(false);
-  const [showContactSupport, setShowContactSupport] = useState(false);
-  const [apiProvider, setApiProvider] = useState('deepseek');
-  const [referralCode, setReferralCode] = useState('');
-  const [notifications, setNotifications] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [interactionCount, setInteractionCount] = useState(0);
-
-  // ✅ NEW: Data Export & Deletion States
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [tipsEnabled, setTipsEnabled] = useState(true);
+  const [apiProvider, setApiProvider] = useState("deepseek");
+  const [showReferralDialog, setShowReferralDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [deleteReason, setDeleteReason] = useState('');
-  const [exportingData, setExportingData] = useState(false);
+  const [referralCode, setReferralCode] = useState("");
+  const [deleteReason, setDeleteReason] = useState("");
+  const [isOffline, setIsOffline] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
 
   const { totalHeight: tabBarTotalHeight } = useTabBarHeight();
 
   useEffect(() => {
-    console.log('SettingsScreen: Mounted ✅');
-    loadAllDataInBackground();
-  }, []);
+    const bootstrap = async () => {
+      try {
+        const [stats, tipsState, seenGuide] = await Promise.all([
+          FirebaseService.getUserStats(),
+          TipsService.areTipsEnabled(),
+          TipsService.hasSeenGuide("settings_overview"),
+        ]);
+        const adminStatus = user?.email
+          ? await AdminService.checkAdminStatus(user.email)
+          : false;
+        const provider = await SecureAIService.getActiveProvider(
+          !!stats?.isPremium || adminStatus,
+        ).catch(() => "deepseek");
+        const permission = await NotificationService.checkPermissionStatus();
 
-  const loadAllDataInBackground = async () => {
-    setIsLoading(true);
-    
-    try {
-      await Promise.allSettled([
-        loadUserDataSafely(),
-        loadSettingsSafely(),
-        checkAdminStatusSafely()
-      ]);
-    } catch (error) {
-      console.log('SettingsScreen: Background load error:', error.message);
-    } finally {
-      setIsLoading(false);
-      console.log('SettingsScreen: Data loaded ✅');
-    }
-  };
+        setUserStats((current) => ({ ...current, ...stats }));
+        setIsPremium(!!stats?.isPremium || adminStatus);
+        setIsAdmin(adminStatus);
+        setApiProvider(provider || "deepseek");
+        setTipsEnabled(!!tipsState);
+        setNotificationsEnabled(permission?.status === "granted");
+        setShowGuide(!seenGuide);
+        setIsOffline(false);
+      } catch (error) {
+        console.error("Settings bootstrap error:", error);
+        setIsOffline(true);
+      }
+    };
 
-  const loadUserDataSafely = async () => {
-    try {
-      const timeout = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout')), 3000)
+    bootstrap();
+  }, [user?.email]);
+
+  const openPremium = () => navigation.getParent()?.navigate("Premium");
+
+  const handleToggleTips = async () => {
+    const next = !tipsEnabled;
+    await TipsService.setTipsEnabled(next);
+    setTipsEnabled(next);
+    if (next) {
+      await TipsService.resetTips();
+      Alert.alert(
+        "Tips enabled",
+        "Guides and inline habit tips will appear again.",
       );
-      
-      const stats = await Promise.race([
-        FirebaseService.getUserStats(),
-        timeout
-      ]);
-      
-      if (stats && typeof stats === 'object') {
-        setUserStats(prevStats => ({
-          ...prevStats,
-          ...stats
-        }));
-        setIsPremium(!!stats.isPremium);
-      }
-    } catch (error) {
-      console.log('User data load failed:', error.message);
     }
   };
 
-  const loadSettingsSafely = async () => {
-    try {
-      const timeout = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout')), 2000)
+  const handleToggleNotifications = async () => {
+    if (notificationsEnabled) {
+      await NotificationService.cancelAllNotifications();
+      setNotificationsEnabled(false);
+      return Alert.alert(
+        "Notifications off",
+        "Daily habit reminders were cancelled on this device.",
       );
-      
-      const settingsPromise = (async () => {
-        const stats = await FirebaseService.getUserStats();
-        return await SecureAIService.getActiveProvider(stats?.isPremium || false);
-      })();
-      
-      const provider = await Promise.race([settingsPromise, timeout]);
-      if (provider) {
-        setApiProvider(provider);
-      }
-    } catch (error) {
-      console.log('Settings load failed:', error.message);
-      setApiProvider('deepseek');
     }
-  };
 
-  const checkAdminStatusSafely = async () => {
-    try {
-      const user = FirebaseService.currentUser;
-      if (!user?.email) {
-        return;
-      }
-      
-      const timeout = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout')), 1000)
-      );
-      
-      const adminStatus = await Promise.race([
-        AdminService.checkAdminStatus(user.email),
-        timeout
-      ]);
-      
-      setIsAdmin(!!adminStatus);
-      
-      if (adminStatus && !isPremium) {
-        FirebaseService.updateUserPremiumStatus(true).catch(() => {});
-        setIsPremium(true);
-      }
-    } catch (error) {
-      console.log('Admin check failed:', error.message);
-      setIsAdmin(false);
-    }
-  };
-
-  const trackInteractionAndShowAd = async (actionName) => {
-    const newCount = interactionCount + 1;
-    setInteractionCount(newCount);
-    
-    console.log(`[Settings] Interaction #${newCount}: ${actionName}`);
-    
-    if (newCount % 3 === 0) {
-      console.log(`[Settings] Showing ad after ${newCount} interactions`);
-      setTimeout(async () => {
-        try {
-          await adMobService.showInterstitialAd(`settings_${actionName}`);
-        } catch (error) {
-          console.log('[Settings] Ad not shown:', error);
-        }
-      }, 500);
-    }
-  };
-
-  const handlePremiumUpgrade = () => {
-    trackInteractionAndShowAd('premium_upgrade');
-    try {
-      navigation.getParent()?.navigate('Premium');
-    } catch (error) {
-      Alert.alert('Info', 'Premium upgrade screen is being loaded...');
-    }
-  };
-
-  const handleSignOut = () => {
+    await NotificationService.initialize();
+    setNotificationsEnabled(true);
     Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign Out',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await FirebaseService.signOut();
-              navigation.getParent()?.replace('Auth');
-            } catch (error) {
-              Alert.alert('Error', 'Failed to sign out. Please try again.');
-            }
-          }
-        }
-      ]
+      "Notifications on",
+      "You can re-enable reminder times on individual habits.",
     );
   };
 
   const handleShareApp = async () => {
-    trackInteractionAndShowAd('share_app');
-    try {
-      const code = userStats?.referralCode || 'HABITOWL';
-      const message = `Check out HabitOwl - the smart habit tracker!\n\nUse code: ${code}\n\nDownload: https://play.google.com/store/apps/details?id=com.mugash4.habitowl`;
-      
-      await Share.share({ 
-        message, 
-        title: 'Join me on HabitOwl!' 
-      });
-      
-      await FirebaseService.trackEvent('app_shared', {
-        method: 'native_share',
-        referral_code: code
-      }).catch(() => {});
-    } catch (error) {
-      if (error.message !== 'User did not share') {
-        console.error('Share error:', error);
-      }
-    }
+    const code = userStats?.referralCode || "HABITOWL";
+    await Share.share({
+      title: "HabitOwl",
+      message: `HabitOwl helps me stay consistent. Use referral code ${code} and try it here: ${PLAY_STORE_URL}`,
+    });
   };
 
   const handleReferralSubmit = async () => {
     if (!referralCode.trim()) {
-      Alert.alert('Error', 'Please enter a referral code');
-      return;
+      return Alert.alert("Enter a code", "Please enter a referral code first.");
     }
-
     try {
       await FirebaseService.processReferral(referralCode.trim().toUpperCase());
       setShowReferralDialog(false);
-      setReferralCode('');
-      Alert.alert('Success!', 'Referral code applied successfully!');
-      await loadUserDataSafely();
-      trackInteractionAndShowAd('referral_submit');
+      setReferralCode("");
+      Alert.alert("Referral applied", "Your code was accepted successfully.");
     } catch (error) {
-      Alert.alert('Error', error.message || 'Failed to process referral code');
+      Alert.alert("Referral failed", error.message || "Please try again.");
     }
   };
 
-  const handleAboutPress = () => {
-    trackInteractionAndShowAd('about');
-    try {
-      navigation.getParent()?.navigate('About');
-    } catch (error) {
-      Alert.alert('Info', 'About section coming soon!');
-    }
-  };
-
-  const handleAdminPress = () => {
-    if (isAdmin) {
-      try {
-        navigation.getParent()?.navigate('Admin');
-      } catch (error) {
-        Alert.alert('Error', 'Unable to open Admin panel');
-      }
-    }
-  };
-
-  const handleContactSupport = () => {
-    trackInteractionAndShowAd('contact_support');
-    console.log('Opening support chat...');
-    setShowContactSupport(true);
-  
-    FirebaseService.trackEvent('support_chat_opened', {
-      from_screen: 'settings'
-    }).catch(err => console.log('Analytics tracking failed:', err));
-  };
-
-  const handlePrivacyPolicy = () => {
-    trackInteractionAndShowAd('privacy_policy');
-    Linking.openURL('https://habitowl-3405d.web.app/privacy').catch(() => 
-      Alert.alert('Error', 'Unable to open privacy policy')
-    );
-  };
-
-  const handleTermsOfService = () => {
-    trackInteractionAndShowAd('terms_of_service');
-    Linking.openURL('https://habitowl-3405d.web.app/terms').catch(() => 
-      Alert.alert('Error', 'Unable to open terms of service')
-    );
-  };
-
-  const handleStatisticsPress = () => {
-    trackInteractionAndShowAd('statistics');
-    try {
-      navigation.navigate('Statistics');
-    } catch (error) {
-      Alert.alert('Info', 'Please use the Statistics tab');
-    }
-  };
-
-  const toggleNotifications = async (enabled) => {
-    trackInteractionAndShowAd('toggle_notifications');
-    try {
-      setNotifications(enabled);
-      if (!enabled) {
-        await NotificationService.cancelAllNotifications();
-      }
-    } catch (error) {
-      console.error('Error toggling notifications:', error);
-      setNotifications(!enabled);
-    }
-  };
-
-  const handleSmartCoachingPress = () => {
-    trackInteractionAndShowAd('smart_coaching');
-    if (!isPremium && !isAdmin) {
-      Alert.alert(
-        'AI Coaching',
-        'Free users get 2 AI coaching uses per day. Upgrade to Premium for unlimited coaching and full access.',
-        [
-          { text: 'Maybe Later', style: 'cancel' },
-          { text: 'Upgrade to Premium', onPress: handlePremiumUpgrade }
-        ]
-      );
-    } else {
-      Alert.alert(
-        '💡 How to Use AI Coaching',
-        'AI-powered coaching is available!\n\n1. Go to Home screen\n2. Find any habit card\n3. Tap the lightbulb (💡) icon on the habit\n4. Ask questions and get personalized coaching!\n\nThe lightbulb icon is located next to each habit name.',
-        [{ text: 'Got it!', style: 'default' }]
-      );
-    }
-  };
-
-  // ✅ NEW: Export User Data (JSON)
   const handleExportData = async () => {
     try {
-      setExportingData(true);
-      trackInteractionAndShowAd('export_data');
-
+      const file = await PrivacyComplianceService.exportUserDataToFile(
+        user?.uid || FirebaseService.currentUser?.uid || "anonymous",
+      );
       Alert.alert(
-        'Export Your Data',
-        'Choose export format:',
-        [
-          {
-            text: 'Cancel',
-            style: 'cancel'
-          },
-          {
-            text: 'JSON (Complete)',
-            onPress: async () => {
-              try {
-                await PrivacyComplianceService.exportUserDataToFile(user.uid);
-                Alert.alert('Success', 'Your complete data has been exported and shared!');
-              } catch (error) {
-                Alert.alert('Error', 'Failed to export data: ' + error.message);
-              }
-            }
-          },
-          {
-            text: 'CSV (Habits Only)',
-            onPress: async () => {
-              try {
-                await PrivacyComplianceService.exportHabitsToCSV(user.uid);
-                Alert.alert('Success', 'Your habits have been exported to CSV!');
-              } catch (error) {
-                Alert.alert('Error', 'Failed to export habits: ' + error.message);
-              }
-            }
-          }
-        ]
+        "Export ready",
+        `Your export file is ready: ${file?.uri || "saved to device storage"}`,
       );
     } catch (error) {
-      Alert.alert('Error', 'Failed to export data');
-    } finally {
-      setExportingData(false);
+      Alert.alert("Export failed", error.message || "Please try again.");
     }
   };
 
-  // ✅ NEW: Request Account Deletion
-  const handleDeleteAccount = () => {
-    trackInteractionAndShowAd('delete_account');
-    setShowDeleteDialog(true);
-  };
-
-  const handleConfirmDeletion = async () => {
-    if (!deleteReason.trim()) {
-      Alert.alert('Required', 'Please provide a reason for deletion');
-      return;
+  const handleDeleteAccount = async () => {
+    try {
+      await PrivacyComplianceService.requestAccountDeletion(
+        user?.uid || FirebaseService.currentUser?.uid || "anonymous",
+        deleteReason.trim() || "User requested account deletion",
+      );
+      setShowDeleteDialog(false);
+      setDeleteReason("");
+      Alert.alert(
+        "Deletion requested",
+        "Your account deletion request was scheduled according to the app privacy flow.",
+      );
+    } catch (error) {
+      Alert.alert("Request failed", error.message || "Please try again.");
     }
-
-    Alert.alert(
-      'Confirm Account Deletion',
-      '⚠️ This action will:\n\n• Schedule your account for deletion in 7 days\n• Allow you to export your data first\n• Give you 7 days to cancel if you change your mind\n\nAre you sure?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete My Account',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const result = await PrivacyComplianceService.requestAccountDeletion(
-                user.uid,
-                deleteReason.trim()
-              );
-
-              setShowDeleteDialog(false);
-              setDeleteReason('');
-
-              Alert.alert(
-                'Deletion Scheduled',
-                result.message,
-                [{ text: 'OK' }]
-              );
-            } catch (error) {
-              Alert.alert('Error', 'Failed to request deletion: ' + error.message);
-            }
-          }
-        }
-      ]
-    );
   };
 
-  const renderUserInfo = () => {
-    const user = FirebaseService.currentUser;
-    if (!user) return null;
-
-    return (
-      <Card style={styles.card}>
-        <LinearGradient colors={['#4f46e5', '#7c3aed']} style={styles.userInfoGradient}>
-          <View style={styles.userInfo}>
-            <View style={styles.avatar}>
-              <Icon name="account" size={40} color="#ffffff" />
-            </View>
-            <View style={styles.userDetails}>
-              <Text style={styles.userName}>
-                {userStats.displayName}
-              </Text>
-              <Text style={styles.userEmail}>{userStats.email}</Text>
-              <View style={styles.badgeContainer}>
-                {isPremium && (
-                  <View style={styles.premiumBadge}>
-                    <Icon name="crown" size={16} color="#f59e0b" />
-                    <Text style={styles.premiumText}>Premium</Text>
-                  </View>
-                )}
-                {isAdmin && (
-                  <View style={styles.adminBadge}>
-                    <Icon name="shield-check" size={16} color="#ef4444" />
-                    <Text style={styles.adminText}>Admin</Text>
-                  </View>
-                )}
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{userStats.totalHabits || 0}</Text>
-              <Text style={styles.statLabel}>Habits</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{userStats.longestStreak || 0}</Text>
-              <Text style={styles.statLabel}>Best Streak</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{userStats.referralCount || 0}</Text>
-              <Text style={styles.statLabel}>Referrals</Text>
-            </View>
-          </View>
-        </LinearGradient>
-      </Card>
-    );
+  const handleRateApp = async () => {
+    await RateAppService.trackPositiveMoment(5);
+    await RateAppService.promptIfEligible();
   };
 
   return (
     <View style={styles.container}>
-      <ScrollView 
-        style={styles.scrollView}
+      <ScrollView
         contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: tabBarTotalHeight + 20 }
+          styles.content,
+          { paddingBottom: tabBarTotalHeight + 80 },
         ]}
         showsVerticalScrollIndicator={false}
-        scrollEnabled={true}
-        bounces={true}
-        alwaysBounceVertical={true}
-        nestedScrollEnabled={true}
       >
-        {renderUserInfo()}
+        {showGuide ? (
+          <TipCard
+            title="Settings control user trust"
+            description="Keep monetization clear, tips optional, and premium benefits visible. This screen is where users decide whether the app feels respectful."
+            onDismiss={async () => {
+              await TipsService.markGuideSeen("settings_overview");
+              setShowGuide(false);
+            }}
+            onStopTips={async () => {
+              await TipsService.setTipsEnabled(false);
+              setShowGuide(false);
+              setTipsEnabled(false);
+            }}
+            style={styles.sectionSpacing}
+          />
+        ) : null}
 
-        {!isPremium && !isAdmin && PromoOfferBanner && (
-          <View style={styles.promoContainer}>
-            <PromoOfferBanner onUpgradePress={handlePremiumUpgrade} />
+        <Card style={styles.profileCard}>
+          <Text style={styles.profileName}>
+            {userStats.displayName || "HabitOwl User"}
+          </Text>
+          <Text style={styles.profileEmail}>
+            {userStats.email || "Anonymous account"}
+          </Text>
+          <View style={styles.profileStatsRow}>
+            <View style={styles.profileStat}>
+              <Text style={styles.profileStatValue}>
+                {userStats.totalHabits || 0}
+              </Text>
+              <Text style={styles.profileStatLabel}>Habits</Text>
+            </View>
+            <View style={styles.profileStat}>
+              <Text style={styles.profileStatValue}>
+                {userStats.longestStreak || 0}
+              </Text>
+              <Text style={styles.profileStatLabel}>Best streak</Text>
+            </View>
+            <View style={styles.profileStat}>
+              <Text style={styles.profileStatValue}>
+                {isPremium ? "Premium" : "Free"}
+              </Text>
+              <Text style={styles.profileStatLabel}>Plan</Text>
+            </View>
           </View>
-        )}
-
-        {!isPremium && !isAdmin && (
-          <Card style={styles.card}>
-            <List.Item
-              title="Upgrade to Premium"
-              description="Remove ads, unlimited habits, AI coaching"
-              left={(props) => <List.Icon {...props} icon="crown" color="#f59e0b" />}
-              right={(props) => <List.Icon {...props} icon="chevron-right" />}
-              onPress={handlePremiumUpgrade}
-              titleStyle={styles.listItemTitle}
-              descriptionStyle={styles.listItemDescription}
-            />
-          </Card>
-        )}
-
-        <Card style={styles.card}>
-          <List.Subheader style={styles.subheader}>AI & Personalization</List.Subheader>
-          
-          {isAdmin && (
-            <List.Item
-              title="AI Powered"
-              description={`Currently using: ${apiProvider.toUpperCase()}`}
-              left={(props) => <List.Icon {...props} icon="robot" />}
-              titleStyle={styles.listItemTitle}
-              descriptionStyle={styles.listItemDescription}
-            />
-          )}
-
-          <List.Item
-            title="Smart Coaching"
-            description={isPremium || isAdmin ? "AI-powered coaching is available! Go to any habit and tap the lightbulb icon to get personalized insights and suggestions." : "Upgrade to Premium to unlock AI coaching"}
-            left={(props) => <List.Icon {...props} icon="brain" />}
-            right={(props) => <List.Icon {...props} icon="chevron-right" />}
-            onPress={handleSmartCoachingPress}
-            titleStyle={styles.listItemTitle}
-            descriptionStyle={styles.listItemDescription}
-          />
-          
-          {isAdmin && (
-            <List.Item
-              title="Admin Panel"
-              description="Manage app settings and API keys"
-              left={(props) => <List.Icon {...props} icon="shield-account" color="#ef4444" />}
-              right={(props) => <List.Icon {...props} icon="chevron-right" />}
-              onPress={handleAdminPress}
-              titleStyle={styles.listItemTitle}
-              descriptionStyle={styles.listItemDescription}
-            />
-          )}
         </Card>
 
-        <Card style={styles.card}>
-          <List.Subheader style={styles.subheader}>Social & Sharing</List.Subheader>
-          
-          <List.Item
-            title="Share HabitOwl"
-            description="Invite friends and earn rewards"
-            left={(props) => <List.Icon {...props} icon="share" />}
-            onPress={handleShareApp}
-            titleStyle={styles.listItemTitle}
-            descriptionStyle={styles.listItemDescription}
+        {!isPremium && !isAdmin ? (
+          <PremiumFeatureCard
+            title="Premium remains visible"
+            description="Free users can see exactly what they would unlock before subscribing. Premium removes every ad placement in the app."
+            bullets={[
+              "Ad-free experience",
+              "Unlimited habits + advanced schedule",
+              "Premium analytics and AI coaching",
+            ]}
+            onPress={openPremium}
+            style={styles.sectionSpacing}
           />
+        ) : null}
 
-          <List.Item
-            title="Enter Referral Code"
-            description="Got a code from a friend?"
-            left={(props) => <List.Icon {...props} icon="ticket" />}
-            onPress={() => setShowReferralDialog(true)}
-            titleStyle={styles.listItemTitle}
-            descriptionStyle={styles.listItemDescription}
-          />
-
-          {userStats?.referralCode && (
+        <Card style={styles.sectionCard}>
+          <List.Section>
+            <List.Subheader style={styles.subheader}>
+              Preferences
+            </List.Subheader>
             <List.Item
-              title="Your Referral Code"
-              description={userStats.referralCode}
-              left={(props) => <List.Icon {...props} icon="card-text" />}
-              right={(props) => (
-                <Button
-                  compact
-                  mode="outlined"
-                  onPress={() => Share.share({ message: userStats.referralCode })}
-                  labelStyle={styles.buttonLabel}
-                >
-                  Share
-                </Button>
+              title="Notifications"
+              description="Enable or disable device reminders"
+              left={(props) => <List.Icon {...props} icon="bell-outline" />}
+              right={() => (
+                <Switch
+                  value={notificationsEnabled}
+                  onValueChange={handleToggleNotifications}
+                />
               )}
-              titleStyle={styles.listItemTitle}
-              descriptionStyle={styles.listItemDescription}
             />
-          )}
+            <List.Item
+              title="Tips and guides"
+              description="Show inline help on cards and screens"
+              left={(props) => (
+                <List.Icon {...props} icon="lightbulb-outline" />
+              )}
+              right={() => (
+                <Switch value={tipsEnabled} onValueChange={handleToggleTips} />
+              )}
+            />
+            <List.Item
+              title="AI provider"
+              description={`Current provider: ${apiProvider}`}
+              left={(props) => <List.Icon {...props} icon="robot-outline" />}
+              onPress={() =>
+                Alert.alert(
+                  "AI provider",
+                  `HabitOwl is currently set to ${apiProvider}.`,
+                )
+              }
+            />
+          </List.Section>
         </Card>
 
-        <Card style={styles.card}>
-          <List.Subheader style={styles.subheader}>App Settings</List.Subheader>
-          
-          <List.Item
-            title="Notifications"
-            description="Habit reminders and motivational messages"
-            left={(props) => <List.Icon {...props} icon="bell" />}
-            right={() => (
-              <Switch
-                value={notifications}
-                onValueChange={toggleNotifications}
-                color="#4f46e5"
-              />
-            )}
-            titleStyle={styles.listItemTitle}
-            descriptionStyle={styles.listItemDescription}
-          />
-
-          <List.Item
-            title="Statistics"
-            description="View your habit analytics"
-            left={(props) => <List.Icon {...props} icon="chart-line" />}
-            right={(props) => <List.Icon {...props} icon="chevron-right" />}
-            onPress={handleStatisticsPress}
-            titleStyle={styles.listItemTitle}
-            descriptionStyle={styles.listItemDescription}
-          />
+        <Card style={styles.sectionCard}>
+          <List.Section>
+            <List.Subheader style={styles.subheader}>
+              Growth & sharing
+            </List.Subheader>
+            <List.Item
+              title="Share the app"
+              description="Invite more users with your referral code"
+              left={(props) => (
+                <List.Icon {...props} icon="share-variant-outline" />
+              )}
+              onPress={handleShareApp}
+            />
+            <List.Item
+              title="Use referral code"
+              description="Apply a referral code"
+              left={(props) => (
+                <List.Icon {...props} icon="ticket-percent-outline" />
+              )}
+              onPress={() => setShowReferralDialog(true)}
+            />
+            <List.Item
+              title="Rate HabitOwl"
+              description="Open the rating prompt if you find the app useful"
+              left={(props) => <List.Icon {...props} icon="star-outline" />}
+              onPress={handleRateApp}
+            />
+          </List.Section>
         </Card>
 
-        {/* ✅ NEW: Privacy & Data Section */}
-        <Card style={styles.card}>
-          <List.Subheader style={styles.subheader}>Privacy & Data</List.Subheader>
-          
-          <List.Item
-            title="Export My Data"
-            description="Download all your data (GDPR)"
-            left={(props) => <List.Icon {...props} icon="download" color="#10b981" />}
-            right={(props) => <List.Icon {...props} icon="chevron-right" />}
-            onPress={handleExportData}
-            titleStyle={styles.listItemTitle}
-            descriptionStyle={styles.listItemDescription}
-          />
-
-          <List.Item
-            title="Delete My Account"
-            description="Request account deletion (7-day grace period)"
-            left={(props) => <List.Icon {...props} icon="delete-forever" color="#ef4444" />}
-            right={(props) => <List.Icon {...props} icon="chevron-right" />}
-            onPress={handleDeleteAccount}
-            titleStyle={[styles.listItemTitle, { color: '#ef4444' }]}
-            descriptionStyle={styles.listItemDescription}
-          />
+        <Card style={styles.sectionCard}>
+          <List.Section>
+            <List.Subheader style={styles.subheader}>
+              Data & support
+            </List.Subheader>
+            <List.Item
+              title="Open statistics"
+              description="Review streaks, heatmap, and weekly insights"
+              left={(props) => <List.Icon {...props} icon="chart-line" />}
+              onPress={() => navigation.navigate("Statistics")}
+            />
+            <List.Item
+              title="Export my data"
+              description="Download a copy of your habits and account data"
+              left={(props) => <List.Icon {...props} icon="download-outline" />}
+              onPress={handleExportData}
+            />
+            <List.Item
+              title="Privacy policy"
+              description="Open hosted privacy page"
+              left={(props) => (
+                <List.Icon {...props} icon="shield-check-outline" />
+              )}
+              onPress={() =>
+                Linking.openURL("https://habitowl-3405d.web.app/privacy")
+              }
+            />
+            <List.Item
+              title="Terms of service"
+              description="Open hosted terms page"
+              left={(props) => (
+                <List.Icon {...props} icon="file-document-outline" />
+              )}
+              onPress={() =>
+                Linking.openURL("https://habitowl-3405d.web.app/terms")
+              }
+            />
+            <List.Item
+              title="Request account deletion"
+              description="Start the deletion flow"
+              left={(props) => (
+                <List.Icon {...props} icon="delete-alert-outline" />
+              )}
+              onPress={() => setShowDeleteDialog(true)}
+            />
+          </List.Section>
         </Card>
 
-        <Card style={styles.card}>
-          <List.Subheader style={styles.subheader}>Support & Legal</List.Subheader>
-          
-          <List.Item
-            title="Contact Support"
-            description="Get help or report issues"
-            left={(props) => <List.Icon {...props} icon="help-circle" />}
-            right={(props) => <List.Icon {...props} icon="chevron-right" />}
-            onPress={handleContactSupport}
-            titleStyle={styles.listItemTitle}
-            descriptionStyle={styles.listItemDescription}
-          />
+        {!isPremium && !isOffline ? <AdMobBanner /> : null}
+        {!isPremium && isOffline ? <OfflineAdCard /> : null}
 
-          <List.Item
-            title="About HabitOwl"
-            description="Learn more about the app"
-            left={(props) => <List.Icon {...props} icon="information" />}
-            right={(props) => <List.Icon {...props} icon="chevron-right" />}
-            onPress={handleAboutPress}
-            titleStyle={styles.listItemTitle}
-            descriptionStyle={styles.listItemDescription}
-          />
-
-          <List.Item
-            title="Privacy Policy"
-            left={(props) => <List.Icon {...props} icon="shield-account" />}
-            onPress={handlePrivacyPolicy}
-            titleStyle={styles.listItemTitle}
-          />
-
-          <List.Item
-            title="Terms of Service"
-            left={(props) => <List.Icon {...props} icon="file-document" />}
-            onPress={handleTermsOfService}
-            titleStyle={styles.listItemTitle}
-          />
-
-          <List.Item
-            title="App Version"
-            description="1.8.0"
-            left={(props) => <List.Icon {...props} icon="information" />}
-            titleStyle={styles.listItemTitle}
-            descriptionStyle={styles.listItemDescription}
-          />
-        </Card>
-
-        <Card style={styles.card}>
-          <List.Item
-            title="Sign Out"
-            titleStyle={styles.signOutText}
-            left={(props) => <List.Icon {...props} icon="logout" color="#ef4444" />}
-            onPress={handleSignOut}
-          />
-        </Card>
+        <Button
+          mode="outlined"
+          onPress={() => FirebaseService.signOut()}
+          style={styles.signOutButton}
+        >
+          Sign out
+        </Button>
       </ScrollView>
 
-      <ContactSupport 
-        visible={showContactSupport} 
-        onDismiss={() => setShowContactSupport(false)} 
-      />
-
       <Portal>
-        <Dialog visible={showReferralDialog} onDismiss={() => setShowReferralDialog(false)}>
-          <Dialog.Title>Enter Referral Code</Dialog.Title>
+        <Dialog
+          visible={showReferralDialog}
+          onDismiss={() => setShowReferralDialog(false)}
+        >
+          <Dialog.Title>Apply referral code</Dialog.Title>
           <Dialog.Content>
-            <Text style={styles.dialogDescription}>
-              Enter a referral code from a friend to get started:
-            </Text>
-            
             <TextInput
-              label="Referral Code"
+              mode="outlined"
+              label="Referral code"
               value={referralCode}
               onChangeText={setReferralCode}
-              mode="outlined"
               autoCapitalize="characters"
-              style={styles.dialogInput}
             />
           </Dialog.Content>
           <Dialog.Actions>
@@ -728,35 +401,30 @@ const SettingsScreen = ({ navigation }) => {
           </Dialog.Actions>
         </Dialog>
 
-        {/* ✅ NEW: Account Deletion Dialog */}
-        <Dialog visible={showDeleteDialog} onDismiss={() => setShowDeleteDialog(false)}>
-          <Dialog.Title>Delete Account</Dialog.Title>
+        <Dialog
+          visible={showDeleteDialog}
+          onDismiss={() => setShowDeleteDialog(false)}
+        >
+          <Dialog.Title>Request account deletion</Dialog.Title>
           <Dialog.Content>
-            <Text style={styles.dialogDescription}>
-              We're sorry to see you go. Your account will be scheduled for deletion in 7 days. You can cancel anytime within this period.
+            <Text style={styles.dialogText}>
+              Tell us why you want to delete the account. This helps improve
+              retention and user trust.
             </Text>
-            
             <TextInput
-              label="Reason for leaving (optional)"
+              mode="outlined"
+              label="Reason"
               value={deleteReason}
               onChangeText={setDeleteReason}
-              mode="outlined"
               multiline
-              numberOfLines={3}
-              style={styles.dialogInput}
-              placeholder="Help us improve..."
+              style={{ marginTop: 12 }}
             />
-
-            <View style={styles.warningBox}>
-              <Icon name="alert-circle" size={20} color="#ef4444" />
-              <Text style={styles.warningText}>
-                Your data will be retained for 90 days for legal compliance, then permanently deleted.
-              </Text>
-            </View>
           </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={() => setShowDeleteDialog(false)}>Cancel</Button>
-            <Button onPress={handleConfirmDeletion} textColor="#ef4444">Delete</Button>
+            <Button textColor="#dc2626" onPress={handleDeleteAccount}>
+              Request deletion
+            </Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
@@ -765,149 +433,46 @@ const SettingsScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-  },
-  card: {
-    margin: 16,
-    marginBottom: 8,
-  },
-  userInfoGradient: {
-    padding: 20,
-    borderRadius: 12,
-  },
-  userInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  avatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  userDetails: {
-    flex: 1,
-  },
-  userName: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#ffffff',
-    marginBottom: 4,
-  },
-  userEmail: {
-    fontSize: 14,
-    color: '#e0e7ff',
-    marginBottom: 8,
-  },
-  badgeContainer: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  premiumBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(245, 158, 11, 0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  premiumText: {
-    color: '#f59e0b',
-    fontSize: 12,
-    fontWeight: 'bold',
-    marginLeft: 4,
-  },
-  adminBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  adminText: {
-    color: '#ef4444',
-    fontSize: 12,
-    fontWeight: 'bold',
-    marginLeft: 4,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#ffffff',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#c7d2fe',
-    marginTop: 4,
-  },
-  subheader: {
-    color: '#1f2937',
-    fontWeight: 'bold',
-  },
-  listItemTitle: {
-    color: '#1f2937',
-    fontWeight: '600',
-  },
-  listItemDescription: {
-    color: '#6b7280',
-  },
-  buttonLabel: {
-    color: '#4f46e5',
-    fontWeight: '600',
-  },
-  signOutText: {
-    color: '#ef4444',
-    fontWeight: '600',
-  },
-  dialogDescription: {
-    fontSize: 16,
-    color: '#6b7280',
+  container: { flex: 1, backgroundColor: "#f8fafc" },
+  content: { padding: 16 },
+  sectionSpacing: { marginBottom: 16 },
+  profileCard: {
+    borderRadius: 24,
+    padding: 18,
     marginBottom: 16,
+    backgroundColor: "#ffffff",
   },
-  dialogInput: {
-    marginBottom: 16,
+  profileName: { fontSize: 22, fontWeight: "800", color: "#111827" },
+  profileEmail: { marginTop: 6, fontSize: 14, color: "#6b7280" },
+  profileStatsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    marginTop: 18,
   },
-  promoContainer: {
-    marginBottom: 8,
-  },
-  // ✅ NEW: Warning Box Style
-  warningBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#fef2f2',
+  profileStat: {
+    flex: 1,
+    minWidth: 90,
     padding: 12,
-    borderRadius: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: '#ef4444',
-    marginTop: 8,
+    borderRadius: 18,
+    backgroundColor: "#f8fafc",
+    alignItems: "center",
   },
-  warningText: {
-    flex: 1,
-    fontSize: 13,
-    color: '#991b1b',
-    marginLeft: 8,
-    lineHeight: 18,
+  profileStatValue: { fontSize: 18, fontWeight: "800", color: "#111827" },
+  profileStatLabel: {
+    marginTop: 4,
+    fontSize: 12,
+    color: "#6b7280",
+    textTransform: "uppercase",
   },
+  sectionCard: {
+    borderRadius: 22,
+    backgroundColor: "#ffffff",
+    marginBottom: 16,
+  },
+  subheader: { fontSize: 14, fontWeight: "800", color: "#4b5563" },
+  signOutButton: { marginTop: 16, borderRadius: 14 },
+  dialogText: { fontSize: 14, lineHeight: 20, color: "#4b5563" },
 });
 
 export default SettingsScreen;

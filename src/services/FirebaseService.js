@@ -10,7 +10,7 @@ import {
   where,
   orderBy,
   setDoc,
-} from 'firebase/firestore';
+} from "firebase/firestore";
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -21,30 +21,34 @@ import {
   GoogleAuthProvider,
   signInWithCredential,
   signInWithPopup,
-} from 'firebase/auth';
-import { AppState, Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+} from "firebase/auth";
+import { AppState, Platform } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-import { db, auth } from '../config/firebase';
-import testAccountService from './TestAccountService';
+import { db, auth } from "../config/firebase";
+import testAccountService from "./TestAccountService";
+import {
+  normalizeHabitSchedule,
+  calculateHabitStreak,
+} from "../utils/habitHelpers";
 
 let adMobService = null;
 
 function getAdMobService() {
   if (!adMobService) {
     try {
-      adMobService = require('./AdMobService').default;
+      adMobService = require("./AdMobService").default;
     } catch (error) {
-      console.log('AdMobService not available');
+      console.log("AdMobService not available");
     }
   }
   return adMobService;
 }
 
-const ONBOARDING_STORAGE_KEY = 'habitowl_onboarding_completed';
-const LOCAL_DEVICE_ID_KEY = 'habitowl_local_device_id';
-const LOCAL_HABITS_KEY = 'habitowl_local_habits';
-const LOCAL_USER_CACHE_KEY = 'habitowl_user_cache';
+const ONBOARDING_STORAGE_KEY = "habitowl_onboarding_completed";
+const LOCAL_DEVICE_ID_KEY = "habitowl_local_device_id";
+const LOCAL_HABITS_KEY = "habitowl_local_habits";
+const LOCAL_USER_CACHE_KEY = "habitowl_user_cache";
 const CACHE_DURATION = 30000;
 const SYNC_INTERVAL_MS = 15000;
 
@@ -67,7 +71,7 @@ class FirebaseService {
         try {
           await this.createUserDocument(user);
         } catch (error) {
-          console.log('User document sync deferred:', error.message);
+          console.log("User document sync deferred:", error.message);
         }
       }
 
@@ -78,12 +82,15 @@ class FirebaseService {
       }
     });
 
-    this.appStateSubscription = AppState.addEventListener('change', (nextState) => {
-      if (nextState === 'active') {
-        this.ensureAnonymousUser().catch(() => {});
-        this.syncPendingHabitsInBackground();
-      }
-    });
+    this.appStateSubscription = AppState.addEventListener(
+      "change",
+      (nextState) => {
+        if (nextState === "active") {
+          this.ensureAnonymousUser().catch(() => {});
+          this.syncPendingHabitsInBackground();
+        }
+      },
+    );
 
     this.syncInterval = setInterval(() => {
       this.syncPendingHabitsInBackground();
@@ -121,7 +128,7 @@ class FirebaseService {
 
       return parsed.map((habit) => this.normalizeLocalHabit(habit));
     } catch (error) {
-      console.error('Error loading local habits:', error);
+      console.error("Error loading local habits:", error);
       return [];
     }
   }
@@ -131,22 +138,35 @@ class FirebaseService {
       .map((habit) => this.normalizeLocalHabit(habit))
       .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 
-    await AsyncStorage.setItem(LOCAL_HABITS_KEY, JSON.stringify(normalizedHabits));
+    await AsyncStorage.setItem(
+      LOCAL_HABITS_KEY,
+      JSON.stringify(normalizedHabits),
+    );
     this.habitsCache = this.getVisibleHabits(normalizedHabits);
     this.lastCacheTime = Date.now();
   }
 
   normalizeLocalHabit(habit) {
+    const normalizedSchedule = normalizeHabitSchedule(habit || {});
+
     return {
       id: habit.id,
-      name: habit.name || '',
-      description: habit.description || '',
-      category: habit.category || 'wellness',
+      name: habit.name || "",
+      description: habit.description || "",
+      category: habit.category || "wellness",
       difficulty: habit.difficulty || 2,
-      estimatedTime: habit.estimatedTime || '5 min',
+      estimatedTime: habit.estimatedTime || "5 min",
       reminderEnabled: !!habit.reminderEnabled,
       reminderTime: habit.reminderTime || null,
       reminderMessage: habit.reminderMessage || null,
+      scheduleType: normalizedSchedule.scheduleType,
+      selectedDays: normalizedSchedule.selectedDays,
+      weeklyTarget: normalizedSchedule.weeklyTarget,
+      cue: normalizedSchedule.cue,
+      location: normalizedSchedule.location,
+      reward: normalizedSchedule.reward,
+      templateId: normalizedSchedule.templateId,
+      isPremiumTemplate: !!normalizedSchedule.isPremiumTemplate,
       createdAt: habit.createdAt || new Date().toISOString(),
       updatedAt: habit.updatedAt || new Date().toISOString(),
       userId: habit.userId || null,
@@ -157,7 +177,7 @@ class FirebaseService {
       isActive: habit.isActive !== false,
       lastCompletedAt: habit.lastCompletedAt || null,
       deletedAt: habit.deletedAt || null,
-      syncStatus: habit.syncStatus || 'synced',
+      syncStatus: habit.syncStatus || "synced",
       pendingDelete: !!habit.pendingDelete,
       isSyncedToRemote: !!habit.isSyncedToRemote,
       lastSyncedAt: habit.lastSyncedAt || null,
@@ -176,13 +196,17 @@ class FirebaseService {
       await this.persistLocalHabits(habits);
       console.log(`✅ Cached ${habits.length} habits locally`);
     } catch (error) {
-      console.error('Error caching habits:', error);
+      console.error("Error caching habits:", error);
     }
   }
 
   async getCachedHabits() {
     try {
-      if (this.habitsCache && this.lastCacheTime && Date.now() - this.lastCacheTime < CACHE_DURATION) {
+      if (
+        this.habitsCache &&
+        this.lastCacheTime &&
+        Date.now() - this.lastCacheTime < CACHE_DURATION
+      ) {
         return this.habitsCache;
       }
 
@@ -192,7 +216,7 @@ class FirebaseService {
       this.lastCacheTime = Date.now();
       return visibleHabits;
     } catch (error) {
-      console.error('Error getting cached habits:', error);
+      console.error("Error getting cached habits:", error);
       return [];
     }
   }
@@ -201,9 +225,9 @@ class FirebaseService {
     try {
       this.habitsCache = null;
       this.lastCacheTime = null;
-      console.log('🗑️ In-memory habits cache cleared');
+      console.log("🗑️ In-memory habits cache cleared");
     } catch (error) {
-      console.error('Error clearing cache:', error);
+      console.error("Error clearing cache:", error);
     }
   }
 
@@ -212,7 +236,7 @@ class FirebaseService {
       const stored = await AsyncStorage.getItem(LOCAL_USER_CACHE_KEY);
       return stored ? JSON.parse(stored) : {};
     } catch (error) {
-      console.error('Error reading cached user profile:', error);
+      console.error("Error reading cached user profile:", error);
       return {};
     }
   }
@@ -225,10 +249,13 @@ class FirebaseService {
         ...profile,
         cachedAt: new Date().toISOString(),
       };
-      await AsyncStorage.setItem(LOCAL_USER_CACHE_KEY, JSON.stringify(nextProfile));
+      await AsyncStorage.setItem(
+        LOCAL_USER_CACHE_KEY,
+        JSON.stringify(nextProfile),
+      );
       return nextProfile;
     } catch (error) {
-      console.error('Error caching user profile:', error);
+      console.error("Error caching user profile:", error);
       return profile;
     }
   }
@@ -240,34 +267,43 @@ class FirebaseService {
 
     const computedLongestStreak = visibleHabits.reduce(
       (best, habit) => Math.max(best, habit.longestStreak || 0),
-      0
+      0,
     );
 
     return {
       displayName:
         this.currentUser?.displayName ||
         cachedProfile.displayName ||
-        this.currentUser?.email?.split('@')[0] ||
-        'HabitOwl User',
-      email: this.currentUser?.email || cachedProfile.email || '',
+        this.currentUser?.email?.split("@")[0] ||
+        "HabitOwl User",
+      email: this.currentUser?.email || cachedProfile.email || "",
       photoURL: this.currentUser?.photoURL || cachedProfile.photoURL || null,
       isPremium: !!cachedProfile.isPremium,
       referralCount: cachedProfile.referralCount || 0,
       referralCode: cachedProfile.referralCode || this.generateReferralCode(),
       aiCoachingUsage: cachedProfile.aiCoachingUsage || {
-        dateKey: '',
+        dateKey: "",
         count: 0,
       },
       totalHabits: visibleHabits.length,
-      longestStreak: Math.max(cachedProfile.longestStreak || 0, computedLongestStreak),
-      authProvider: cachedProfile.authProvider || (this.currentUser?.isAnonymous ? 'anonymous' : 'password'),
+      longestStreak: Math.max(
+        cachedProfile.longestStreak || 0,
+        computedLongestStreak,
+      ),
+      authProvider:
+        cachedProfile.authProvider ||
+        (this.currentUser?.isAnonymous ? "anonymous" : "password"),
       uid: this.currentUser?.uid || cachedProfile.uid || null,
     };
   }
 
   async signUp(email, password, displayName) {
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        email,
+        password,
+      );
       const user = userCredential.user;
 
       await updateProfile(user, { displayName });
@@ -280,7 +316,7 @@ class FirebaseService {
       this.syncPendingHabitsInBackground();
       return user;
     } catch (error) {
-      console.error('Sign up error:', error);
+      console.error("Sign up error:", error);
       throw this.handleFirebaseError(error);
     }
   }
@@ -288,10 +324,14 @@ class FirebaseService {
   async signIn(email, password) {
     try {
       if (!email || !password) {
-        throw new Error('Email and password required');
+        throw new Error("Email and password required");
       }
 
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        email,
+        password,
+      );
       const user = userCredential.user;
 
       if (testAccountService.isTestAccount(email)) {
@@ -301,7 +341,7 @@ class FirebaseService {
       this.syncPendingHabitsInBackground();
       return user;
     } catch (error) {
-      console.error('Sign in error:', error);
+      console.error("Sign in error:", error);
       throw this.handleFirebaseError(error);
     }
   }
@@ -309,16 +349,22 @@ class FirebaseService {
   async signInWithGoogleWeb() {
     try {
       const provider = new GoogleAuthProvider();
-      provider.addScope('email');
-      provider.addScope('profile');
+      provider.addScope("email");
+      provider.addScope("profile");
 
       const result = await signInWithPopup(auth, provider);
 
       if (result?.user) {
         await this.createUserDocument(result.user);
 
-        if (result.user.email && testAccountService.isTestAccount(result.user.email)) {
-          await testAccountService.grantTestAccountPremium(result.user.email, result.user.uid);
+        if (
+          result.user.email &&
+          testAccountService.isTestAccount(result.user.email)
+        ) {
+          await testAccountService.grantTestAccountPremium(
+            result.user.email,
+            result.user.uid,
+          );
         }
 
         this.syncPendingHabitsInBackground();
@@ -327,7 +373,7 @@ class FirebaseService {
 
       return null;
     } catch (error) {
-      console.error('Google sign in error:', error);
+      console.error("Google sign in error:", error);
       throw this.handleFirebaseError(error);
     }
   }
@@ -340,8 +386,14 @@ class FirebaseService {
       if (result?.user) {
         await this.createUserDocument(result.user);
 
-        if (result.user.email && testAccountService.isTestAccount(result.user.email)) {
-          await testAccountService.grantTestAccountPremium(result.user.email, result.user.uid);
+        if (
+          result.user.email &&
+          testAccountService.isTestAccount(result.user.email)
+        ) {
+          await testAccountService.grantTestAccountPremium(
+            result.user.email,
+            result.user.uid,
+          );
         }
 
         this.syncPendingHabitsInBackground();
@@ -350,27 +402,29 @@ class FirebaseService {
 
       return null;
     } catch (error) {
-      console.error('Google credential error:', error);
+      console.error("Google credential error:", error);
       throw this.handleFirebaseError(error);
     }
   }
 
   async signOut() {
     try {
-      const onboardingCompleted = await AsyncStorage.getItem(ONBOARDING_STORAGE_KEY);
+      const onboardingCompleted = await AsyncStorage.getItem(
+        ONBOARDING_STORAGE_KEY,
+      );
       await signOut(auth);
       await AsyncStorage.clear();
 
-      if (onboardingCompleted === 'true') {
-        await AsyncStorage.setItem(ONBOARDING_STORAGE_KEY, 'true');
+      if (onboardingCompleted === "true") {
+        await AsyncStorage.setItem(ONBOARDING_STORAGE_KEY, "true");
       }
 
       this.deviceId = null;
       this.habitsCache = null;
       this.lastCacheTime = null;
-      console.log('Sign out successful');
+      console.log("Sign out successful");
     } catch (error) {
-      console.error('Sign out error:', error);
+      console.error("Sign out error:", error);
       throw this.handleFirebaseError(error);
     }
   }
@@ -394,7 +448,7 @@ class FirebaseService {
       await this.createUserDocument(user);
       return user;
     } catch (error) {
-      console.error('Anonymous sign in error:', error);
+      console.error("Anonymous sign in error:", error);
       throw this.handleFirebaseError(error);
     } finally {
       this.authBootstrapInFlight = false;
@@ -407,7 +461,7 @@ class FirebaseService {
 
     return () => {
       this.authStateChangedListeners = this.authStateChangedListeners.filter(
-        (listener) => listener !== callback
+        (listener) => listener !== callback,
       );
     };
   }
@@ -415,7 +469,8 @@ class FirebaseService {
   async createUserDocument(user) {
     try {
       const localStats = await this.buildLocalUserStats();
-      const derivedDisplayName = user.displayName || user.email?.split('@')[0] || localStats.displayName;
+      const derivedDisplayName =
+        user.displayName || user.email?.split("@")[0] || localStats.displayName;
 
       const baseUserDoc = {
         uid: user.uid,
@@ -430,17 +485,19 @@ class FirebaseService {
         referredBy: localStats.referredBy || null,
         referralCount: localStats.referralCount || 0,
         aiCoachingUsage: localStats.aiCoachingUsage || {
-          dateKey: '',
+          dateKey: "",
           count: 0,
         },
-        authProvider: user.isAnonymous ? 'anonymous' : user.providerData?.[0]?.providerId || 'password',
+        authProvider: user.isAnonymous
+          ? "anonymous"
+          : user.providerData?.[0]?.providerId || "password",
       };
 
-      const q = query(collection(db, 'users'), where('uid', '==', user.uid));
+      const q = query(collection(db, "users"), where("uid", "==", user.uid));
       const querySnapshot = await getDocs(q);
 
       if (querySnapshot.empty) {
-        await addDoc(collection(db, 'users'), baseUserDoc);
+        await addDoc(collection(db, "users"), baseUserDoc);
         await this.cacheUserProfile(baseUserDoc);
         return baseUserDoc;
       }
@@ -454,7 +511,8 @@ class FirebaseService {
         isPremium: existingData.isPremium ?? baseUserDoc.isPremium,
         referralCode: existingData.referralCode || baseUserDoc.referralCode,
         referralCount: existingData.referralCount || 0,
-        aiCoachingUsage: existingData.aiCoachingUsage || baseUserDoc.aiCoachingUsage,
+        aiCoachingUsage:
+          existingData.aiCoachingUsage || baseUserDoc.aiCoachingUsage,
       };
 
       await updateDoc(existingDoc.ref, {
@@ -465,14 +523,17 @@ class FirebaseService {
       await this.cacheUserProfile(mergedUserDoc);
       return mergedUserDoc;
     } catch (error) {
-      console.error('Error with user document:', error);
+      console.error("Error with user document:", error);
 
       const fallbackProfile = {
         uid: user.uid,
         email: user.email || null,
-        displayName: user.displayName || user.email?.split('@')[0] || 'HabitOwl User',
+        displayName:
+          user.displayName || user.email?.split("@")[0] || "HabitOwl User",
         photoURL: user.photoURL || null,
-        authProvider: user.isAnonymous ? 'anonymous' : user.providerData?.[0]?.providerId || 'password',
+        authProvider: user.isAnonymous
+          ? "anonymous"
+          : user.providerData?.[0]?.providerId || "password",
       };
 
       await this.cacheUserProfile(fallbackProfile);
@@ -487,9 +548,9 @@ class FirebaseService {
 
     try {
       const q = query(
-        collection(db, 'habits'),
-        where('userId', '==', this.currentUser.uid),
-        where('isActive', '==', true)
+        collection(db, "habits"),
+        where("userId", "==", this.currentUser.uid),
+        where("isActive", "==", true),
       );
 
       let querySnapshot;
@@ -505,11 +566,11 @@ class FirebaseService {
           this.normalizeLocalHabit({
             id: snapshot.id,
             ...snapshot.data(),
-            syncStatus: 'synced',
+            syncStatus: "synced",
             pendingDelete: false,
             isSyncedToRemote: true,
             lastSyncedAt: new Date().toISOString(),
-          })
+          }),
         );
       });
 
@@ -528,7 +589,7 @@ class FirebaseService {
           return;
         }
 
-        if (localHabit.pendingDelete || localHabit.syncStatus === 'pending') {
+        if (localHabit.pendingDelete || localHabit.syncStatus === "pending") {
           return;
         }
 
@@ -539,37 +600,49 @@ class FirebaseService {
       await this.persistLocalHabits(mergedHabits);
       return this.getVisibleHabits(mergedHabits);
     } catch (error) {
-      console.log('Remote habits pull skipped:', error.message);
+      console.log("Remote habits pull skipped:", error.message);
       return this.getCachedHabits();
     }
   }
 
   async syncPendingHabitsInBackground() {
     this.syncPendingHabits().catch((error) => {
-      console.log('Background habit sync postponed:', error.message);
+      console.log("Background habit sync postponed:", error.message);
     });
   }
 
   serializeHabitForRemote(habit) {
+    const normalized = this.normalizeLocalHabit(habit);
+
     return {
-      name: habit.name,
-      description: habit.description,
-      category: habit.category,
-      difficulty: habit.difficulty,
-      estimatedTime: habit.estimatedTime,
-      reminderEnabled: habit.reminderEnabled,
-      reminderTime: habit.reminderTime,
-      reminderMessage: habit.reminderMessage,
-      createdAt: habit.createdAt,
-      updatedAt: habit.updatedAt,
-      userId: this.currentUser?.uid || habit.userId,
-      currentStreak: habit.currentStreak || 0,
-      longestStreak: habit.longestStreak || 0,
-      totalCompletions: habit.totalCompletions || 0,
-      completions: Array.isArray(habit.completions) ? habit.completions : [],
-      isActive: habit.isActive !== false,
-      lastCompletedAt: habit.lastCompletedAt || null,
-      deletedAt: habit.deletedAt || null,
+      name: normalized.name,
+      description: normalized.description,
+      category: normalized.category,
+      difficulty: normalized.difficulty,
+      estimatedTime: normalized.estimatedTime,
+      reminderEnabled: normalized.reminderEnabled,
+      reminderTime: normalized.reminderTime,
+      reminderMessage: normalized.reminderMessage,
+      scheduleType: normalized.scheduleType,
+      selectedDays: normalized.selectedDays,
+      weeklyTarget: normalized.weeklyTarget,
+      cue: normalized.cue,
+      location: normalized.location,
+      reward: normalized.reward,
+      templateId: normalized.templateId,
+      isPremiumTemplate: !!normalized.isPremiumTemplate,
+      createdAt: normalized.createdAt,
+      updatedAt: normalized.updatedAt,
+      userId: this.currentUser?.uid || normalized.userId,
+      currentStreak: normalized.currentStreak || 0,
+      longestStreak: normalized.longestStreak || 0,
+      totalCompletions: normalized.totalCompletions || 0,
+      completions: Array.isArray(normalized.completions)
+        ? normalized.completions
+        : [],
+      isActive: normalized.isActive !== false,
+      lastCompletedAt: normalized.lastCompletedAt || null,
+      deletedAt: normalized.deletedAt || null,
     };
   }
 
@@ -600,7 +673,7 @@ class FirebaseService {
         if (habit.pendingDelete) {
           if (habit.isSyncedToRemote) {
             await setDoc(
-              doc(db, 'habits', habit.id),
+              doc(db, "habits", habit.id),
               {
                 ...this.serializeHabitForRemote({
                   ...habit,
@@ -609,7 +682,7 @@ class FirebaseService {
                   updatedAt: new Date().toISOString(),
                 }),
               },
-              { merge: true }
+              { merge: true },
             );
           }
 
@@ -618,18 +691,22 @@ class FirebaseService {
           continue;
         }
 
-        if (habit.syncStatus !== 'pending') {
+        if (habit.syncStatus !== "pending") {
           continue;
         }
 
-        await setDoc(doc(db, 'habits', habit.id), this.serializeHabitForRemote(habit), { merge: true });
+        await setDoc(
+          doc(db, "habits", habit.id),
+          this.serializeHabitForRemote(habit),
+          { merge: true },
+        );
 
         const index = localHabits.findIndex((item) => item.id === habit.id);
         if (index !== -1) {
           localHabits[index] = {
             ...localHabits[index],
             userId: this.currentUser.uid,
-            syncStatus: 'synced',
+            syncStatus: "synced",
             isSyncedToRemote: true,
             lastSyncedAt: new Date().toISOString(),
           };
@@ -657,10 +734,13 @@ class FirebaseService {
       const visibleHabits = this.getVisibleHabits(habits);
       const longestStreak = visibleHabits.reduce(
         (best, habit) => Math.max(best, habit.longestStreak || 0),
-        0
+        0,
       );
 
-      const q = query(collection(db, 'users'), where('uid', '==', this.currentUser.uid));
+      const q = query(
+        collection(db, "users"),
+        where("uid", "==", this.currentUser.uid),
+      );
       const querySnapshot = await getDocs(q);
       if (querySnapshot.empty) {
         await this.createUserDocument(this.currentUser);
@@ -679,7 +759,7 @@ class FirebaseService {
         longestStreak,
       });
     } catch (error) {
-      console.log('User stats sync skipped:', error.message);
+      console.log("User stats sync skipped:", error.message);
     }
   }
 
@@ -702,7 +782,7 @@ class FirebaseService {
         totalCompletions: 0,
         isActive: true,
         completions: [],
-        syncStatus: 'pending',
+        syncStatus: "pending",
         pendingDelete: false,
         isSyncedToRemote: false,
       });
@@ -713,8 +793,8 @@ class FirebaseService {
       this.syncPendingHabitsInBackground();
       return newHabit;
     } catch (error) {
-      console.error('Error creating habit:', error);
-      throw new Error(error.message || 'Failed to create habit');
+      console.error("Error creating habit:", error);
+      throw new Error(error.message || "Failed to create habit");
     }
   }
 
@@ -732,7 +812,7 @@ class FirebaseService {
       this.syncPendingHabitsInBackground();
       return await this.getCachedHabits();
     } catch (error) {
-      console.error('Error fetching habits:', error);
+      console.error("Error fetching habits:", error);
       return this.getCachedHabits();
     }
   }
@@ -747,14 +827,14 @@ class FirebaseService {
     const index = habits.findIndex((habit) => habit.id === habitId);
 
     if (index === -1) {
-      throw new Error('Habit not found');
+      throw new Error("Habit not found");
     }
 
     habits[index] = this.normalizeLocalHabit({
       ...habits[index],
       ...updates,
       updatedAt: new Date().toISOString(),
-      syncStatus: 'pending',
+      syncStatus: "pending",
       pendingDelete: false,
     });
 
@@ -768,7 +848,7 @@ class FirebaseService {
     const index = habits.findIndex((habit) => habit.id === habitId);
 
     if (index === -1) {
-      throw new Error('Habit not found');
+      throw new Error("Habit not found");
     }
 
     const targetHabit = habits[index];
@@ -783,7 +863,7 @@ class FirebaseService {
       ...targetHabit,
       isActive: false,
       pendingDelete: true,
-      syncStatus: 'pending',
+      syncStatus: "pending",
       deletedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
@@ -798,19 +878,21 @@ class FirebaseService {
     const index = habits.findIndex((habit) => habit.id === habitId);
 
     if (index === -1) {
-      throw new Error('Habit not found');
+      throw new Error("Habit not found");
     }
 
     const habit = habits[index];
     const today = new Date().toDateString();
-    const completions = Array.isArray(habit.completions) ? [...habit.completions] : [];
+    const completions = Array.isArray(habit.completions)
+      ? [...habit.completions]
+      : [];
 
     if (completions.includes(today)) {
-      throw new Error('Already completed today');
+      throw new Error("Already completed today");
     }
 
     completions.push(today);
-    const newStreak = this.calculateStreak(completions);
+    const newStreak = calculateHabitStreak({ ...habit, completions });
     const newLongestStreak = Math.max(habit.longestStreak || 0, newStreak);
 
     habits[index] = this.normalizeLocalHabit({
@@ -821,7 +903,7 @@ class FirebaseService {
       totalCompletions: (habit.totalCompletions || 0) + 1,
       lastCompletedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      syncStatus: 'pending',
+      syncStatus: "pending",
     });
 
     await this.persistLocalHabits(habits);
@@ -835,13 +917,15 @@ class FirebaseService {
     const index = habits.findIndex((habit) => habit.id === habitId);
 
     if (index === -1) {
-      throw new Error('Habit not found');
+      throw new Error("Habit not found");
     }
 
     const habit = habits[index];
     const today = new Date().toDateString();
-    const completions = (habit.completions || []).filter((date) => date !== today);
-    const newStreak = this.calculateStreak(completions);
+    const completions = (habit.completions || []).filter(
+      (date) => date !== today,
+    );
+    const newStreak = calculateHabitStreak({ ...habit, completions });
 
     habits[index] = this.normalizeLocalHabit({
       ...habit,
@@ -849,7 +933,7 @@ class FirebaseService {
       currentStreak: newStreak,
       totalCompletions: Math.max(0, (habit.totalCompletions || 0) - 1),
       updatedAt: new Date().toISOString(),
-      syncStatus: 'pending',
+      syncStatus: "pending",
     });
 
     await this.persistLocalHabits(habits);
@@ -866,7 +950,10 @@ class FirebaseService {
     }
 
     try {
-      const q = query(collection(db, 'users'), where('uid', '==', this.currentUser.uid));
+      const q = query(
+        collection(db, "users"),
+        where("uid", "==", this.currentUser.uid),
+      );
       const querySnapshot = await getDocs(q);
 
       if (querySnapshot.empty) {
@@ -875,7 +962,10 @@ class FirebaseService {
           ...localStats,
           ...createdProfile,
           totalHabits: localStats.totalHabits,
-          longestStreak: Math.max(localStats.longestStreak, createdProfile.longestStreak || 0),
+          longestStreak: Math.max(
+            localStats.longestStreak,
+            createdProfile.longestStreak || 0,
+          ),
         };
       }
 
@@ -885,28 +975,33 @@ class FirebaseService {
         displayName: userData.displayName || localStats.displayName,
         email: userData.email || localStats.email,
         totalHabits: localStats.totalHabits,
-        longestStreak: Math.max(userData.longestStreak || 0, localStats.longestStreak || 0),
+        longestStreak: Math.max(
+          userData.longestStreak || 0,
+          localStats.longestStreak || 0,
+        ),
       };
 
       if (this.currentUser.email) {
         try {
-          const AdminService = require('./AdminService').default;
-          const isAdmin = await AdminService.checkAdminStatus(this.currentUser.email);
+          const AdminService = require("./AdminService").default;
+          const isAdmin = await AdminService.checkAdminStatus(
+            this.currentUser.email,
+          );
           if (isAdmin && !mergedUserData.isPremium) {
             mergedUserData = {
               ...mergedUserData,
               isPremium: true,
-              premiumReason: 'admin_access',
+              premiumReason: "admin_access",
             };
 
             await updateDoc(querySnapshot.docs[0].ref, {
               isPremium: true,
               premiumUpdatedAt: new Date().toISOString(),
-              premiumReason: 'admin_access',
+              premiumReason: "admin_access",
             });
           }
         } catch (error) {
-          console.log('Admin status check skipped:', error.message);
+          console.log("Admin status check skipped:", error.message);
         }
       }
 
@@ -915,10 +1010,13 @@ class FirebaseService {
         ...localStats,
         ...mergedUserData,
         totalHabits: localStats.totalHabits,
-        longestStreak: Math.max(localStats.longestStreak, mergedUserData.longestStreak || 0),
+        longestStreak: Math.max(
+          localStats.longestStreak,
+          mergedUserData.longestStreak || 0,
+        ),
       };
     } catch (error) {
-      console.log('Using cached local user stats:', error.message);
+      console.log("Using cached local user stats:", error.message);
       return localStats;
     }
   }
@@ -941,20 +1039,23 @@ class FirebaseService {
     }
 
     try {
-      const q = query(collection(db, 'users'), where('uid', '==', this.currentUser.uid));
+      const q = query(
+        collection(db, "users"),
+        where("uid", "==", this.currentUser.uid),
+      );
       const querySnapshot = await getDocs(q);
       if (!querySnapshot.empty) {
         const userDoc = querySnapshot.docs[0];
         await updateDoc(userDoc.ref, nextProfile);
       }
     } catch (error) {
-      console.log('User stats remote update deferred:', error.message);
+      console.log("User stats remote update deferred:", error.message);
     }
   }
 
   async getAICoachingUsageStatus(limit = 2) {
     const userStats = await this.getUserStats();
-    const dateKey = new Date().toISOString().split('T')[0];
+    const dateKey = new Date().toISOString().split("T")[0];
     const usage = userStats?.aiCoachingUsage || {};
     const count = usage.dateKey === dateKey ? usage.count || 0 : 0;
 
@@ -997,20 +1098,23 @@ class FirebaseService {
 
   async processReferral(referralCode) {
     if (!this.currentUser) {
-      throw new Error('You need internet connection to use referral codes');
+      throw new Error("You need internet connection to use referral codes");
     }
 
-    const q = query(collection(db, 'users'), where('referralCode', '==', referralCode));
+    const q = query(
+      collection(db, "users"),
+      where("referralCode", "==", referralCode),
+    );
     const querySnapshot = await getDocs(q);
     if (querySnapshot.empty) {
-      throw new Error('Invalid referral code');
+      throw new Error("Invalid referral code");
     }
 
     const referrerDoc = querySnapshot.docs[0];
     const referrerId = referrerDoc.data().uid;
 
     if (referrerId === this.currentUser.uid) {
-      throw new Error('Cannot refer yourself');
+      throw new Error("Cannot refer yourself");
     }
 
     await this.updateUserStats({ referredBy: referrerId });
@@ -1020,11 +1124,11 @@ class FirebaseService {
       updatedAt: new Date().toISOString(),
     });
 
-    await addDoc(collection(db, 'referrals'), {
+    await addDoc(collection(db, "referrals"), {
       referrerId,
       referredUserId: this.currentUser.uid,
       createdAt: new Date().toISOString(),
-      status: 'completed',
+      status: "completed",
     });
 
     return true;
@@ -1036,9 +1140,9 @@ class FirebaseService {
     }
 
     const q = query(
-      collection(db, 'referrals'),
-      where('referrerId', '==', this.currentUser.uid),
-      orderBy('createdAt', 'desc')
+      collection(db, "referrals"),
+      where("referrerId", "==", this.currentUser.uid),
+      orderBy("createdAt", "desc"),
     );
 
     const querySnapshot = await getDocs(q);
@@ -1054,7 +1158,7 @@ class FirebaseService {
         return;
       }
 
-      await addDoc(collection(db, 'analytics'), {
+      await addDoc(collection(db, "analytics"), {
         userId: this.currentUser.uid,
         eventName,
         parameters,
@@ -1062,7 +1166,7 @@ class FirebaseService {
         platform: Platform.OS,
       });
     } catch (error) {
-      console.error('Analytics error:', error);
+      console.error("Analytics error:", error);
     }
   }
 
@@ -1097,8 +1201,8 @@ class FirebaseService {
   }
 
   generateReferralCode() {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let result = 'OWL';
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    let result = "OWL";
     for (let i = 0; i < 3; i += 1) {
       result += chars.charAt(Math.floor(Math.random() * chars.length));
     }
@@ -1107,25 +1211,27 @@ class FirebaseService {
 
   handleFirebaseError(error) {
     const errorMessages = {
-      'auth/email-already-in-use': 'Email already registered',
-      'auth/invalid-email': 'Invalid email address',
-      'auth/operation-not-allowed': 'Operation not allowed',
-      'auth/weak-password': 'Password too weak (min 6 chars)',
-      'auth/user-disabled': 'User account disabled',
-      'auth/user-not-found': 'No user found',
-      'auth/wrong-password': 'Incorrect password',
-      'auth/invalid-credential': 'Invalid credentials',
-      'auth/too-many-requests': 'Too many attempts. Try later',
-      'auth/popup-closed-by-user': 'Sign-in popup closed',
-      'auth/popup-blocked': 'Sign-in popup blocked',
-      'auth/cancelled-popup-request': 'Multiple popup requests',
-      'auth/account-exists-with-different-credential': 'Account exists with different credentials',
-      'auth/network-request-failed': 'Network error. Check internet',
-      'auth/invalid-api-key': 'Invalid API key',
-      'auth/app-not-authorized': 'App not authorized',
+      "auth/email-already-in-use": "Email already registered",
+      "auth/invalid-email": "Invalid email address",
+      "auth/operation-not-allowed": "Operation not allowed",
+      "auth/weak-password": "Password too weak (min 6 chars)",
+      "auth/user-disabled": "User account disabled",
+      "auth/user-not-found": "No user found",
+      "auth/wrong-password": "Incorrect password",
+      "auth/invalid-credential": "Invalid credentials",
+      "auth/too-many-requests": "Too many attempts. Try later",
+      "auth/popup-closed-by-user": "Sign-in popup closed",
+      "auth/popup-blocked": "Sign-in popup blocked",
+      "auth/cancelled-popup-request": "Multiple popup requests",
+      "auth/account-exists-with-different-credential":
+        "Account exists with different credentials",
+      "auth/network-request-failed": "Network error. Check internet",
+      "auth/invalid-api-key": "Invalid API key",
+      "auth/app-not-authorized": "App not authorized",
     };
 
-    const message = errorMessages[error.code] || error.message || 'Unexpected error';
+    const message =
+      errorMessages[error.code] || error.message || "Unexpected error";
     return new Error(message);
   }
 
@@ -1140,7 +1246,10 @@ class FirebaseService {
         return true;
       }
 
-      const userQuery = query(collection(db, 'users'), where('uid', '==', this.currentUser.uid));
+      const userQuery = query(
+        collection(db, "users"),
+        where("uid", "==", this.currentUser.uid),
+      );
       const querySnapshot = await getDocs(userQuery);
 
       if (!querySnapshot.empty) {
@@ -1159,14 +1268,14 @@ class FirebaseService {
 
       return true;
     } catch (error) {
-      console.error('Error updating premium:', error);
+      console.error("Error updating premium:", error);
       throw error;
     }
   }
 
   async checkIfUserIsAdmin(email) {
     try {
-      const AdminService = require('./AdminService').default;
+      const AdminService = require("./AdminService").default;
       return await AdminService.checkAdminStatus(email);
     } catch (error) {
       return false;

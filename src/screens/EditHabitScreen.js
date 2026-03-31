@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -7,669 +7,577 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  Keyboard
-} from 'react-native';
+} from "react-native";
 import {
-  TextInput,
+  Appbar,
   Button,
   Card,
   Chip,
   Switch,
-  Appbar,
-  HelperText
-} from 'react-native-paper';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import DateTimePicker from '@react-native-community/datetimepicker';
+  TextInput,
+} from "react-native-paper";
+import DateTimePicker from "@react-native-community/datetimepicker";
+import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 
-import FirebaseService from '../services/FirebaseService';
-import NotificationService from '../services/NotificationService';
-import adMobService from '../services/AdMobService';
+import FirebaseService from "../services/FirebaseService";
+import NotificationService from "../services/NotificationService";
+import TipsService from "../services/TipsService";
+import TipCard from "../components/TipCard";
+import PremiumFeatureCard from "../components/PremiumFeatureCard";
+import {
+  DAY_OPTIONS,
+  SCHEDULE_OPTIONS,
+  normalizeHabitSchedule,
+} from "../utils/habitHelpers";
+
+const CATEGORY_OPTIONS = [
+  { value: "wellness", label: "Wellness", icon: "leaf" },
+  { value: "fitness", label: "Fitness", icon: "dumbbell" },
+  { value: "productivity", label: "Productivity", icon: "briefcase-outline" },
+  {
+    value: "learning",
+    label: "Learning",
+    icon: "book-open-page-variant-outline",
+  },
+  { value: "health", label: "Health", icon: "heart-pulse" },
+  { value: "creativity", label: "Creativity", icon: "palette-outline" },
+  { value: "social", label: "Social", icon: "account-group-outline" },
+  { value: "finance", label: "Finance", icon: "cash-multiple" },
+];
+const TIME_OPTIONS = [
+  "5 min",
+  "10 min",
+  "15 min",
+  "20 min",
+  "30 min",
+  "45 min",
+  "1 hour",
+];
 
 const EditHabitScreen = ({ navigation, route }) => {
-  const { habit, onGoBack } = route.params;
-  const scrollViewRef = useRef(null);
-  
-  const [habitName, setHabitName] = useState(habit.name || '');
-  const [description, setDescription] = useState(habit.description || '');
-  const [category, setCategory] = useState(habit.category || 'wellness');
+  const { habit } = route.params;
+  const normalizedHabit = normalizeHabitSchedule(habit);
+
+  const [habitName, setHabitName] = useState(habit.name || "");
+  const [description, setDescription] = useState(habit.description || "");
+  const [category, setCategory] = useState(habit.category || "wellness");
   const [difficulty, setDifficulty] = useState(habit.difficulty || 2);
-  const [estimatedTime, setEstimatedTime] = useState(habit.estimatedTime || '5 min');
-  const [reminderEnabled, setReminderEnabled] = useState(habit.reminderEnabled || false);
+  const [estimatedTime, setEstimatedTime] = useState(
+    habit.estimatedTime || "10 min",
+  );
+  const [scheduleType, setScheduleType] = useState(
+    normalizedHabit.scheduleType || "daily",
+  );
+  const [selectedDays, setSelectedDays] = useState(
+    normalizedHabit.selectedDays || [1, 2, 3, 4, 5],
+  );
+  const [weeklyTarget, setWeeklyTarget] = useState(
+    normalizedHabit.weeklyTarget || 3,
+  );
+  const [cue, setCue] = useState(normalizedHabit.cue || "");
+  const [location, setLocation] = useState(normalizedHabit.location || "");
+  const [reward, setReward] = useState(normalizedHabit.reward || "");
+  const [reminderEnabled, setReminderEnabled] = useState(
+    !!habit.reminderEnabled,
+  );
   const [reminderTime, setReminderTime] = useState(() => {
-    if (habit.reminderTime) {
-      const [hours, minutes] = habit.reminderTime.split(':').map(Number);
-      const date = new Date();
-      date.setHours(hours, minutes, 0, 0);
-      return date;
-    }
-    return new Date();
+    if (!habit.reminderTime) return new Date();
+    const [hours, minutes] = habit.reminderTime.split(":").map(Number);
+    const value = new Date();
+    value.setHours(hours, minutes, 0, 0);
+    return value;
   });
+  const [customMessage, setCustomMessage] = useState(
+    habit.reminderMessage || "",
+  );
   const [showTimePicker, setShowTimePicker] = useState(false);
-  const [customMessage, setCustomMessage] = useState(habit.reminderMessage || '');
   const [isLoading, setIsLoading] = useState(false);
-
-  // ✅ FIXED: Track premium/admin status properly
-  const [isPremiumOrAdmin, setIsPremiumOrAdmin] = useState(false);
-  const [interactionCount, setInteractionCount] = useState(0);
-
-  const categories = [
-    { value: 'wellness', label: 'Wellness', icon: 'leaf', color: '#10b981' },
-    { value: 'fitness', label: 'Fitness', icon: 'dumbbell', color: '#f59e0b' },
-    { value: 'productivity', label: 'Productivity', icon: 'briefcase', color: '#3b82f6' },
-    { value: 'learning', label: 'Learning', icon: 'book', color: '#8b5cf6' },
-    { value: 'health', label: 'Health', icon: 'heart', color: '#ef4444' },
-    { value: 'creativity', label: 'Creativity', icon: 'palette', color: '#f97316' },
-    { value: 'social', label: 'Social', icon: 'account-group', color: '#06b6d4' },
-    { value: 'finance', label: 'Finance', icon: 'currency-usd', color: '#10b981' }
-  ];
-
-  const timeOptions = ['5 min', '10 min', '15 min', '30 min', '45 min', '1 hour', '2 hours'];
+  const [isPremium, setIsPremium] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
 
   useEffect(() => {
-    checkPremiumStatus(); // ✅ ADDED: Check on mount
+    const bootstrap = async () => {
+      const [stats, seenGuide] = await Promise.all([
+        FirebaseService.getUserStats(),
+        TipsService.hasSeenGuide("edit_habit"),
+      ]);
+      let adminStatus = false;
+      const currentUser = FirebaseService.currentUser;
+      if (currentUser?.email) {
+        const AdminService = require("../services/AdminService").default;
+        adminStatus = await AdminService.checkAdminStatus(currentUser.email);
+      }
+      setIsPremium(!!stats?.isPremium || adminStatus);
+      setIsAdmin(adminStatus);
+      setShowGuide(!seenGuide);
+    };
+    bootstrap();
   }, []);
 
-  // ✅ ADDED: Check premium/admin status
-  const checkPremiumStatus = async () => {
-    try {
-      const userStats = await FirebaseService.getUserStats();
-      const isPremium = userStats?.isPremium || false;
-      
-      // Also check admin status
-      const user = FirebaseService.currentUser;
-      let isAdmin = false;
-      if (user && user.email) {
-        const AdminService = require('../services/AdminService').default;
-        isAdmin = await AdminService.checkAdminStatus(user.email);
+  const categoryMeta = useMemo(
+    () => CATEGORY_OPTIONS.find((item) => item.value === category),
+    [category],
+  );
+  const canUseAdvancedSchedule = isPremium || isAdmin;
+  const canUseCustomReminderMessage = isPremium || isAdmin;
+
+  const toggleSelectedDay = (dayValue) => {
+    setSelectedDays((current) => {
+      if (current.includes(dayValue)) {
+        const next = current.filter((value) => value !== dayValue);
+        return next.length ? next : current;
       }
-      
-      const premiumOrAdmin = isPremium || isAdmin;
-      setIsPremiumOrAdmin(premiumOrAdmin);
-      
-      console.log('[EditHabit] Premium/Admin status:', premiumOrAdmin, '(Premium:', isPremium, 'Admin:', isAdmin, ')');
-    } catch (error) {
-      console.log('[EditHabit] Error checking status:', error);
-      setIsPremiumOrAdmin(false);
-    }
+      return [...current, dayValue].sort((a, b) => a - b);
+    });
   };
 
-  // ✅ FIXED: Only show ads for FREE users
-  const trackInteractionAndShowAd = async (actionName) => {
-    // ✅ CRITICAL FIX: Check status FIRST before showing any ads
-    if (isPremiumOrAdmin) {
-      console.log(`[EditHabit] 👑 Premium/Admin user - no ads for ${actionName}`);
-      return;
-    }
-
-    const newCount = interactionCount + 1;
-    setInteractionCount(newCount);
-    
-    console.log(`[EditHabit] Interaction #${newCount}: ${actionName}`);
-    
-    // Show ad every 2 interactions in edit screen
-    if (newCount % 2 === 0) {
-      setTimeout(async () => {
-        try {
-          // ✅ Double-check before showing ad
-          if (!isPremiumOrAdmin) {
-            await adMobService.showInterstitialAd(`edit_habit_${actionName}`);
-          }
-        } catch (error) {
-          console.log('[EditHabit] Ad not shown:', error);
-        }
-      }, 500);
-    }
-  };
-
-  const validateForm = () => {
+  const validate = () => {
     if (!habitName.trim()) {
-      Alert.alert('Error', 'Please enter a habit name');
+      Alert.alert("Habit name required", "Please enter a habit name.");
       return false;
     }
-    
-    if (habitName.length < 3) {
-      Alert.alert('Error', 'Habit name must be at least 3 characters');
+    if (scheduleType === "custom" && selectedDays.length === 0) {
+      Alert.alert("Choose days", "Select at least one custom day.");
       return false;
     }
-
-    if (habitName.length > 50) {
-      Alert.alert('Error', 'Habit name must be less than 50 characters');
+    if (scheduleType === "timesPerWeek" && !canUseAdvancedSchedule) {
+      Alert.alert(
+        "Premium feature",
+        "Weekly target scheduling is visible here but unlocked on Premium.",
+      );
       return false;
     }
-
     return true;
   };
 
-  const handleUpdateHabit = async () => {
-    if (!validateForm()) return;
+  const saveHabit = async () => {
+    if (!validate()) return;
 
     try {
       setIsLoading(true);
-
       const updates = {
         name: habitName.trim(),
         description: description.trim(),
         category,
         difficulty,
         estimatedTime,
+        scheduleType,
+        selectedDays,
+        weeklyTarget,
+        cue: cue.trim(),
+        location: location.trim(),
+        reward: reward.trim(),
         reminderEnabled,
-        reminderTime: reminderEnabled ? reminderTime.toTimeString().slice(0, 5) : null,
-        reminderMessage: customMessage.trim() || null,
-        updatedAt: new Date().toISOString(),
+        reminderTime: reminderEnabled
+          ? reminderTime.toTimeString().slice(0, 5)
+          : null,
+        reminderMessage: canUseCustomReminderMessage
+          ? customMessage.trim() || null
+          : null,
       };
 
-      console.log('🔧 Updating habit:', habit.id);
-      await FirebaseService.updateHabit(habit.id, updates);
-      console.log('✅ Habit updated successfully');
-
+      const updatedHabit = await FirebaseService.updateHabit(habit.id, updates);
       if (reminderEnabled) {
-        const updatedHabit = { ...habit, ...updates };
         await NotificationService.scheduleHabitReminder(updatedHabit);
-        console.log('🔔 Reminder updated');
       } else {
         await NotificationService.cancelHabitNotifications(habit.id);
-        console.log('🔕 Reminder cancelled');
       }
+      await FirebaseService.trackEvent("habit_updated_v2", {
+        habitId: habit.id,
+        scheduleType,
+      });
 
-      try {
-        await FirebaseService.trackEvent('habit_updated', {
-          category,
-          difficulty,
-          has_reminder: reminderEnabled
-        });
-      } catch (trackError) {
-        console.error('Tracking error:', trackError);
-      }
-
-      // ✅ FIXED: Show ad only if user is FREE
-      trackInteractionAndShowAd('habit_updated');
-
-      console.log('⏳ Waiting for Firestore sync...');
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      if (onGoBack) {
-        onGoBack();
-      }
-      
-      console.log('🔧 Navigating back to Home screen...');
+      Alert.alert(
+        "Habit updated",
+        `${habitName.trim()} was updated successfully.`,
+      );
       navigation.goBack();
-      
-      setTimeout(() => {
-        Alert.alert(
-          'Success! ✅',
-          `"${habitName}" has been updated!`,
-          [{ text: 'OK' }]
-        );
-      }, 300);
-
     } catch (error) {
-      console.error('❌ Update habit error:', error);
-      Alert.alert('Error', error.message || 'Failed to update habit');
+      Alert.alert(
+        "Could not update habit",
+        error.message || "Please try again.",
+      );
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleDeleteHabit = () => {
+  const deleteHabit = () => {
     Alert.alert(
-      'Delete Habit',
-      `Are you sure you want to delete "${habitName}"? This action cannot be undone.`,
+      "Delete habit?",
+      "This will remove the habit and its reminders.",
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: "Cancel", style: "cancel" },
         {
-          text: 'Delete',
-          style: 'destructive',
+          text: "Delete",
+          style: "destructive",
           onPress: async () => {
             try {
               setIsLoading(true);
-              console.log('🗑️ Deleting habit:', habit.id);
-              
               await FirebaseService.deleteHabit(habit.id);
               await NotificationService.cancelHabitNotifications(habit.id);
-              
-              console.log('✅ Habit deleted successfully');
-
-              // ✅ FIXED: Show ad only if user is FREE
-              trackInteractionAndShowAd('habit_deleted');
-              
-              await new Promise(resolve => setTimeout(resolve, 500));
-              
-              if (onGoBack) {
-                onGoBack();
-              }
-              
               navigation.goBack();
-              
-              setTimeout(() => {
-                Alert.alert('Deleted', 'Habit has been deleted successfully');
-              }, 300);
-              
             } catch (error) {
-              console.error('❌ Delete habit error:', error);
-              Alert.alert('Error', 'Failed to delete habit');
+              Alert.alert(
+                "Could not delete habit",
+                error.message || "Please try again.",
+              );
             } finally {
               setIsLoading(false);
             }
-          }
-        }
-      ]
+          },
+        },
+      ],
     );
   };
 
-  const handleTimeChange = (event, selectedTime) => {
-    setShowTimePicker(false);
-    if (selectedTime) {
-      setReminderTime(selectedTime);
-    }
-  };
-
-  const scrollToInput = (yOffset) => {
-    setTimeout(() => {
-      scrollViewRef.current?.scrollTo({
-        x: 0,
-        y: yOffset,
-        animated: true,
-      });
-    }, 100);
-  };
-
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <Appbar.Header style={styles.appbar}>
-        <Appbar.BackAction onPress={() => {
-          if (onGoBack) {
-            onGoBack();
-          }
-          navigation.goBack();
-        }} color="#ffffff" />
-        <Appbar.Content title="Edit Habit" titleStyle={styles.headerTitle} />
-        <Appbar.Action 
-          icon="delete" 
-          onPress={handleDeleteHabit}
-          disabled={isLoading}
-          color="#ffffff"
+      <Appbar.Header style={styles.header}>
+        <Appbar.BackAction onPress={() => navigation.goBack()} />
+        <Appbar.Content
+          title="Edit habit"
+          subtitle={`Current streak ${habit.currentStreak || 0}`}
         />
-        <Appbar.Action 
-          icon="check" 
-          onPress={handleUpdateHabit}
-          disabled={isLoading}
-          color="#ffffff"
-        />
+        <Appbar.Action icon="delete-outline" onPress={deleteHabit} />
       </Appbar.Header>
 
-      <ScrollView 
-        ref={scrollViewRef}
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={true}
-        keyboardShouldPersistTaps="handled"
-        nestedScrollEnabled={true}
-        bounces={true}
-        scrollEnabled={true}
-        removeClippedSubviews={false}
-        overScrollMode="always"
-        persistentScrollbar={Platform.OS === 'android'}
-        keyboardDismissMode="on-drag"
-        automaticallyAdjustKeyboardInsets={true}
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
       >
-        {/* Habit Stats */}
+        {showGuide ? (
+          <TipCard
+            title="Keep editing simple"
+            description="Use this screen to refine schedule, cue, and reminders without making the habit too complex."
+            onDismiss={async () => {
+              await TipsService.markGuideSeen("edit_habit");
+              setShowGuide(false);
+            }}
+            onStopTips={async () => {
+              await TipsService.setTipsEnabled(false);
+              setShowGuide(false);
+            }}
+            style={styles.sectionSpacing}
+          />
+        ) : null}
+
         <Card style={styles.card}>
-          <Card.Content>
-            <Text style={styles.sectionTitle}>Habit Statistics</Text>
-            
-            <View style={styles.statsRow}>
-              <View style={styles.statItem}>
-                <Icon name="fire" size={20} color="#f59e0b" />
-                <Text style={styles.statValue}>{habit.currentStreak || 0}</Text>
-                <Text style={styles.statLabel}>Current Streak</Text>
-              </View>
-              
-              <View style={styles.statItem}>
-                <Icon name="trophy" size={20} color="#10b981" />
-                <Text style={styles.statValue}>{habit.longestStreak || 0}</Text>
-                <Text style={styles.statLabel}>Best Streak</Text>
-              </View>
-              
-              <View style={styles.statItem}>
-                <Icon name="check-all" size={20} color="#4f46e5" />
-                <Text style={styles.statValue}>{habit.totalCompletions || 0}</Text>
-                <Text style={styles.statLabel}>Total</Text>
-              </View>
+          <View style={styles.previewRow}>
+            <Icon
+              name={categoryMeta?.icon || "target"}
+              size={22}
+              color="#4f46e5"
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.previewTitle}>{habitName || "Habit"}</Text>
+              <Text style={styles.previewText}>
+                Best streak {habit.longestStreak || 0} • Total completions{" "}
+                {habit.totalCompletions || 0}
+              </Text>
             </View>
-          </Card.Content>
+          </View>
         </Card>
 
-        {/* Basic Information */}
         <Card style={styles.card}>
-          <Card.Content>
-            <Text style={styles.sectionTitle}>Basic Information</Text>
-            
-            <TextInput
-              label="Habit Name *"
-              value={habitName}
-              onChangeText={setHabitName}
-              mode="outlined"
-              style={styles.input}
-              placeholder="e.g., Morning meditation"
-              maxLength={50}
-              theme={{ colors: { primary: '#4f46e5' } }}
-              onFocus={() => scrollToInput(200)}
-            />
-            
-            <HelperText type="info">
-              Choose a specific, actionable name for your habit
-            </HelperText>
-
-            <TextInput
-              label="Description (Optional)"
-              value={description}
-              onChangeText={setDescription}
-              mode="outlined"
-              multiline
-              numberOfLines={3}
-              style={styles.input}
-              placeholder="What does this habit involve?"
-              maxLength={200}
-              theme={{ colors: { primary: '#4f46e5' } }}
-              onFocus={() => scrollToInput(300)}
-            />
-          </Card.Content>
+          <Text style={styles.cardTitle}>Basic details</Text>
+          <TextInput
+            mode="outlined"
+            label="Habit name"
+            value={habitName}
+            onChangeText={setHabitName}
+            style={styles.input}
+          />
+          <TextInput
+            mode="outlined"
+            label="Description"
+            value={description}
+            onChangeText={setDescription}
+            style={styles.input}
+            multiline
+            numberOfLines={3}
+          />
+          <Text style={styles.label}>Category</Text>
+          <View style={styles.chipWrap}>
+            {CATEGORY_OPTIONS.map((item) => (
+              <Chip
+                key={item.value}
+                selected={category === item.value}
+                onPress={() => setCategory(item.value)}
+                style={styles.choiceChip}
+                icon={item.icon}
+              >
+                {item.label}
+              </Chip>
+            ))}
+          </View>
+          <Text style={styles.label}>Time needed</Text>
+          <View style={styles.chipWrap}>
+            {TIME_OPTIONS.map((option) => (
+              <Chip
+                key={option}
+                selected={estimatedTime === option}
+                onPress={() => setEstimatedTime(option)}
+                style={styles.choiceChip}
+              >
+                {option}
+              </Chip>
+            ))}
+          </View>
+          <Text style={styles.label}>Difficulty</Text>
+          <View style={styles.chipWrap}>
+            {[1, 2, 3, 4, 5].map((value) => (
+              <Chip
+                key={value}
+                selected={difficulty === value}
+                onPress={() => setDifficulty(value)}
+                style={styles.choiceChip}
+                icon="star-outline"
+              >
+                {value}
+              </Chip>
+            ))}
+          </View>
         </Card>
 
-        {/* Category Selection */}
         <Card style={styles.card}>
-          <Card.Content>
-            <Text style={styles.sectionTitle}>Category</Text>
-            <Text style={styles.sectionSubtitle}>
-              Choose the category that best fits your habit
-            </Text>
-            
-            <View style={styles.categoriesContainer}>
-              {categories.map((cat) => (
-                <Chip
-                  key={cat.value}
-                  selected={category === cat.value}
-                  onPress={() => setCategory(cat.value)}
+          <Text style={styles.cardTitle}>Schedule</Text>
+          <View style={styles.scheduleList}>
+            {SCHEDULE_OPTIONS.map((option) => {
+              const locked =
+                option.value === "timesPerWeek" && !canUseAdvancedSchedule;
+              const selected = scheduleType === option.value;
+              return (
+                <Card
+                  key={option.value}
                   style={[
-                    styles.categoryChip,
-                    category === cat.value && { backgroundColor: cat.color }
+                    styles.scheduleCard,
+                    selected && styles.scheduleCardSelected,
+                    locked && styles.lockedCard,
                   ]}
-                  textStyle={[
-                    styles.categoryChipText,
-                    category === cat.value && { color: '#ffffff' }
-                  ]}
-                  icon={cat.icon}
-                >
-                  {cat.label}
-                </Chip>
-              ))}
-            </View>
-          </Card.Content>
-        </Card>
-
-        {/* Difficulty & Time */}
-        <Card style={styles.card}>
-          <Card.Content>
-            <Text style={styles.sectionTitle}>Difficulty & Time</Text>
-            
-            <Text style={styles.subsectionTitle}>Difficulty Level</Text>
-            <Text style={styles.sectionSubtitle}>
-              How challenging is this habit for you?
-            </Text>
-            
-            <View style={styles.difficultyContainer}>
-              {[1, 2, 3, 4, 5].map((level) => (
-                <Button
-                  key={level}
-                  mode={difficulty === level ? "contained" : "outlined"}
-                  onPress={() => setDifficulty(level)}
-                  style={styles.difficultyButton}
-                  labelStyle={difficulty === level ? styles.buttonLabelWhite : styles.buttonLabel}
-                  compact
-                >
-                  {level}
-                </Button>
-              ))}
-            </View>
-            
-            <Text style={styles.difficultyLabel}>
-              {difficulty === 1 && "Very Easy"}
-              {difficulty === 2 && "Easy"}
-              {difficulty === 3 && "Moderate"}
-              {difficulty === 4 && "Hard"}
-              {difficulty === 5 && "Very Hard"}
-            </Text>
-
-            <Text style={styles.subsectionTitle}>Estimated Time</Text>
-            <View style={styles.timeContainer}>
-              {timeOptions.map((time) => (
-                <Chip
-                  key={time}
-                  selected={estimatedTime === time}
-                  onPress={() => setEstimatedTime(time)}
-                  style={styles.timeChip}
-                  textStyle={estimatedTime === time && { color: '#ffffff' }}
-                >
-                  {time}
-                </Chip>
-              ))}
-            </View>
-          </Card.Content>
-        </Card>
-
-        {/* Reminders */}
-        <Card style={styles.card}>
-          <Card.Content>
-            <View style={styles.reminderHeader}>
-              <Text style={styles.sectionTitle}>Daily Reminder</Text>
-              <Switch
-                value={reminderEnabled}
-                onValueChange={setReminderEnabled}
-                color="#4f46e5"
-              />
-            </View>
-
-            {reminderEnabled && (
-              <>
-                <Button
-                  mode="outlined"
                   onPress={() => {
-                    setShowTimePicker(true);
-                    scrollToInput(900);
+                    if (locked) {
+                      navigation.getParent()?.navigate("Premium");
+                      return;
+                    }
+                    setScheduleType(option.value);
                   }}
-                  style={styles.timeButton}
-                  icon="clock"
-                  labelStyle={styles.buttonLabel}
                 >
-                  {reminderTime.toLocaleTimeString([], { 
-                    hour: '2-digit', 
-                    minute: '2-digit' 
-                  })}
-                </Button>
+                  <View style={styles.rowBetween}>
+                    <View style={{ flex: 1, paddingRight: 12 }}>
+                      <Text style={styles.scheduleTitle}>{option.label}</Text>
+                      <Text style={styles.scheduleDescription}>
+                        {option.description}
+                      </Text>
+                    </View>
+                    <Icon
+                      name={
+                        locked
+                          ? "lock-outline"
+                          : selected
+                            ? "check-circle"
+                            : "circle-outline"
+                      }
+                      size={22}
+                      color={locked ? "#7c3aed" : "#4f46e5"}
+                    />
+                  </View>
+                </Card>
+              );
+            })}
+          </View>
 
+          {scheduleType === "custom" ? (
+            <View style={styles.dayWrap}>
+              {DAY_OPTIONS.map((day) => (
+                <Chip
+                  key={day.value}
+                  selected={selectedDays.includes(day.value)}
+                  onPress={() => toggleSelectedDay(day.value)}
+                  style={styles.choiceChip}
+                >
+                  {day.short}
+                </Chip>
+              ))}
+            </View>
+          ) : null}
+
+          {scheduleType === "timesPerWeek" ? (
+            <View style={styles.chipWrap}>
+              {[2, 3, 4, 5, 6].map((value) => (
+                <Chip
+                  key={value}
+                  selected={weeklyTarget === value}
+                  onPress={() => setWeeklyTarget(value)}
+                  style={styles.choiceChip}
+                >
+                  {value}x / week
+                </Chip>
+              ))}
+            </View>
+          ) : null}
+        </Card>
+
+        <Card style={styles.card}>
+          <Text style={styles.cardTitle}>Implementation plan</Text>
+          <TextInput
+            mode="outlined"
+            label="Cue"
+            value={cue}
+            onChangeText={setCue}
+            style={styles.input}
+          />
+          <TextInput
+            mode="outlined"
+            label="Location"
+            value={location}
+            onChangeText={setLocation}
+            style={styles.input}
+          />
+          <TextInput
+            mode="outlined"
+            label="Reward"
+            value={reward}
+            onChangeText={setReward}
+            style={styles.input}
+          />
+        </Card>
+
+        <Card style={styles.card}>
+          <View style={styles.rowBetween}>
+            <View style={{ flex: 1, paddingRight: 16 }}>
+              <Text style={styles.cardTitle}>Reminder</Text>
+              <Text style={styles.sectionText}>
+                Your reminder respects the current schedule and selected days.
+              </Text>
+            </View>
+            <Switch
+              value={reminderEnabled}
+              onValueChange={setReminderEnabled}
+            />
+          </View>
+
+          {reminderEnabled ? (
+            <>
+              <Button
+                mode="outlined"
+                icon="clock-outline"
+                onPress={() => setShowTimePicker(true)}
+                style={styles.timeButton}
+              >
+                {reminderTime.toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </Button>
+              {showTimePicker ? (
+                <DateTimePicker
+                  value={reminderTime}
+                  mode="time"
+                  is24Hour={false}
+                  onChange={(event, value) => {
+                    setShowTimePicker(false);
+                    if (value) setReminderTime(value);
+                  }}
+                />
+              ) : null}
+
+              {canUseCustomReminderMessage ? (
                 <TextInput
-                  label="Custom Reminder Message (Optional)"
+                  mode="outlined"
+                  label="Custom reminder message"
                   value={customMessage}
                   onChangeText={setCustomMessage}
-                  mode="outlined"
                   style={styles.input}
-                  placeholder="e.g., Time for your daily meditation!"
-                  maxLength={100}
-                  theme={{ colors: { primary: '#4f46e5' } }}
-                  onFocus={() => scrollToInput(1000)}
+                  multiline
                 />
-                
-                <HelperText type="info">
-                  Leave blank to use the default reminder message
-                </HelperText>
-              </>
-            )}
-          </Card.Content>
+              ) : (
+                <PremiumFeatureCard
+                  title="Custom reminder messages"
+                  description="Visible here for all users so the upgrade path feels clear."
+                  bullets={[
+                    "Personal message for each habit",
+                    "Premium-only reminder customization",
+                  ]}
+                  onPress={() => navigation.getParent()?.navigate("Premium")}
+                />
+              )}
+            </>
+          ) : null}
         </Card>
 
-        {/* Update Button */}
         <Button
           mode="contained"
-          onPress={handleUpdateHabit}
+          onPress={saveHabit}
           loading={isLoading}
           disabled={isLoading}
-          style={styles.updateButton}
-          contentStyle={styles.updateButtonContent}
-          labelStyle={styles.buttonLabelWhite}
-          icon="check"
+          style={styles.saveButton}
         >
-          Update Habit
+          Save changes
         </Button>
-
-        <View style={styles.bottomPadding} />
       </ScrollView>
-
-      {showTimePicker && (
-        <DateTimePicker
-          value={reminderTime}
-          mode="time"
-          is24Hour={false}
-          onChange={handleTimeChange}
-        />
-      )}
     </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-  },
-  appbar: {
-    backgroundColor: '#4f46e5',
-    elevation: 4,
-  },
-  headerTitle: {
-    color: '#ffffff',
-    fontWeight: 'bold',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 50,
-    flexGrow: 1,
-  },
+  container: { flex: 1, backgroundColor: "#f8fafc" },
+  header: { backgroundColor: "#f8fafc" },
+  content: { padding: 16, paddingBottom: 32 },
+  sectionSpacing: { marginBottom: 12 },
   card: {
-    margin: 16,
-    marginBottom: 8,
-    elevation: 2,
+    borderRadius: 22,
+    padding: 16,
+    marginBottom: 16,
+    backgroundColor: "#ffffff",
   },
-  sectionTitle: {
+  cardTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1f2937',
-    marginBottom: 8,
+    fontWeight: "800",
+    color: "#111827",
+    marginBottom: 10,
   },
-  sectionSubtitle: {
+  input: { marginBottom: 10, backgroundColor: "#ffffff" },
+  label: {
     fontSize: 14,
-    color: '#6b7280',
-    marginBottom: 16,
-  },
-  subsectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#374151',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 8,
-  },
-  statItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1f2937',
+    fontWeight: "700",
+    color: "#374151",
     marginTop: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginTop: 2,
-  },
-  input: {
-    marginBottom: 8,
-    backgroundColor: '#ffffff',
-  },
-  categoriesContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  categoryChip: {
     marginBottom: 8,
   },
-  categoryChipText: {
-    fontSize: 14,
+  chipWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  choiceChip: { marginBottom: 8 },
+  scheduleList: { gap: 10 },
+  scheduleCard: { borderRadius: 18, padding: 14, backgroundColor: "#f8fafc" },
+  scheduleCardSelected: {
+    borderWidth: 1,
+    borderColor: "#4f46e5",
+    backgroundColor: "#eef2ff",
   },
-  difficultyContainer: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 8,
+  lockedCard: { backgroundColor: "#faf5ff" },
+  scheduleTitle: { fontSize: 15, fontWeight: "800", color: "#111827" },
+  scheduleDescription: { marginTop: 4, fontSize: 13, color: "#6b7280" },
+  dayWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
+  rowBetween: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
-  difficultyButton: {
-    flex: 1,
+  timeButton: { alignSelf: "flex-start", marginBottom: 12 },
+  sectionText: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: "#6b7280",
+    marginBottom: 12,
   },
-  difficultyLabel: {
-    textAlign: 'center',
-    fontSize: 14,
-    color: '#6b7280',
-    fontWeight: '500',
-  },
-  timeContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  timeChip: {
-    marginBottom: 8,
-  },
-  reminderHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  timeButton: {
-    marginBottom: 16,
-    borderColor: '#e5e7eb',
-  },
-  buttonLabel: {
-    color: '#4f46e5',
-    fontWeight: '600',
-  },
-  buttonLabelWhite: {
-    color: '#ffffff',
-    fontWeight: '600',
-  },
-  updateButton: {
-    margin: 16,
-    marginTop: 8,
-    backgroundColor: '#4f46e5',
-    elevation: 3,
-  },
-  updateButtonContent: {
-    paddingVertical: 8,
-  },
-  bottomPadding: {
-    height: 100,
-  },
+  previewRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  previewTitle: { fontSize: 17, fontWeight: "800", color: "#111827" },
+  previewText: { marginTop: 4, fontSize: 13, color: "#6b7280" },
+  saveButton: { borderRadius: 16, paddingVertical: 6 },
 });
 
 export default EditHabitScreen;
