@@ -23,12 +23,15 @@ import NotificationService from "../services/NotificationService";
 import TipsService from "../services/TipsService";
 import RateAppService from "../services/RateAppService";
 import HabitTemplateService from "../services/HabitTemplateService";
+import adMobService from "../services/AdMobService";
 import { useTabBarHeight } from "../hooks/useTabBarHeight";
 import {
   sortHabitsForDashboard,
   getTodayProgress,
   getSuccessMessageForStreak,
   isHabitDueOnDate,
+  getAchievementProgress,
+  getEarnedAchievements,
 } from "../utils/habitHelpers";
 
 const FREE_HABIT_LIMIT = 5;
@@ -55,11 +58,14 @@ const HomeScreen = ({ navigation }) => {
   const templates = HabitTemplateService.getTemplates();
 
   const loadDashboard = useCallback(async (forceRefresh = false) => {
+    let sortedHabits = [];
+
     try {
       if (!forceRefresh) {
         const cached = await FirebaseService.getCachedHabits();
         if (cached?.length) {
-          setHabits(sortHabitsForDashboard(cached));
+          sortedHabits = sortHabitsForDashboard(cached);
+          setHabits(sortedHabits);
           setLoading(false);
         }
       }
@@ -76,15 +82,19 @@ const HomeScreen = ({ navigation }) => {
         adminStatus = await AdminService.checkAdminStatus(currentUser.email);
       }
 
-      setHabits(sortHabitsForDashboard(userHabits || []));
+      sortedHabits = sortHabitsForDashboard(userHabits || []);
+      setHabits(sortedHabits);
       setIsPremium(!!userStats?.isPremium || adminStatus);
       setIsAdmin(adminStatus);
       setIsOffline(false);
+      return sortedHabits;
     } catch (error) {
       console.error("Home load error:", error);
       setIsOffline(true);
       const fallback = await FirebaseService.getCachedHabits();
-      setHabits(sortHabitsForDashboard(fallback || []));
+      sortedHabits = sortHabitsForDashboard(fallback || []);
+      setHabits(sortedHabits);
+      return sortedHabits;
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -137,6 +147,10 @@ const HomeScreen = ({ navigation }) => {
     (best, habit) => Math.max(best, habit.longestStreak || 0),
     0,
   );
+  const achievementProgress = useMemo(
+    () => getAchievementProgress(habits),
+    [habits],
+  );
 
   const handleStopTips = async () => {
     await TipsService.setTipsEnabled(false);
@@ -153,20 +167,27 @@ const HomeScreen = ({ navigation }) => {
     navigation.getParent()?.navigate("Premium");
   };
 
-  const handleCreateHabit = async () => {
-    const stats = await FirebaseService.getUserStats();
-    const hasPremiumAccess = !!stats?.isPremium || isAdmin;
-    const currentHabits = await FirebaseService.getUserHabits();
+  const openAchievements = () => {
+    navigation.getParent()?.navigate("Achievements");
+  };
 
-    if (!hasPremiumAccess && currentHabits.length >= FREE_HABIT_LIMIT) {
-      Alert.alert(
-        "Free plan limit reached",
-        "You can keep tracking your current habits, or upgrade to Premium to create unlimited habits.",
-        [
-          { text: "Not now", style: "cancel" },
-          { text: "See Premium", onPress: openPremium },
-        ],
-      );
+  const showFreePlanLimitPrompt = (count = FREE_HABIT_LIMIT) => {
+    Alert.alert(
+      "Free plan limit reached",
+      `You already have ${count} active habits. Upgrade to Premium to create unlimited habits and remove ads.`,
+      [
+        { text: "Not now", style: "cancel" },
+        { text: "See Premium", onPress: openPremium },
+      ],
+    );
+  };
+
+  const handleCreateHabit = async () => {
+    const creationCheck =
+      await FirebaseService.canCreateHabit(FREE_HABIT_LIMIT);
+
+    if (!creationCheck.allowed) {
+      showFreePlanLimitPrompt(creationCheck.count);
       return;
     }
 
@@ -180,6 +201,13 @@ const HomeScreen = ({ navigation }) => {
         `${template.title} is visible to free users so they can preview it. Upgrade to add it instantly.`,
       );
       return openPremium();
+    }
+
+    const creationCheck =
+      await FirebaseService.canCreateHabit(FREE_HABIT_LIMIT);
+    if (!creationCheck.allowed) {
+      showFreePlanLimitPrompt(creationCheck.count);
+      return;
     }
 
     const habitData = {
@@ -208,9 +236,14 @@ const HomeScreen = ({ navigation }) => {
         premium: !!template.premiumOnly,
       });
       await RateAppService.trackPositiveMoment(1);
-      loadDashboard(true);
+      await loadDashboard(true);
+      await adMobService.showInterstitialAd("template_created");
       Alert.alert("Added", `${template.title} was added to your habits.`);
     } catch (error) {
+      if (error.message?.toLowerCase().includes("free plan")) {
+        showFreePlanLimitPrompt();
+        return;
+      }
       Alert.alert(
         "Could not add template",
         error.message || "Please try again.",
@@ -223,24 +256,40 @@ const HomeScreen = ({ navigation }) => {
       await FirebaseService.deleteHabit(habitId);
       await NotificationService.cancelHabitNotifications(habitId);
       await loadDashboard(true);
+      await adMobService.showInterstitialAd("habit_deleted");
     } catch (error) {
       Alert.alert("Delete failed", error.message || "Please try again.");
     }
   };
 
   const handleHabitComplete = async (habit, nextCompleted, result = {}) => {
-    await loadDashboard(true);
+    const previousAchievementIds = new Set(
+      getEarnedAchievements(habits).map((item) => item.id),
+    );
+
+    const updatedHabits = await loadDashboard(true);
 
     if (!nextCompleted) {
       return;
     }
 
+    const newAchievements = getEarnedAchievements(updatedHabits).filter(
+      (item) => !previousAchievementIds.has(item.id),
+    );
     const newStreak = result?.newStreak || 0;
     const milestones = [3, 7, 14, 30, 60, 100, 365];
-    const dueNow = await FirebaseService.getUserHabits();
-    const progress = getTodayProgress(dueNow);
+    const progress = getTodayProgress(updatedHabits);
 
-    if (milestones.includes(newStreak)) {
+    if (newAchievements.length > 0) {
+      const unlocked = newAchievements[0];
+      setCelebration({
+        visible: true,
+        title: `${unlocked.title} unlocked!`,
+        subtitle: unlocked.description,
+        badge: "Achievement earned",
+      });
+      await RateAppService.trackPositiveMoment(2);
+    } else if (milestones.includes(newStreak)) {
       NotificationService.scheduleStreakCelebration(habit, newStreak).catch(
         () => {},
       );
@@ -268,6 +317,67 @@ const HomeScreen = ({ navigation }) => {
     }
 
     await RateAppService.promptIfEligible();
+    await adMobService.showInterstitialAd("habit_completed");
+  };
+
+  const renderTopBanner = (placementKey) => {
+    if (isPremium || isAdmin) return null;
+    if (isOffline) {
+      return (
+        <View key={`${placementKey}_offline`} style={styles.section}>
+          <OfflineAdCard message="You can keep using HabitOwl fully offline. Ad placements for free users will fill again when the connection returns." />
+        </View>
+      );
+    }
+
+    return (
+      <View key={`${placementKey}_banner`} style={styles.section}>
+        <AdMobBanner />
+      </View>
+    );
+  };
+
+  const renderHabitCardsWithAds = (habitList, sectionKey) => {
+    const rows = [];
+
+    habitList.forEach((habit, index) => {
+      rows.push(
+        <HabitCard
+          key={habit.id}
+          habit={habit}
+          isCompleted={(habit.completions || []).includes(
+            new Date().toDateString(),
+          )}
+          onComplete={handleHabitComplete}
+          onEdit={(selectedHabit) =>
+            navigation
+              .getParent()
+              ?.navigate("EditHabit", { habit: selectedHabit })
+          }
+          onDelete={handleDeleteHabit}
+        />,
+      );
+
+      const shouldShowInlineBanner =
+        !isPremium &&
+        !isAdmin &&
+        !isOffline &&
+        index < habitList.length - 1 &&
+        (index + 1) % 2 === 0;
+
+      if (shouldShowInlineBanner) {
+        rows.push(
+          <View
+            key={`inline_ad_${sectionKey}_${habit.id}`}
+            style={styles.inlineAdWrap}
+          >
+            <AdMobBanner />
+          </View>,
+        );
+      }
+    });
+
+    return rows;
   };
 
   const renderTemplates = () => (
@@ -350,6 +460,7 @@ const HomeScreen = ({ navigation }) => {
     <View style={styles.container}>
       <Appbar.Header style={styles.header}>
         <Appbar.Content title="HabitOwl" subtitle="Your daily momentum" />
+        <Appbar.Action icon="medal-outline" onPress={openAchievements} />
         <Appbar.Action icon="crown-outline" onPress={openPremium} />
       </Appbar.Header>
 
@@ -371,7 +482,7 @@ const HomeScreen = ({ navigation }) => {
       >
         <LinearGradient colors={["#4f46e5", "#7c3aed"]} style={styles.heroCard}>
           <View style={styles.heroTopRow}>
-            <View>
+            <View style={styles.heroTextWrap}>
               <Text style={styles.heroEyebrow}>Today</Text>
               <Text style={styles.heroTitle}>
                 {todayProgress.completedToday}/{todayProgress.dueToday || 0}{" "}
@@ -401,8 +512,17 @@ const HomeScreen = ({ navigation }) => {
               <Icon name="fire" size={16} color="#ffffff" />
               <Text style={styles.heroStatText}>Best streak {bestStreak}</Text>
             </View>
+            <View style={styles.heroStatPill}>
+              <Icon name="medal-outline" size={16} color="#ffffff" />
+              <Text style={styles.heroStatText}>
+                {achievementProgress.earnedCount}/
+                {achievementProgress.totalCount} badges
+              </Text>
+            </View>
           </View>
         </LinearGradient>
+
+        {renderTopBanner("home_top")}
 
         {showGuide ? (
           <TipCard
@@ -430,7 +550,7 @@ const HomeScreen = ({ navigation }) => {
             description="Free users can preview advanced features before upgrading. Premium removes all ads and unlocks deeper scheduling + analytics."
             bullets={[
               "Unlimited habits",
-              "AI coaching on every habit",
+              "AI coaching with unlimited daily use",
               "Premium templates and weekly insights",
             ]}
             onPress={openPremium}
@@ -438,19 +558,21 @@ const HomeScreen = ({ navigation }) => {
           />
         ) : null}
 
+        <Card style={styles.achievementCard}>
+          <View style={styles.achievementHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.achievementCardTitle}>Achievements</Text>
+              <Text style={styles.achievementCardText}>
+                Unlock badges from real streaks, completions, and consistency.
+              </Text>
+            </View>
+            <Button mode="contained-tonal" onPress={openAchievements}>
+              View
+            </Button>
+          </View>
+        </Card>
+
         {renderTemplates()}
-
-        {!isPremium && !isOffline ? (
-          <View style={styles.section}>
-            <AdMobBanner />
-          </View>
-        ) : null}
-
-        {!isPremium && isOffline ? (
-          <View style={styles.section}>
-            <OfflineAdCard message="You can keep using HabitOwl fully offline. Ad placements for free users will fill again when the connection returns." />
-          </View>
-        ) : null}
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -480,22 +602,7 @@ const HomeScreen = ({ navigation }) => {
               </Button>
             </Card>
           ) : (
-            dueTodayHabits.map((habit) => (
-              <HabitCard
-                key={habit.id}
-                habit={habit}
-                isCompleted={(habit.completions || []).includes(
-                  new Date().toDateString(),
-                )}
-                onComplete={handleHabitComplete}
-                onEdit={(selectedHabit) =>
-                  navigation
-                    .getParent()
-                    ?.navigate("EditHabit", { habit: selectedHabit })
-                }
-                onDelete={handleDeleteHabit}
-              />
-            ))
+            renderHabitCardsWithAds(dueTodayHabits, "due_today")
           )}
         </View>
 
@@ -507,22 +614,7 @@ const HomeScreen = ({ navigation }) => {
                 {laterHabits.length}
               </Chip>
             </View>
-            {laterHabits.map((habit) => (
-              <HabitCard
-                key={habit.id}
-                habit={habit}
-                isCompleted={(habit.completions || []).includes(
-                  new Date().toDateString(),
-                )}
-                onComplete={handleHabitComplete}
-                onEdit={(selectedHabit) =>
-                  navigation
-                    .getParent()
-                    ?.navigate("EditHabit", { habit: selectedHabit })
-                }
-                onDelete={handleDeleteHabit}
-              />
-            ))}
+            {renderHabitCardsWithAds(laterHabits, "later")}
           </View>
         ) : null}
       </ScrollView>
@@ -560,11 +652,18 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     padding: 20,
     marginBottom: 16,
+    minHeight: 170,
   },
   heroTopRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    gap: 16,
+    alignItems: "flex-start",
+    gap: 14,
+  },
+  heroTextWrap: {
+    flex: 1,
+    minWidth: 0,
+    paddingRight: 4,
   },
   heroEyebrow: {
     color: "rgba(255,255,255,0.82)",
@@ -576,21 +675,22 @@ const styles = StyleSheet.create({
   heroTitle: {
     marginTop: 8,
     fontSize: 24,
+    lineHeight: 31,
     fontWeight: "800",
     color: "#ffffff",
-    maxWidth: 240,
+    flexShrink: 1,
   },
   heroSubtitle: {
     marginTop: 8,
     fontSize: 14,
     lineHeight: 20,
     color: "rgba(255,255,255,0.92)",
-    maxWidth: 260,
+    flexShrink: 1,
   },
   heroCircle: {
-    width: 82,
-    height: 82,
-    borderRadius: 41,
+    width: 78,
+    height: 78,
+    borderRadius: 39,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(255,255,255,0.16)",
@@ -634,6 +734,9 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 8,
   },
+  inlineAdWrap: {
+    marginBottom: 16,
+  },
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -650,6 +753,28 @@ const styles = StyleSheet.create({
   },
   tipSpacing: {
     marginBottom: 12,
+  },
+  achievementCard: {
+    borderRadius: 22,
+    padding: 16,
+    backgroundColor: "#ffffff",
+    marginBottom: 12,
+  },
+  achievementHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  achievementCardTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#111827",
+  },
+  achievementCardText: {
+    marginTop: 4,
+    fontSize: 13,
+    lineHeight: 19,
+    color: "#6b7280",
   },
   templateRow: {
     paddingRight: 8,

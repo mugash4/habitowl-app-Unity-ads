@@ -16,6 +16,7 @@ import {
   Dialog,
   Portal,
   TextInput,
+  Chip,
 } from "react-native-paper";
 
 import FirebaseService from "../services/FirebaseService";
@@ -29,10 +30,12 @@ import AdMobBanner from "../components/AdMobBanner";
 import TipCard from "../components/TipCard";
 import PremiumFeatureCard from "../components/PremiumFeatureCard";
 import OfflineAdCard from "../components/OfflineAdCard";
+import ContactSupport from "../components/ContactSupport";
 import { useTabBarHeight } from "../hooks/useTabBarHeight";
 
 const PLAY_STORE_URL =
   "https://play.google.com/store/apps/details?id=com.mugash4.habitowl";
+const FREE_COACHING_LIMIT = 2;
 
 const SettingsScreen = ({ navigation }) => {
   const user = FirebaseService.currentUser;
@@ -54,16 +57,26 @@ const SettingsScreen = ({ navigation }) => {
   const [deleteReason, setDeleteReason] = useState("");
   const [isOffline, setIsOffline] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
+  const [showSupport, setShowSupport] = useState(false);
+  const [coachingUsage, setCoachingUsage] = useState({
+    count: 0,
+    limit: FREE_COACHING_LIMIT,
+    remaining: FREE_COACHING_LIMIT,
+  });
 
   const { totalHeight: tabBarTotalHeight } = useTabBarHeight();
 
   useEffect(() => {
     const bootstrap = async () => {
       try {
-        const [stats, tipsState, seenGuide] = await Promise.all([
+        const localStats = await FirebaseService.getUserStats();
+        setUserStats((current) => ({ ...current, ...localStats }));
+
+        const [stats, tipsState, seenGuide, usageStatus] = await Promise.all([
           FirebaseService.getUserStats(),
           TipsService.areTipsEnabled(),
           TipsService.hasSeenGuide("settings_overview"),
+          FirebaseService.getAICoachingUsageStatus(FREE_COACHING_LIMIT),
         ]);
         const adminStatus = user?.email
           ? await AdminService.checkAdminStatus(user.email)
@@ -80,9 +93,15 @@ const SettingsScreen = ({ navigation }) => {
         setTipsEnabled(!!tipsState);
         setNotificationsEnabled(permission?.status === "granted");
         setShowGuide(!seenGuide);
+        setCoachingUsage(usageStatus);
         setIsOffline(false);
       } catch (error) {
         console.error("Settings bootstrap error:", error);
+        const localStats = await FirebaseService.getUserStats();
+        const usageStatus =
+          await FirebaseService.getAICoachingUsageStatus(FREE_COACHING_LIMIT);
+        setUserStats((current) => ({ ...current, ...localStats }));
+        setCoachingUsage(usageStatus);
         setIsOffline(true);
       }
     };
@@ -91,6 +110,8 @@ const SettingsScreen = ({ navigation }) => {
   }, [user?.email]);
 
   const openPremium = () => navigation.getParent()?.navigate("Premium");
+  const openAchievements = () =>
+    navigation.getParent()?.navigate("Achievements");
 
   const handleToggleTips = async () => {
     const next = !tipsEnabled;
@@ -148,7 +169,7 @@ const SettingsScreen = ({ navigation }) => {
   const handleExportData = async () => {
     try {
       const file = await PrivacyComplianceService.exportUserDataToFile(
-        user?.uid || FirebaseService.currentUser?.uid || "anonymous",
+        user?.uid || FirebaseService.currentUser?.uid || "habitowl_user",
       );
       Alert.alert(
         "Export ready",
@@ -162,7 +183,7 @@ const SettingsScreen = ({ navigation }) => {
   const handleDeleteAccount = async () => {
     try {
       await PrivacyComplianceService.requestAccountDeletion(
-        user?.uid || FirebaseService.currentUser?.uid || "anonymous",
+        user?.uid || FirebaseService.currentUser?.uid || "habitowl_user",
         deleteReason.trim() || "User requested account deletion",
       );
       setShowDeleteDialog(false);
@@ -180,6 +201,11 @@ const SettingsScreen = ({ navigation }) => {
     await RateAppService.trackPositiveMoment(5);
     await RateAppService.promptIfEligible();
   };
+
+  const coachingDescription =
+    isPremium || isAdmin
+      ? "Unlimited AI coaching is enabled on your plan."
+      : `Free plan: ${coachingUsage.remaining}/${coachingUsage.limit} coaching sessions left today.`;
 
   return (
     <View style={styles.container}>
@@ -208,12 +234,26 @@ const SettingsScreen = ({ navigation }) => {
         ) : null}
 
         <Card style={styles.profileCard}>
-          <Text style={styles.profileName}>
-            {userStats.displayName || "HabitOwl User"}
-          </Text>
-          <Text style={styles.profileEmail}>
-            {userStats.email || "Anonymous account"}
-          </Text>
+          <View style={styles.profileTopRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.profileName}>
+                {userStats.displayName || "HabitOwl User"}
+              </Text>
+              <Text style={styles.profileEmail}>
+                {userStats.email || "HabitOwl user"}
+              </Text>
+            </View>
+            <Chip
+              compact
+              style={isPremium ? styles.planChipPremium : styles.planChipFree}
+              textStyle={
+                isPremium ? styles.planChipPremiumText : styles.planChipFreeText
+              }
+            >
+              {isAdmin ? "Admin" : isPremium ? "Premium" : "Free"}
+            </Chip>
+          </View>
+
           <View style={styles.profileStatsRow}>
             <View style={styles.profileStat}>
               <Text style={styles.profileStatValue}>
@@ -229,12 +269,24 @@ const SettingsScreen = ({ navigation }) => {
             </View>
             <View style={styles.profileStat}>
               <Text style={styles.profileStatValue}>
-                {isPremium ? "Premium" : "Free"}
+                {isPremium || isAdmin ? "∞" : coachingUsage.remaining}
               </Text>
-              <Text style={styles.profileStatLabel}>Plan</Text>
+              <Text style={styles.profileStatLabel}>AI today</Text>
             </View>
           </View>
         </Card>
+
+        {!isPremium && !isAdmin && !isOffline ? (
+          <View style={styles.sectionSpacing}>
+            <AdMobBanner />
+          </View>
+        ) : null}
+
+        {!isPremium && !isAdmin && isOffline ? (
+          <View style={styles.sectionSpacing}>
+            <OfflineAdCard message="Your settings stay available offline. Ad placements will return once the connection is back." />
+          </View>
+        ) : null}
 
         {!isPremium && !isAdmin ? (
           <PremiumFeatureCard
@@ -243,7 +295,7 @@ const SettingsScreen = ({ navigation }) => {
             bullets={[
               "Ad-free experience",
               "Unlimited habits + advanced schedule",
-              "Premium analytics and AI coaching",
+              "Unlimited AI coaching and premium analytics",
             ]}
             onPress={openPremium}
             style={styles.sectionSpacing}
@@ -277,9 +329,21 @@ const SettingsScreen = ({ navigation }) => {
               )}
             />
             <List.Item
+              title="AI coaching"
+              description={coachingDescription}
+              left={(props) => <List.Icon {...props} icon="robot-outline" />}
+              right={() =>
+                !isPremium && !isAdmin ? (
+                  <Button compact mode="text" onPress={openPremium}>
+                    Upgrade
+                  </Button>
+                ) : null
+              }
+            />
+            <List.Item
               title="AI provider"
               description={`Current provider: ${apiProvider}`}
-              left={(props) => <List.Icon {...props} icon="robot-outline" />}
+              left={(props) => <List.Icon {...props} icon="brain" />}
               onPress={() =>
                 Alert.alert(
                   "AI provider",
@@ -295,6 +359,12 @@ const SettingsScreen = ({ navigation }) => {
             <List.Subheader style={styles.subheader}>
               Growth & sharing
             </List.Subheader>
+            <List.Item
+              title="Achievements"
+              description="View your medals, badges, and unlocked milestones"
+              left={(props) => <List.Icon {...props} icon="medal-outline" />}
+              onPress={openAchievements}
+            />
             <List.Item
               title="Share the app"
               description="Invite more users with your referral code"
@@ -325,6 +395,12 @@ const SettingsScreen = ({ navigation }) => {
             <List.Subheader style={styles.subheader}>
               Data & support
             </List.Subheader>
+            <List.Item
+              title="AI Support"
+              description="Chat with support inside the app"
+              left={(props) => <List.Icon {...props} icon="lifebuoy" />}
+              onPress={() => setShowSupport(true)}
+            />
             <List.Item
               title="Open statistics"
               description="Review streaks, heatmap, and weekly insights"
@@ -367,17 +443,6 @@ const SettingsScreen = ({ navigation }) => {
             />
           </List.Section>
         </Card>
-
-        {!isPremium && !isOffline ? <AdMobBanner /> : null}
-        {!isPremium && isOffline ? <OfflineAdCard /> : null}
-
-        <Button
-          mode="outlined"
-          onPress={() => FirebaseService.signOut()}
-          style={styles.signOutButton}
-        >
-          Sign out
-        </Button>
       </ScrollView>
 
       <Portal>
@@ -428,6 +493,11 @@ const SettingsScreen = ({ navigation }) => {
           </Dialog.Actions>
         </Dialog>
       </Portal>
+
+      <ContactSupport
+        visible={showSupport}
+        onDismiss={() => setShowSupport(false)}
+      />
     </View>
   );
 };
@@ -442,8 +512,18 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     backgroundColor: "#ffffff",
   },
+  profileTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 10,
+  },
   profileName: { fontSize: 22, fontWeight: "800", color: "#111827" },
   profileEmail: { marginTop: 6, fontSize: 14, color: "#6b7280" },
+  planChipPremium: { backgroundColor: "#ede9fe" },
+  planChipPremiumText: { color: "#6d28d9", fontWeight: "700" },
+  planChipFree: { backgroundColor: "#f3f4f6" },
+  planChipFreeText: { color: "#4b5563", fontWeight: "700" },
   profileStatsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -471,7 +551,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   subheader: { fontSize: 14, fontWeight: "800", color: "#4b5563" },
-  signOutButton: { marginTop: 16, borderRadius: 14 },
   dialogText: { fontSize: 14, lineHeight: 20, color: "#4b5563" },
 });
 

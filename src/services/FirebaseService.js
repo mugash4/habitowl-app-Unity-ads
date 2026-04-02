@@ -297,6 +297,49 @@ class FirebaseService {
     };
   }
 
+  async syncCachedStatsFromHabits(habits = []) {
+    const visibleHabits = this.getVisibleHabits(habits);
+    const longestStreak = visibleHabits.reduce(
+      (best, habit) => Math.max(best, habit.longestStreak || 0),
+      0,
+    );
+
+    await this.cacheUserProfile({
+      totalHabits: visibleHabits.length,
+      longestStreak,
+    });
+  }
+
+  async hasPremiumAccess() {
+    const stats = await this.getUserStats();
+    let adminStatus = false;
+
+    if (this.currentUser?.email) {
+      try {
+        const AdminService = require("./AdminService").default;
+        adminStatus = await AdminService.checkAdminStatus(
+          this.currentUser.email,
+        );
+      } catch (error) {
+        console.log("Admin status check skipped:", error.message);
+      }
+    }
+
+    return !!stats?.isPremium || adminStatus;
+  }
+
+  async canCreateHabit(limit = 5) {
+    const habits = await this.getCachedHabits();
+    const hasPremium = await this.hasPremiumAccess();
+
+    return {
+      allowed: hasPremium || habits.length < limit,
+      count: habits.length,
+      limit,
+      hasPremium,
+    };
+  }
+
   async signUp(email, password, displayName) {
     try {
       const userCredential = await createUserWithEmailAndPassword(
@@ -769,6 +812,13 @@ class FirebaseService {
 
   async createHabit(habitData) {
     try {
+      const creationCheck = await this.canCreateHabit(5);
+      if (!creationCheck.allowed) {
+        throw new Error(
+          "Free plan limit reached. Upgrade to Premium to create unlimited habits.",
+        );
+      }
+
       const now = new Date().toISOString();
       const ownerId = this.currentUser?.uid || (await this.getDeviceId());
       const newHabit = this.normalizeLocalHabit({
@@ -790,6 +840,7 @@ class FirebaseService {
       const habits = await this.loadLocalHabits();
       habits.unshift(newHabit);
       await this.persistLocalHabits(habits);
+      await this.syncCachedStatsFromHabits(habits);
       this.syncPendingHabitsInBackground();
       return newHabit;
     } catch (error) {
@@ -839,6 +890,7 @@ class FirebaseService {
     });
 
     await this.persistLocalHabits(habits);
+    await this.syncCachedStatsFromHabits(habits);
     this.syncPendingHabitsInBackground();
     return habits[index];
   }
@@ -856,6 +908,7 @@ class FirebaseService {
     if (!targetHabit.isSyncedToRemote) {
       const remainingHabits = habits.filter((habit) => habit.id !== habitId);
       await this.persistLocalHabits(remainingHabits);
+      await this.syncCachedStatsFromHabits(remainingHabits);
       return true;
     }
 
@@ -869,6 +922,7 @@ class FirebaseService {
     });
 
     await this.persistLocalHabits(habits);
+    await this.syncCachedStatsFromHabits(habits);
     this.syncPendingHabitsInBackground();
     return true;
   }
@@ -907,6 +961,7 @@ class FirebaseService {
     });
 
     await this.persistLocalHabits(habits);
+    await this.syncCachedStatsFromHabits(habits);
     this.syncPendingHabitsInBackground();
 
     return { newStreak, newLongestStreak };
@@ -937,6 +992,7 @@ class FirebaseService {
     });
 
     await this.persistLocalHabits(habits);
+    await this.syncCachedStatsFromHabits(habits);
     this.syncPendingHabitsInBackground();
 
     return { newStreak };

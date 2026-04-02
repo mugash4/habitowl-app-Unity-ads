@@ -25,6 +25,7 @@ import {
   getTodayProgress,
   isHabitDueOnDate,
 } from "../utils/habitHelpers";
+import adMobService from "../services/AdMobService";
 
 const StatisticsScreen = ({ navigation }) => {
   const [habits, setHabits] = useState([]);
@@ -165,10 +166,7 @@ const StatisticsScreen = ({ navigation }) => {
   return (
     <View style={styles.container}>
       <Appbar.Header style={styles.header}>
-        <Appbar.Content
-          title="Statistics"
-          subtitle="Readable, no clipped text"
-        />
+        <Appbar.Content title="Statistics" subtitle="Your habits at a glance" />
         <Appbar.Action
           icon="crown-outline"
           onPress={() => navigation.getParent()?.navigate("Premium")}
@@ -183,9 +181,12 @@ const StatisticsScreen = ({ navigation }) => {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => {
+            onRefresh={async () => {
               setRefreshing(true);
-              loadStats(true);
+              await loadStats(true);
+              if (!isPremium && !isAdmin) {
+                await adMobService.showInterstitialAd("statistics_refresh");
+              }
             }}
           />
         }
@@ -194,7 +195,7 @@ const StatisticsScreen = ({ navigation }) => {
         {showGuide ? (
           <TipCard
             title="How to read this screen"
-            description="The top cards answer ‘how am I doing now?’, the review section explains patterns, and Premium reveals deeper breakdowns without hiding the upgrade path."
+            description="The top cards answer 'how am I doing now?', the review section explains patterns, and Premium reveals deeper breakdowns without hiding the upgrade path."
             onDismiss={async () => {
               await TipsService.markGuideSeen("statistics_overview");
               setShowGuide(false);
@@ -228,6 +229,17 @@ const StatisticsScreen = ({ navigation }) => {
           )}
           {renderOverviewCard("fire", "Best streak", bestStreak, "#ef4444")}
         </View>
+
+        {!isPremium && !isAdmin && !isOffline ? (
+          <View style={styles.sectionSpacing}>
+            <AdMobBanner />
+          </View>
+        ) : null}
+        {!isPremium && !isAdmin && isOffline ? (
+          <View style={styles.sectionSpacing}>
+            <OfflineAdCard />
+          </View>
+        ) : null}
 
         <Card style={styles.sectionCard}>
           <View style={styles.sectionHeader}>
@@ -373,18 +385,6 @@ const StatisticsScreen = ({ navigation }) => {
             <Text style={styles.legendText}>More</Text>
           </View>
         </Card>
-
-        {!isPremium && !isOffline ? (
-          <View style={styles.sectionSpacing}>
-            <AdMobBanner />
-          </View>
-        ) : null}
-
-        {!isPremium && isOffline ? (
-          <View style={styles.sectionSpacing}>
-            <OfflineAdCard />
-          </View>
-        ) : null}
 
         <Button
           mode="contained-tonal"

@@ -26,6 +26,8 @@ import TipsService from "../services/TipsService";
 import HabitTemplateService from "../services/HabitTemplateService";
 import TipCard from "../components/TipCard";
 import PremiumFeatureCard from "../components/PremiumFeatureCard";
+import AdMobBanner from "../components/AdMobBanner";
+import adMobService from "../services/AdMobService";
 import { DAY_OPTIONS, SCHEDULE_OPTIONS } from "../utils/habitHelpers";
 
 const FREE_HABIT_LIMIT = 5;
@@ -151,27 +153,27 @@ const CreateHabitScreen = ({ navigation }) => {
     return true;
   };
 
-  const checkFreeLimit = async () => {
-    const userHabits = await FirebaseService.getUserHabits();
-    return userHabits.length < FREE_HABIT_LIMIT || isPremium || isAdmin;
+  const showFreePlanPrompt = () => {
+    Alert.alert(
+      "Free plan limit reached",
+      "You can create up to 5 habits on the free plan. Upgrade to Premium for unlimited habits.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "See Premium",
+          onPress: () => navigation.getParent()?.navigate("Premium"),
+        },
+      ],
+    );
   };
 
   const saveHabit = async () => {
     if (!validate()) return;
 
-    const canCreate = await checkFreeLimit();
-    if (!canCreate) {
-      return Alert.alert(
-        "Free plan limit reached",
-        "You can create up to 5 habits on the free plan. Upgrade to Premium for unlimited habits.",
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "See Premium",
-            onPress: () => navigation.getParent()?.navigate("Premium"),
-          },
-        ],
-      );
+    const canCreate = await FirebaseService.canCreateHabit(FREE_HABIT_LIMIT);
+    if (!canCreate.allowed) {
+      showFreePlanPrompt();
+      return;
     }
 
     if (scheduleType === "timesPerWeek" && !canUseAdvancedSchedule) {
@@ -214,10 +216,15 @@ const CreateHabitScreen = ({ navigation }) => {
         scheduleType,
         reminderEnabled,
       });
+      await adMobService.showInterstitialAd("habit_created");
 
       Alert.alert("Habit created", `${habitName.trim()} is ready to track.`);
       navigation.goBack();
     } catch (error) {
+      if (error.message?.toLowerCase().includes("free plan")) {
+        showFreePlanPrompt();
+        return;
+      }
       Alert.alert(
         "Could not create habit",
         error.message || "Please try again.",
@@ -292,6 +299,10 @@ const CreateHabitScreen = ({ navigation }) => {
             })}
           </ScrollView>
         </Card>
+
+        {!isPremium && !isAdmin ? (
+          <AdMobBanner style={styles.bannerSpacing} />
+        ) : null}
 
         <Card style={styles.card}>
           <Text style={styles.cardTitle}>Basic details</Text>
@@ -595,6 +606,7 @@ const styles = StyleSheet.create({
   header: { backgroundColor: "#f8fafc" },
   content: { padding: 16, paddingBottom: 32 },
   sectionSpacing: { marginBottom: 12 },
+  bannerSpacing: { marginBottom: 16 },
   card: {
     borderRadius: 22,
     padding: 16,
@@ -619,6 +631,22 @@ const styles = StyleSheet.create({
     color: "#6b7280",
     marginBottom: 12,
   },
+  templateRow: { paddingRight: 8, gap: 12 },
+  templateCard: {
+    width: 230,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: "#f8fafc",
+  },
+  templateChip: { alignSelf: "flex-start", marginBottom: 8 },
+  templateTitle: { fontSize: 16, fontWeight: "800", color: "#111827" },
+  templateDescription: {
+    marginTop: 6,
+    marginBottom: 12,
+    fontSize: 13,
+    lineHeight: 18,
+    color: "#6b7280",
+  },
   input: { marginBottom: 10, backgroundColor: "#ffffff" },
   label: {
     fontSize: 14,
@@ -630,27 +658,6 @@ const styles = StyleSheet.create({
   chipWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   choiceChip: { marginBottom: 8 },
   difficultyRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  templateRow: { gap: 12, paddingRight: 8 },
-  templateCard: {
-    width: 220,
-    borderRadius: 18,
-    padding: 14,
-    backgroundColor: "#f8fafc",
-  },
-  lockedCard: { backgroundColor: "#faf5ff" },
-  templateChip: {
-    alignSelf: "flex-start",
-    marginBottom: 10,
-    backgroundColor: "#eef2ff",
-  },
-  templateTitle: { fontSize: 16, fontWeight: "800", color: "#111827" },
-  templateDescription: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: "#4b5563",
-    marginTop: 8,
-    marginBottom: 12,
-  },
   scheduleList: { gap: 10 },
   scheduleCard: { borderRadius: 18, padding: 14, backgroundColor: "#f8fafc" },
   scheduleCardSelected: {
@@ -658,6 +665,7 @@ const styles = StyleSheet.create({
     borderColor: "#4f46e5",
     backgroundColor: "#eef2ff",
   },
+  lockedCard: { backgroundColor: "#faf5ff" },
   scheduleTitle: { fontSize: 15, fontWeight: "800", color: "#111827" },
   scheduleDescription: { marginTop: 4, fontSize: 13, color: "#6b7280" },
   dayWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
@@ -668,15 +676,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   timeButton: { alignSelf: "flex-start", marginBottom: 12 },
-  previewRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginBottom: 12,
-  },
+  previewRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   previewTitle: { fontSize: 17, fontWeight: "800", color: "#111827" },
-  previewText: { fontSize: 13, lineHeight: 19, color: "#4b5563", marginTop: 4 },
-  previewChip: { backgroundColor: "#ffffff" },
+  previewText: { marginTop: 4, fontSize: 13, color: "#6b7280" },
+  previewChip: { marginTop: 12, marginRight: 8, backgroundColor: "#ffffff" },
   saveButton: { borderRadius: 16, paddingVertical: 6 },
 });
 

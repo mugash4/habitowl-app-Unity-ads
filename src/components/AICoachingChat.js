@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
+import { useNavigation } from "@react-navigation/native";
 import {
   View,
   Text,
@@ -6,22 +7,25 @@ import {
   ScrollView,
   Alert,
   KeyboardAvoidingView,
-  Platform
-} from 'react-native';
+  Platform,
+} from "react-native";
 import {
   Dialog,
   Portal,
   Button,
   TextInput,
   ActivityIndicator,
-  Chip
-} from 'react-native-paper';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { LinearGradient } from 'expo-linear-gradient';
+  Chip,
+} from "react-native-paper";
+import Icon from "react-native-vector-icons/MaterialCommunityIcons";
+import { LinearGradient } from "expo-linear-gradient";
 
-import FirebaseService from '../services/FirebaseService';
-import SecureAIService from '../services/SecureAIService';
-import { checkInternetConnection, showInternetRequiredAlert } from '../utils/networkUtils';
+import FirebaseService from "../services/FirebaseService";
+import SecureAIService from "../services/SecureAIService";
+import {
+  checkInternetConnection,
+  showInternetRequiredAlert,
+} from "../utils/networkUtils";
 
 /**
  * ✅ FIXED: AI Coaching Chat for Habits
@@ -33,7 +37,8 @@ import { checkInternetConnection, showInternetRequiredAlert } from '../utils/net
 const FREE_DAILY_LIMIT = 2;
 
 const AICoachingChat = ({ visible, onDismiss, habit }) => {
-  const [message, setMessage] = useState('');
+  const navigation = useNavigation();
+  const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [aiResponse, setAiResponse] = useState(null);
   const [showResponse, setShowResponse] = useState(false);
@@ -48,11 +53,11 @@ const AICoachingChat = ({ visible, onDismiss, habit }) => {
 
   useEffect(() => {
     if (visible) {
-      console.log('🦉 AICoachingChat: Modal opened for habit:', habit?.name);
+      console.log("🦉 AICoachingChat: Modal opened for habit:", habit?.name);
       checkAccessStatus();
       setShowResponse(false);
       setAiResponse(null);
-      setMessage('');
+      setMessage("");
       setConversationHistory([]);
     }
   }, [visible]);
@@ -61,7 +66,7 @@ const AICoachingChat = ({ visible, onDismiss, habit }) => {
     const hasInternet = await checkInternetConnection();
 
     if (!hasInternet) {
-      showInternetRequiredAlert('AI Coaching');
+      showInternetRequiredAlert("AI Coaching");
       return false;
     }
 
@@ -70,7 +75,7 @@ const AICoachingChat = ({ visible, onDismiss, habit }) => {
 
   const checkAccessStatus = async () => {
     try {
-      console.log('🔍 AICoachingChat: Checking user access status...');
+      console.log("🔍 AICoachingChat: Checking user access status...");
 
       const userStats = await FirebaseService.getUserStats();
       const premiumStatus = userStats?.isPremium || false;
@@ -78,7 +83,7 @@ const AICoachingChat = ({ visible, onDismiss, habit }) => {
 
       const user = FirebaseService.currentUser;
       if (user && user.email) {
-        const AdminService = require('../services/AdminService').default;
+        const AdminService = require("../services/AdminService").default;
         adminStatus = await AdminService.checkAdminStatus(user.email);
       }
 
@@ -86,7 +91,8 @@ const AICoachingChat = ({ visible, onDismiss, habit }) => {
       setIsAdmin(adminStatus);
 
       if (!premiumStatus && !adminStatus) {
-        const freeUsageStatus = await FirebaseService.getAICoachingUsageStatus(FREE_DAILY_LIMIT);
+        const freeUsageStatus =
+          await FirebaseService.getAICoachingUsageStatus(FREE_DAILY_LIMIT);
         setUsageStatus(freeUsageStatus);
       } else {
         setUsageStatus({
@@ -96,7 +102,7 @@ const AICoachingChat = ({ visible, onDismiss, habit }) => {
         });
       }
     } catch (error) {
-      console.error('❌ Error checking access status:', error);
+      console.error("❌ Error checking access status:", error);
       setIsPremium(false);
       setIsAdmin(false);
       setUsageStatus({
@@ -110,26 +116,35 @@ const AICoachingChat = ({ visible, onDismiss, habit }) => {
   // ✅ FIX: Improved message sending with better validation and error handling
   const handleSendMessage = async (customMessage = null) => {
     const messageToSend = customMessage || message;
-    
+
     const hasUnlimitedAccess = isPremium || isAdmin;
 
-    console.log('🚀 Send message clicked');
-    console.log('📝 Message:', messageToSend);
-    console.log('💎 Unlimited access:', hasUnlimitedAccess);
-    console.log('👤 Is premium:', isPremium);
-    console.log('👑 Is admin:', isAdmin);
+    console.log("🚀 Send message clicked");
+    console.log("📝 Message:", messageToSend);
+    console.log("💎 Unlimited access:", hasUnlimitedAccess);
+    console.log("👤 Is premium:", isPremium);
+    console.log("👑 Is admin:", isAdmin);
 
     if (!hasUnlimitedAccess && usageStatus.remaining <= 0) {
       Alert.alert(
-        'Daily Coaching Limit Reached',
-        'Free users get 2 AI coaching uses per day. Upgrade to Premium for unlimited coaching anytime.',
-        [{ text: 'OK', style: 'cancel' }]
+        "Daily Coaching Limit Reached",
+        "Free users get 2 AI coaching uses per day. Upgrade to Premium for unlimited coaching anytime.",
+        [
+          { text: "Not now", style: "cancel" },
+          {
+            text: "See Premium",
+            onPress: () => navigation.getParent()?.navigate("Premium"),
+          },
+        ],
       );
       return;
     }
 
     if (!messageToSend || !messageToSend.trim()) {
-      Alert.alert('Required', 'Please enter a question or select a quick suggestion');
+      Alert.alert(
+        "Required",
+        "Please enter a question or select a quick suggestion",
+      );
       return;
     }
 
@@ -142,35 +157,43 @@ const AICoachingChat = ({ visible, onDismiss, habit }) => {
       setIsLoading(true);
       setShowResponse(false);
 
-      console.log('📤 Requesting AI coaching...');
-      console.log('👤 User is admin:', isAdmin);
-      console.log('💎 User is premium:', isPremium);
+      console.log("📤 Requesting AI coaching...");
+      console.log("👤 User is admin:", isAdmin);
+      console.log("💎 User is premium:", isPremium);
 
       // Build coaching prompt
       const prompt = buildCoachingPrompt(habit, messageToSend.trim());
 
-      console.log('🤖 Calling AI service...');
+      console.log("🤖 Calling AI service...");
 
       // Call AI service with timeout
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Request timeout')), 45000)
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Request timeout")), 45000),
       );
 
       const aiPromise = SecureAIService.callSecureAI(prompt);
 
       const response = await Promise.race([aiPromise, timeoutPromise]);
 
-      console.log('✅ AI coaching received successfully');
+      console.log("✅ AI coaching received successfully");
 
       let updatedUsageStatus = usageStatus;
       if (!hasUnlimitedAccess) {
-        updatedUsageStatus = await FirebaseService.consumeAICoachingUse(FREE_DAILY_LIMIT);
+        updatedUsageStatus =
+          await FirebaseService.consumeAICoachingUse(FREE_DAILY_LIMIT);
 
         if (!updatedUsageStatus.allowed) {
           setUsageStatus(updatedUsageStatus);
           Alert.alert(
-            'Daily Coaching Limit Reached',
-            'You have already used your 2 free coaching sessions today. Upgrade to Premium for unlimited access.'
+            "Daily Coaching Limit Reached",
+            "You have already used your 2 free coaching sessions today. Upgrade to Premium for unlimited access.",
+            [
+              { text: "Not now", style: "cancel" },
+              {
+                text: "See Premium",
+                onPress: () => navigation.getParent()?.navigate("Premium"),
+              },
+            ],
           );
           return;
         }
@@ -180,49 +203,54 @@ const AICoachingChat = ({ visible, onDismiss, habit }) => {
 
       const newHistory = [
         ...conversationHistory,
-        { type: 'user', text: messageToSend.trim() },
-        { type: 'ai', text: response }
+        { type: "user", text: messageToSend.trim() },
+        { type: "ai", text: response },
       ];
       setConversationHistory(newHistory);
 
       setAiResponse(response);
       setShowResponse(true);
-      setMessage('');
+      setMessage("");
 
-      await FirebaseService.trackEvent('ai_coaching_used', {
+      await FirebaseService.trackEvent("ai_coaching_used", {
         habit_name: habit.name,
         habit_category: habit.category,
         is_admin: isAdmin,
         is_premium: isPremium,
-        remaining_free_uses: hasUnlimitedAccess ? null : updatedUsageStatus.remaining,
-        message_length: messageToSend.trim().length
+        remaining_free_uses: hasUnlimitedAccess
+          ? null
+          : updatedUsageStatus.remaining,
+        message_length: messageToSend.trim().length,
       }).catch(() => {});
-
     } catch (error) {
-      console.error('❌ Error getting AI coaching:', error);
+      console.error("❌ Error getting AI coaching:", error);
 
       // Enhanced error handling with better messages
-      let errorTitle = 'Connection Error';
-      let errorMessage = 'Failed to get AI coaching. Please check your internet connection and try again.';
+      let errorTitle = "Connection Error";
+      let errorMessage =
+        "Failed to get AI coaching. Please check your internet connection and try again.";
 
-      if (error.message && error.message.includes('API key')) {
-        errorTitle = '⚙️ Setup Required';
-        errorMessage = 'AI Coaching needs to be configured by an admin.\n\nPlease ask the admin to:\n1. Go to Settings → Admin Panel\n2. Configure API Keys\n3. Add DeepSeek API key\n4. Save and try again\n\nGet API key at: https://platform.deepseek.com';
-      } else if (error.message && error.message.includes('not configured')) {
-        errorTitle = '⚙️ Setup Required';
+      if (error.message && error.message.includes("API key")) {
+        errorTitle = "⚙️ Setup Required";
+        errorMessage =
+          "AI Coaching needs to be configured by an admin.\n\nPlease ask the admin to:\n1. Go to Settings → Admin Panel\n2. Configure API Keys\n3. Add DeepSeek API key\n4. Save and try again\n\nGet API key at: https://platform.deepseek.com";
+      } else if (error.message && error.message.includes("not configured")) {
+        errorTitle = "⚙️ Setup Required";
         errorMessage = error.message;
-      } else if (error.message && error.message.includes('timeout')) {
-        errorTitle = '⏱️ Timeout';
-        errorMessage = 'Request took too long. Please try again with a shorter question.';
+      } else if (error.message && error.message.includes("timeout")) {
+        errorTitle = "⏱️ Timeout";
+        errorMessage =
+          "Request took too long. Please try again with a shorter question.";
       }
 
-      Alert.alert(errorTitle, errorMessage, [{ text: 'OK' }]);
+      Alert.alert(errorTitle, errorMessage, [{ text: "OK" }]);
 
       const fallback = getFallbackCoaching(habit);
 
       if (!hasUnlimitedAccess) {
         try {
-          const updatedUsageStatus = await FirebaseService.consumeAICoachingUse(FREE_DAILY_LIMIT);
+          const updatedUsageStatus =
+            await FirebaseService.consumeAICoachingUse(FREE_DAILY_LIMIT);
           if (updatedUsageStatus.allowed) {
             setUsageStatus(updatedUsageStatus);
           } else {
@@ -230,14 +258,13 @@ const AICoachingChat = ({ visible, onDismiss, habit }) => {
             return;
           }
         } catch (usageError) {
-          console.log('Could not update free usage count:', usageError.message);
+          console.log("Could not update free usage count:", usageError.message);
         }
       }
 
       setAiResponse(fallback);
       setShowResponse(true);
-      setMessage('');
-
+      setMessage("");
     } finally {
       setIsLoading(false);
     }
@@ -245,9 +272,9 @@ const AICoachingChat = ({ visible, onDismiss, habit }) => {
 
   // ✅ FIX: Improved quick suggestion handler to auto-send
   const handleQuickSuggestion = async (suggestion) => {
-    console.log('💡 Quick suggestion selected:', suggestion);
+    console.log("💡 Quick suggestion selected:", suggestion);
     setMessage(suggestion);
-    
+
     // ✅ FIX: Auto-send the message immediately
     // Small delay to allow UI to update
     setTimeout(() => {
@@ -260,19 +287,19 @@ const AICoachingChat = ({ visible, onDismiss, habit }) => {
    */
   const buildCoachingPrompt = (habit, userMessage) => {
     const completionRate = calculateCompletionRate(habit);
-    
+
     const basePrompt = `You are HabitOwl AI Coach. Provide personalized, actionable habit coaching.
 
 HABIT DETAILS:
 - Name: ${habit.name}
-- Category: ${habit.category || 'General'}
+- Category: ${habit.category || "General"}
 - Current Streak: ${habit.currentStreak || 0} days
 - Longest Streak: ${habit.longestStreak || 0} days
 - Completion Rate: ${completionRate}%
 - Total Completions: ${habit.totalCompletions || 0}
 
 USER QUESTION:
-${userMessage || 'Provide general coaching for this habit'}
+${userMessage || "Provide general coaching for this habit"}
 
 INSTRUCTIONS:
 1. Be encouraging and supportive
@@ -300,7 +327,7 @@ YOUR COACHING:`;
     const thirtyDaysAgo = new Date(today);
     thirtyDaysAgo.setDate(today.getDate() - 30);
 
-    const recentCompletions = habit.completions.filter(dateStr => {
+    const recentCompletions = habit.completions.filter((dateStr) => {
       const date = new Date(dateStr);
       return date >= thirtyDaysAgo && date <= today;
     });
@@ -330,7 +357,7 @@ YOUR COACHING:`;
    * Close dialog and reset
    */
   const handleClose = () => {
-    setMessage('');
+    setMessage("");
     setShowResponse(false);
     setAiResponse(null);
     setConversationHistory([]);
@@ -341,7 +368,7 @@ YOUR COACHING:`;
    * Start new conversation
    */
   const handleNewConversation = () => {
-    setMessage('');
+    setMessage("");
     setShowResponse(false);
     setAiResponse(null);
     // Keep conversation history for context
@@ -351,25 +378,22 @@ YOUR COACHING:`;
    * Quick suggestion chips
    */
   const quickSuggestions = [
-    'How can I stay consistent?',
-    'Tips to improve my streak',
-    'Why am I struggling?',
-    'How to make this easier?'
+    "How can I stay consistent?",
+    "Tips to improve my streak",
+    "Why am I struggling?",
+    "How to make this easier?",
   ];
 
   return (
     <Portal>
-      <Dialog 
-        visible={visible} 
-        onDismiss={handleClose} 
+      <Dialog
+        visible={visible}
+        onDismiss={handleClose}
         style={styles.dialog}
         dismissable={!isLoading}
       >
         {/* Header */}
-        <LinearGradient
-          colors={['#4f46e5', '#7c3aed']}
-          style={styles.header}
-        >
+        <LinearGradient colors={["#4f46e5", "#7c3aed"]} style={styles.header}>
           <View style={styles.headerContent}>
             <Icon name="brain" size={32} color="#ffffff" />
             <View style={styles.headerText}>
@@ -386,7 +410,7 @@ YOUR COACHING:`;
 
         {/* ✅ CRITICAL FIX: Use Dialog.ScrollArea with proper maxHeight */}
         <Dialog.ScrollArea style={styles.scrollArea}>
-          <ScrollView 
+          <ScrollView
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={true}
             nestedScrollEnabled={true}
@@ -395,17 +419,23 @@ YOUR COACHING:`;
             <View style={styles.statsContainer}>
               <View style={styles.statBox}>
                 <Icon name="fire" size={20} color="#ef4444" />
-                <Text style={styles.statValue}>{habit?.currentStreak || 0}</Text>
+                <Text style={styles.statValue}>
+                  {habit?.currentStreak || 0}
+                </Text>
                 <Text style={styles.statLabel}>Streak</Text>
               </View>
               <View style={styles.statBox}>
                 <Icon name="chart-line" size={20} color="#10b981" />
-                <Text style={styles.statValue}>{calculateCompletionRate(habit)}%</Text>
+                <Text style={styles.statValue}>
+                  {calculateCompletionRate(habit)}%
+                </Text>
                 <Text style={styles.statLabel}>Rate</Text>
               </View>
               <View style={styles.statBox}>
                 <Icon name="check-circle" size={20} color="#3b82f6" />
-                <Text style={styles.statValue}>{habit?.totalCompletions || 0}</Text>
+                <Text style={styles.statValue}>
+                  {habit?.totalCompletions || 0}
+                </Text>
                 <Text style={styles.statLabel}>Total</Text>
               </View>
             </View>
@@ -414,9 +444,14 @@ YOUR COACHING:`;
               <>
                 {!isPremium && !isAdmin && (
                   <View style={styles.freePlanBanner}>
-                    <Icon name="ticket-percent-outline" size={18} color="#4f46e5" />
+                    <Icon
+                      name="ticket-percent-outline"
+                      size={18}
+                      color="#4f46e5"
+                    />
                     <Text style={styles.freePlanBannerText}>
-                      Free plan: {usageStatus.count}/{usageStatus.limit} used today • {usageStatus.remaining} left
+                      Free plan: {usageStatus.count}/{usageStatus.limit} used
+                      today • {usageStatus.remaining} left
                     </Text>
                   </View>
                 )}
@@ -424,7 +459,9 @@ YOUR COACHING:`;
                 <Text style={styles.sectionTitle}>Ask your AI coach:</Text>
 
                 {/* Quick Suggestions */}
-                <Text style={styles.quickTitle}>Quick suggestions (tap to send):</Text>
+                <Text style={styles.quickTitle}>
+                  Quick suggestions (tap to send):
+                </Text>
                 <View style={styles.chipsContainer}>
                   {quickSuggestions.map((suggestion, index) => (
                     <Chip
@@ -456,7 +493,8 @@ YOUR COACHING:`;
                 <View style={styles.tipContainer}>
                   <Icon name="lightbulb-outline" size={16} color="#f59e0b" />
                   <Text style={styles.tipText}>
-                    Get personalized advice based on your habit progress and patterns
+                    Get personalized advice based on your habit progress and
+                    patterns
                   </Text>
                 </View>
               </>
@@ -476,13 +514,15 @@ YOUR COACHING:`;
                   {/* Conversation History */}
                   {conversationHistory.length > 2 && (
                     <View style={styles.historyContainer}>
-                      <Text style={styles.historyTitle}>Conversation History:</Text>
+                      <Text style={styles.historyTitle}>
+                        Conversation History:
+                      </Text>
                       {conversationHistory.slice(0, -2).map((item, index) => (
                         <View key={index} style={styles.historyItem}>
-                          <Icon 
-                            name={item.type === 'user' ? 'account' : 'robot'} 
-                            size={16} 
-                            color={item.type === 'user' ? '#3b82f6' : '#8b5cf6'} 
+                          <Icon
+                            name={item.type === "user" ? "account" : "robot"}
+                            size={16}
+                            color={item.type === "user" ? "#3b82f6" : "#8b5cf6"}
                           />
                           <Text style={styles.historyText}>{item.text}</Text>
                         </View>
@@ -521,15 +561,17 @@ YOUR COACHING:`;
                 mode="contained"
                 buttonColor="#4f46e5"
               >
-                {isLoading ? 'Getting Advice...' : 'Get Coaching'}
+                {isLoading ? "Getting Advice..." : "Get Coaching"}
               </Button>
             </>
           ) : (
             <>
-              <Button onPress={handleNewConversation}>
-                New Question
-              </Button>
-              <Button onPress={handleClose} mode="contained" buttonColor="#4f46e5">
+              <Button onPress={handleNewConversation}>New Question</Button>
+              <Button
+                onPress={handleClose}
+                mode="contained"
+                buttonColor="#4f46e5"
+              >
                 Done
               </Button>
             </>
@@ -541,8 +583,12 @@ YOUR COACHING:`;
           <View style={styles.loadingOverlay}>
             <View style={styles.loadingCard}>
               <ActivityIndicator size="large" color="#4f46e5" />
-              <Text style={styles.loadingText}>Getting your personalized coaching...</Text>
-              <Text style={styles.loadingSubtext}>This may take a few seconds</Text>
+              <Text style={styles.loadingText}>
+                Getting your personalized coaching...
+              </Text>
+              <Text style={styles.loadingSubtext}>
+                This may take a few seconds
+              </Text>
             </View>
           </View>
         )}
@@ -553,7 +599,7 @@ YOUR COACHING:`;
 
 const styles = StyleSheet.create({
   dialog: {
-    maxHeight: '85%',
+    maxHeight: "85%",
     marginVertical: 60,
     borderRadius: 16,
   },
@@ -563,8 +609,8 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 16,
   },
   headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   headerText: {
     marginLeft: 12,
@@ -572,19 +618,19 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#ffffff',
+    fontWeight: "bold",
+    color: "#ffffff",
   },
   headerSubtitle: {
     fontSize: 14,
-    color: '#e0e7ff',
+    color: "#e0e7ff",
     marginTop: 2,
   },
   adminBadge: {
     fontSize: 12,
-    color: '#fbbf24',
+    color: "#fbbf24",
     marginTop: 4,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   // ✅ CRITICAL FIX: Proper ScrollArea styling
   scrollArea: {
@@ -596,42 +642,42 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    backgroundColor: '#f9fafb',
+    flexDirection: "row",
+    justifyContent: "space-around",
+    backgroundColor: "#f9fafb",
     padding: 16,
     borderRadius: 12,
     marginBottom: 20,
   },
   statBox: {
-    alignItems: 'center',
+    alignItems: "center",
   },
   statValue: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1f2937',
+    fontWeight: "bold",
+    color: "#1f2937",
     marginTop: 4,
   },
   statLabel: {
     fontSize: 12,
-    color: '#6b7280',
+    color: "#6b7280",
     marginTop: 2,
   },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#374151',
+    fontWeight: "600",
+    color: "#374151",
     marginBottom: 12,
   },
   quickTitle: {
     fontSize: 13,
-    fontWeight: '500',
-    color: '#6b7280',
+    fontWeight: "500",
+    color: "#6b7280",
     marginBottom: 8,
   },
   chipsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
     marginBottom: 16,
   },
@@ -645,11 +691,11 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   freePlanBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#eef2ff',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#eef2ff",
     borderWidth: 1,
-    borderColor: '#c7d2fe',
+    borderColor: "#c7d2fe",
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 10,
@@ -659,20 +705,20 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     flex: 1,
     fontSize: 12,
-    fontWeight: '600',
-    color: '#4338ca',
+    fontWeight: "600",
+    color: "#4338ca",
   },
   tipContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fef3c7',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fef3c7",
     padding: 12,
     borderRadius: 8,
     marginBottom: 16,
   },
   tipText: {
     fontSize: 12,
-    color: '#92400e',
+    color: "#92400e",
     marginLeft: 8,
     flex: 1,
   },
@@ -680,49 +726,49 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   responseHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 16,
   },
   responseTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1f2937',
+    fontWeight: "bold",
+    color: "#1f2937",
     marginLeft: 8,
   },
   responseCard: {
-    backgroundColor: '#f0f9ff',
+    backgroundColor: "#f0f9ff",
     padding: 16,
     borderRadius: 12,
     borderLeftWidth: 4,
-    borderLeftColor: '#4f46e5',
+    borderLeftColor: "#4f46e5",
     marginBottom: 16,
   },
   responseText: {
     fontSize: 15,
-    color: '#374151',
+    color: "#374151",
     lineHeight: 24,
   },
   historyContainer: {
-    backgroundColor: '#f9fafb',
+    backgroundColor: "#f9fafb",
     padding: 12,
     borderRadius: 8,
     marginBottom: 16,
   },
   historyTitle: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#6b7280',
+    fontWeight: "600",
+    color: "#6b7280",
     marginBottom: 8,
   },
   historyItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    alignItems: "flex-start",
     marginBottom: 8,
   },
   historyText: {
     fontSize: 12,
-    color: '#6b7280',
+    color: "#6b7280",
     marginLeft: 8,
     flex: 1,
   },
@@ -737,35 +783,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
+    borderTopColor: "#e5e7eb",
   },
   // Loading overlay styles
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
     borderRadius: 16,
   },
   loadingCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: "#ffffff",
     padding: 24,
     borderRadius: 16,
-    alignItems: 'center',
+    alignItems: "center",
     minWidth: 200,
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    fontWeight: '600',
-    color: '#1f2937',
-    textAlign: 'center',
+    fontWeight: "600",
+    color: "#1f2937",
+    textAlign: "center",
   },
   loadingSubtext: {
     marginTop: 4,
     fontSize: 13,
-    color: '#6b7280',
-    textAlign: 'center',
+    color: "#6b7280",
+    textAlign: "center",
   },
 });
 

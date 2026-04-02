@@ -214,7 +214,11 @@ export const getNextDueLabel = (habit = {}, fromDate = new Date()) => {
   const tomorrow = addDays(startOfDay(fromDate), 1);
   if (getDateKey(tomorrow) === nextKey) return "Due tomorrow";
 
-  return `Next: ${nextDue.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}`;
+  return `Next: ${nextDue.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  })}`;
 };
 
 export const sortHabitsForDashboard = (habits = []) => {
@@ -338,4 +342,132 @@ export const getSuccessMessageForStreak = (streak = 0) => {
   if (streak >= 7) return "One strong week";
   if (streak >= 3) return "Consistency is forming";
   return "Nice work today";
+};
+
+const getAchievementMetrics = (habits = []) => {
+  const totalHabits = habits.length;
+  const totalCompletions = habits.reduce(
+    (sum, habit) => sum + (habit.totalCompletions || 0),
+    0,
+  );
+  const bestStreak = habits.reduce(
+    (best, habit) => Math.max(best, habit.longestStreak || 0),
+    0,
+  );
+  const currentBestStreak = habits.reduce(
+    (best, habit) => Math.max(best, habit.currentStreak || 0),
+    0,
+  );
+  const categoryCount = new Set(
+    habits.map((habit) => (habit.category || "other").toLowerCase()),
+  ).size;
+
+  return {
+    totalHabits,
+    totalCompletions,
+    bestStreak,
+    currentBestStreak,
+    categoryCount,
+  };
+};
+
+export const ACHIEVEMENT_DEFINITIONS = [
+  {
+    id: "first_habit",
+    title: "First Nest",
+    description: "Create your first habit.",
+    icon: "egg-outline",
+    color: "#4f46e5",
+    requirementText: "1 active habit",
+    isEarned: (metrics) => metrics.totalHabits >= 1,
+  },
+  {
+    id: "five_habits",
+    title: "Routine Builder",
+    description: "Manage five active habits at once.",
+    icon: "view-grid-outline",
+    color: "#7c3aed",
+    requirementText: "5 active habits",
+    isEarned: (metrics) => metrics.totalHabits >= 5,
+  },
+  {
+    id: "first_completion",
+    title: "First Check-in",
+    description: "Complete your first habit session.",
+    icon: "check-circle-outline",
+    color: "#10b981",
+    requirementText: "1 completion",
+    isEarned: (metrics) => metrics.totalCompletions >= 1,
+  },
+  {
+    id: "ten_completions",
+    title: "Momentum Maker",
+    description: "Reach ten total completions.",
+    icon: "lightning-bolt-outline",
+    color: "#f59e0b",
+    requirementText: "10 completions",
+    isEarned: (metrics) => metrics.totalCompletions >= 10,
+  },
+  {
+    id: "fifty_completions",
+    title: "Steady Climber",
+    description: "Reach fifty total completions.",
+    icon: "trending-up",
+    color: "#06b6d4",
+    requirementText: "50 completions",
+    isEarned: (metrics) => metrics.totalCompletions >= 50,
+  },
+  {
+    id: "streak_7",
+    title: "7-Day Flame",
+    description: "Hit a seven-day streak on any habit.",
+    icon: "fire",
+    color: "#ef4444",
+    requirementText: "Best streak 7",
+    isEarned: (metrics) => metrics.bestStreak >= 7,
+  },
+  {
+    id: "streak_30",
+    title: "30-Day Legend",
+    description: "Hit a thirty-day streak on any habit.",
+    icon: "medal-outline",
+    color: "#f97316",
+    requirementText: "Best streak 30",
+    isEarned: (metrics) => metrics.bestStreak >= 30,
+  },
+  {
+    id: "three_categories",
+    title: "Balanced Owl",
+    description: "Build habits in at least three categories.",
+    icon: "shape-outline",
+    color: "#8b5cf6",
+    requirementText: "3 categories",
+    isEarned: (metrics) => metrics.categoryCount >= 3,
+  },
+];
+
+export const getAchievementProgress = (habits = []) => {
+  const metrics = getAchievementMetrics(habits);
+  const achievements = ACHIEVEMENT_DEFINITIONS.map((achievement) => ({
+    ...achievement,
+    earned: achievement.isEarned(metrics),
+  }));
+  const earnedCount = achievements.filter((item) => item.earned).length;
+
+  return {
+    achievements,
+    earnedCount,
+    totalCount: achievements.length,
+    metrics,
+  };
+};
+
+export const getEarnedAchievements = (habits = []) => {
+  return getAchievementProgress(habits).achievements.filter(
+    (achievement) => achievement.earned,
+  );
+};
+
+export const getUnlockedAchievementIds = (habits = []) => {
+  return getEarnedAchievements(habits).map((achievement) => achievement.id);
 };

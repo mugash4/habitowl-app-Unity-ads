@@ -24,6 +24,8 @@ import NotificationService from "../services/NotificationService";
 import TipsService from "../services/TipsService";
 import TipCard from "../components/TipCard";
 import PremiumFeatureCard from "../components/PremiumFeatureCard";
+import AdMobBanner from "../components/AdMobBanner";
+import adMobService from "../services/AdMobService";
 import {
   DAY_OPTIONS,
   SCHEDULE_OPTIONS,
@@ -187,6 +189,7 @@ const EditHabitScreen = ({ navigation, route }) => {
         habitId: habit.id,
         scheduleType,
       });
+      await adMobService.showInterstitialAd("habit_updated");
 
       Alert.alert(
         "Habit updated",
@@ -217,6 +220,7 @@ const EditHabitScreen = ({ navigation, route }) => {
               setIsLoading(true);
               await FirebaseService.deleteHabit(habit.id);
               await NotificationService.cancelHabitNotifications(habit.id);
+              await adMobService.showInterstitialAd("habit_deleted");
               navigation.goBack();
             } catch (error) {
               Alert.alert(
@@ -282,6 +286,10 @@ const EditHabitScreen = ({ navigation, route }) => {
             </View>
           </View>
         </Card>
+
+        {!isPremium && !isAdmin ? (
+          <AdMobBanner style={styles.bannerSpacing} />
+        ) : null}
 
         <Card style={styles.card}>
           <Text style={styles.cardTitle}>Basic details</Text>
@@ -529,6 +537,7 @@ const styles = StyleSheet.create({
   header: { backgroundColor: "#f8fafc" },
   content: { padding: 16, paddingBottom: 32 },
   sectionSpacing: { marginBottom: 12 },
+  bannerSpacing: { marginBottom: 16 },
   card: {
     borderRadius: 22,
     padding: 16,

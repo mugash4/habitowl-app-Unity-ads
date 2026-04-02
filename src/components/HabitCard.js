@@ -84,14 +84,6 @@ const HabitCard = ({
   const hasAIAccess = isPremium || isAdmin;
 
   const handleAICoaching = async () => {
-    if (!hasAIAccess) {
-      Alert.alert(
-        "Premium feature",
-        "AI coaching stays visible so free users can see what is included. Upgrade to unlock personalized coaching on every habit.",
-      );
-      return;
-    }
-
     const hasInternet = await checkInternetConnection();
     if (!hasInternet) {
       showInternetRequiredAlert("AI Coaching");
@@ -235,17 +227,9 @@ const HabitCard = ({
                     onPress={handleAICoaching}
                   >
                     <Icon
-                      name={
-                        hasAIAccess ? "robot-excited-outline" : "lock-outline"
-                      }
+                      name="robot-excited-outline"
                       size={22}
-                      color={
-                        hasAIAccess
-                          ? "#f59e0b"
-                          : isCompleted
-                            ? "#ffffff"
-                            : "#4f46e5"
-                      }
+                      color={isCompleted ? "#ffffff" : "#f59e0b"}
                     />
                   </TouchableOpacity>
                 </View>
@@ -408,14 +392,22 @@ const HabitCard = ({
               </View>
             ) : null}
 
-            {!hasAIAccess ? (
-              <View style={styles.lockedStrip}>
-                <Icon name="lock-outline" size={16} color="#7c3aed" />
-                <Text style={styles.lockedText}>
-                  AI coaching is visible here but unlocked on Premium only.
-                </Text>
-              </View>
-            ) : null}
+            <View style={styles.lockedStrip}>
+              <Icon
+                name={
+                  hasAIAccess
+                    ? "robot-excited-outline"
+                    : "ticket-percent-outline"
+                }
+                size={16}
+                color={hasAIAccess ? "#f59e0b" : "#7c3aed"}
+              />
+              <Text style={styles.lockedText}>
+                {hasAIAccess
+                  ? "Unlimited AI coaching is active on this habit."
+                  : "Free plan includes 2 AI coaching sessions per day. Premium unlocks unlimited coaching."}
+              </Text>
+            </View>
 
             {showActions ? (
               <View style={styles.actionsRow}>
@@ -491,7 +483,7 @@ const HabitCard = ({
 
       <AICoachingChat
         visible={showAICoaching}
-        onClose={() => setShowAICoaching(false)}
+        onDismiss={() => setShowAICoaching(false)}
         habit={habit}
       />
     </>
