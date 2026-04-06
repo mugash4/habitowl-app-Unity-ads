@@ -80,30 +80,25 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
     
+    // ✅ IMPORTANT FIX:
+    // Allow signed-in app users to read API keys, same pattern as PawGuard
+    // Only admins can write
     match /admin_config/api_keys {
-      allow read: if isAdmin();
+      allow read: if isSignedIn();
       allow write: if isAdmin();
     }
 
     // ✅ Promo offers - Allow tracking updates for all authenticated users
     match /promo_offers/{offerId} {
-      // ✅ Anyone authenticated can read active offers
       allow read: if isSignedIn();
-  
-      // ✅ Allow all authenticated users to update for tracking metrics
       allow update: if isSignedIn();
-  
-      // ✅ Admins OR automated system can create
       allow create: if isSignedIn() && (
         isAdmin() || 
         request.resource.data.createdBy == 'auto_system'
       );
-  
-      // ✅ Only admins can delete offers
       allow delete: if isAdmin();
     }
 
-  
     // Analytics
     match /analytics/{analyticsId} {
       allow read: if isAdmin();
