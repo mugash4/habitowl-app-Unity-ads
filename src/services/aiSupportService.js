@@ -1,7 +1,16 @@
 import axios from 'axios';
 import AdminService from './AdminService';
 import FirebaseService from './FirebaseService';
-import { collection, addDoc, updateDoc, doc, query, where, getDocs, orderBy, onSnapshot } from 'firebase/firestore';
+import {
+  collection,
+  addDoc,
+  updateDoc,
+  doc,
+  query,
+  where,
+  getDocs,
+  orderBy,
+} from 'firebase/firestore';
 import { db } from '../config/firebase';
 
 class AISupportService {
@@ -119,38 +128,51 @@ HabitOwl is a smart habit tracking app with AI coaching, streak tracking, and pr
 - Email: augustinemwathi96@gmail.com
 - Response time: Within 24 hours
 `;
+    this.supportedProviders = ['deepseek', 'openai', 'openrouter'];
   }
 
-  /**
-   * Main entry point: Handle support ticket with AI
-   */
   async handleSupportTicket(ticketData) {
     try {
-      // 1. Create ticket in Firestore
-      const ticket = await this.createTicket(ticketData);
+      const userStats = await FirebaseService.getUserStats();
+      const currentUser = FirebaseService.currentUser;
+      let isPremium = userStats?.isPremium || false;
 
-      // 2. Generate AI response
-      const aiResponse = await this.generateAIResponse(ticketData);
+      if (currentUser?.email && !isPremium) {
+        try {
+          const isAdmin = await AdminService.checkAdminStatus(currentUser.email);
+          if (isAdmin) {
+            isPremium = true;
+          }
+        } catch (error) {
+          console.log(
+            'AISupportService: Admin status check skipped:',
+            error.message,
+          );
+        }
+      }
 
-      // 3. Determine if human escalation needed
+      const aiResponse = await this.generateAIResponse(
+        ticketData,
+        userStats,
+        isPremium,
+      );
       const needsHuman = this.needsHumanEscalation(ticketData, aiResponse);
 
-      // 4. Update ticket with AI response
-      await this.updateTicket(ticket.id, {
+      const ticket = await this.createTicket(ticketData, {
         aiResponse: aiResponse.answer,
         confidence: aiResponse.confidence,
         status: needsHuman ? 'escalated' : 'ai_resolved',
         resolvedBy: needsHuman ? null : 'ai',
         escalationReason: aiResponse.escalationReason || null,
-        respondedAt: new Date().toISOString()
+        respondedAt: new Date().toISOString(),
       });
 
       return {
         success: true,
         ticketId: ticket.id,
         aiResponse: aiResponse.answer,
-        needsHuman: needsHuman,
-        confidence: aiResponse.confidence
+        needsHuman,
+        confidence: aiResponse.confidence,
       };
     } catch (error) {
       console.error('Error handling support ticket:', error);
@@ -158,12 +180,9 @@ HabitOwl is a smart habit tracking app with AI coaching, streak tracking, and pr
     }
   }
 
-  /**
-   * Create support ticket in Firestore
-   */
-  async createTicket(ticketData) {
+  async createTicket(ticketData, extraFields = {}) {
     const user = FirebaseService.currentUser;
-    
+
     const ticket = {
       userId: user?.uid || 'anonymous',
       userEmail: ticketData.userEmail || user?.email || 'no-email',
@@ -173,63 +192,46 @@ HabitOwl is a smart habit tracking app with AI coaching, streak tracking, and pr
       status: 'new',
       createdAt: new Date().toISOString(),
       platform: ticketData.platform || 'mobile',
-      appVersion: ticketData.appVersion || '1.8.0'
+      appVersion: ticketData.appVersion || '1.9.0',
+      ...extraFields,
     };
 
     const docRef = await addDoc(collection(db, 'support_tickets'), ticket);
-    
+
     return { id: docRef.id, ...ticket };
   }
 
-  /**
-   * Update ticket in Firestore
-   */
   async updateTicket(ticketId, updates) {
     const ticketRef = doc(db, 'support_tickets', ticketId);
     await updateDoc(ticketRef, {
       ...updates,
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     });
   }
 
-  /**
-   * Generate AI response using existing AI infrastructure
-   */
-  async generateAIResponse(ticketData) {
+  async generateAIResponse(ticketData, userStats = null, isPremium = false) {
     try {
-      // Get user stats for personalized response
-      const userStats = await FirebaseService.getUserStats();
-      const isPremium = userStats?.isPremium || false;
-
-      // Build context-aware prompt
-      const prompt = this.buildSupportPrompt(ticketData, userStats);
-
-      // Call AI using existing infrastructure
+      const resolvedStats = userStats || (await FirebaseService.getUserStats());
+      const prompt = this.buildSupportPrompt(ticketData, resolvedStats);
       const aiAnswer = await this.callAIForSupport(prompt, isPremium);
-
-      // Analyze confidence and escalation needs
       const analysis = this.analyzeResponse(ticketData, aiAnswer);
 
       return {
         answer: aiAnswer,
         confidence: analysis.confidence,
-        escalationReason: analysis.escalationReason
+        escalationReason: analysis.escalationReason,
       };
     } catch (error) {
       console.error('Error generating AI response:', error);
-      
-      // Fallback response
+
       return {
         answer: this.getFallbackResponse(ticketData.issueType),
         confidence: 0.3,
-        escalationReason: 'AI service unavailable'
+        escalationReason: 'AI service unavailable',
       };
     }
   }
 
-  /**
-   * Build comprehensive support prompt
-   */
   buildSupportPrompt(ticketData, userStats) {
     return `You are HabitOwl Support AI. Provide helpful, friendly support.
 
@@ -258,34 +260,96 @@ INSTRUCTIONS:
 YOUR RESPONSE:`;
   }
 
-  /**
-   * Call AI using existing infrastructure
-   */
+  isSupportedProvider(provider) {
+    return this.supportedProviders.includes(provider);
+  }
+
+  normalizeApiKey(value) {
+    if (typeof value !== 'string') {
+      return null;
+    }
+
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
+  }
+
+  async getProviderCandidates(isPremium = false) {
+    const candidates = [];
+
+    try {
+      const adminDefault = await AdminService.getDefaultAiProvider();
+      if (this.isSupportedProvider(adminDefault)) {
+        candidates.push(adminDefault);
+      }
+    } catch (error) {
+      console.log(
+        'AISupportService: Could not load admin default provider:',
+        error.message,
+      );
+    }
+
+    if (isPremium) {
+      candidates.push('openai');
+    }
+
+    candidates.push('deepseek', 'openai', 'openrouter');
+
+    return [...new Set(candidates.filter(Boolean))];
+  }
+
+  async resolveProviderAndKey(isPremium = false) {
+    const candidates = await this.getProviderCandidates(isPremium);
+
+    for (const provider of candidates) {
+      try {
+        const apiKey = this.normalizeApiKey(
+          await AdminService.getGlobalApiKey(provider),
+        );
+
+        if (apiKey) {
+          return { provider, apiKey };
+        }
+      } catch (error) {
+        console.log(
+          `AISupportService: Could not load API key for ${provider}:`,
+          error.message,
+        );
+      }
+    }
+
+    return {
+      provider: candidates[0] || 'deepseek',
+      apiKey: null,
+    };
+  }
+
   async callAIForSupport(prompt, isPremium) {
     try {
-      // Get provider (same as app's existing AI service)
-      const provider = isPremium ? 'openai' : 'deepseek';
-      const apiKey = await AdminService.getGlobalApiKey(provider);
+      const { provider, apiKey } = await this.resolveProviderAndKey(isPremium);
 
       if (!apiKey) {
-        throw new Error('No API key available');
+        throw new Error(`No API key available for ${provider}`);
       }
 
-      // Use DeepSeek for cost-effective support
       if (provider === 'deepseek') {
         return await this.callDeepSeekSupport(prompt, apiKey);
-      } else {
+      }
+
+      if (provider === 'openai') {
         return await this.callOpenAISupport(prompt, apiKey);
       }
+
+      if (provider === 'openrouter') {
+        return await this.callOpenRouterSupport(prompt, apiKey);
+      }
+
+      throw new Error('Unsupported AI provider');
     } catch (error) {
       console.error('AI call error:', error);
       throw error;
     }
   }
 
-  /**
-   * Call DeepSeek API for support
-   */
   async callDeepSeekSupport(prompt, apiKey) {
     const response = await axios.post(
       'https://api.deepseek.com/v1/chat/completions',
@@ -294,30 +358,29 @@ YOUR RESPONSE:`;
         messages: [
           {
             role: 'system',
-            content: 'You are HabitOwl Support AI. Provide clear, helpful answers. Be concise and actionable.'
+            content:
+              'You are HabitOwl Support AI. Provide clear, helpful answers. Be concise and actionable.',
           },
           {
             role: 'user',
-            content: prompt
-          }
+            content: prompt,
+          },
         ],
         max_tokens: 400,
-        temperature: 0.7
+        temperature: 0.7,
       },
       {
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json'
-        }
-      }
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 30000,
+      },
     );
 
     return response.data.choices[0].message.content.trim();
   }
 
-  /**
-   * Call OpenAI API for support
-   */
   async callOpenAISupport(prompt, apiKey) {
     const response = await axios.post(
       'https://api.openai.com/v1/chat/completions',
@@ -326,38 +389,69 @@ YOUR RESPONSE:`;
         messages: [
           {
             role: 'system',
-            content: 'You are HabitOwl Support AI. Provide clear, helpful answers. Be concise and actionable.'
+            content:
+              'You are HabitOwl Support AI. Provide clear, helpful answers. Be concise and actionable.',
           },
           {
             role: 'user',
-            content: prompt
-          }
+            content: prompt,
+          },
         ],
         max_tokens: 400,
-        temperature: 0.7
+        temperature: 0.7,
       },
       {
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json'
-        }
-      }
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 30000,
+      },
     );
 
     return response.data.choices[0].message.content.trim();
   }
 
-  /**
-   * Analyze response confidence and escalation needs
-   */
+  async callOpenRouterSupport(prompt, apiKey) {
+    const response = await axios.post(
+      'https://openrouter.ai/api/v1/chat/completions',
+      {
+        model: 'openai/gpt-3.5-turbo',
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are HabitOwl Support AI. Provide clear, helpful answers. Be concise and actionable.',
+          },
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+        max_tokens: 400,
+        temperature: 0.7,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://habitowl-app.web.app',
+          'X-Title': 'HabitOwl',
+        },
+        timeout: 30000,
+      },
+    );
+
+    return response.data.choices[0].message.content.trim();
+  }
+
   analyzeResponse(ticketData, aiAnswer) {
-    let confidence = 0.8; // Default high confidence
+    let confidence = 0.8;
     let escalationReason = null;
 
     const message = ticketData.message.toLowerCase();
     const answer = aiAnswer.toLowerCase();
 
-    // Billing/payment issues = always escalate
     if (
       message.includes('payment') ||
       message.includes('charge') ||
@@ -367,10 +461,7 @@ YOUR RESPONSE:`;
     ) {
       confidence = 0.3;
       escalationReason = 'Billing/payment issue';
-    }
-
-    // Account access issues = escalate
-    else if (
+    } else if (
       message.includes('locked') ||
       message.includes('banned') ||
       message.includes('deleted account') ||
@@ -378,20 +469,14 @@ YOUR RESPONSE:`;
     ) {
       confidence = 0.4;
       escalationReason = 'Account access issue';
-    }
-
-    // AI says to escalate
-    else if (
+    } else if (
       answer.includes('escalate') ||
       answer.includes('support team') ||
       answer.includes('human support')
     ) {
       confidence = 0.5;
       escalationReason = 'AI recommends human review';
-    }
-
-    // Bug reports with detailed info = medium confidence
-    else if (ticketData.issueType === 'bug' && message.length > 200) {
+    } else if (ticketData.issueType === 'bug' && message.length > 200) {
       confidence = 0.6;
       escalationReason = 'Complex bug report';
     }
@@ -399,21 +484,15 @@ YOUR RESPONSE:`;
     return { confidence, escalationReason };
   }
 
-  /**
-   * Determine if human escalation needed
-   */
   needsHumanEscalation(ticketData, aiResponse) {
-    // Low confidence = needs human
     if (aiResponse.confidence < 0.6) {
       return true;
     }
 
-    // Explicit escalation reason = needs human
     if (aiResponse.escalationReason) {
       return true;
     }
 
-    // Premium users with urgent issues = prioritize
     const message = ticketData.message.toLowerCase();
     if (message.includes('urgent') || message.includes('emergency')) {
       return true;
@@ -422,42 +501,37 @@ YOUR RESPONSE:`;
     return false;
   }
 
-  /**
-   * Fallback responses when AI unavailable
-   */
   getFallbackResponse(issueType) {
     const fallbacks = {
-      general: "Thanks for contacting HabitOwl support! I'm here to help. For general questions, check out our Help Center in Settings. Our team typically responds within 24 hours. Was this helpful?",
-      
-      bug: "Thanks for reporting this bug! Our team takes these seriously. Please include: 1) What you were doing, 2) What happened, 3) Your device type. We'll investigate and get back to you within 24 hours!",
-      
-      feature: "Great feature idea! We love hearing from users. All feature requests are reviewed by our product team. Keep the suggestions coming! Was this helpful?",
-      
-      account: "For account issues, please verify: 1) You're using the correct email, 2) Password is correct, 3) Try 'Forgot Password' reset. If still stuck, our support team will help within 24 hours!",
-      
-      billing: "For billing and subscription questions, please contact our support team directly. We'll review your account and respond within 24 hours. Thanks for your patience!",
-      
-      data: "For sync issues, try: 1) Check internet connection, 2) Sign out and sign back in, 3) Force quit and restart app. If problem persists, our team will investigate. Was this helpful?"
+      general:
+        "Thanks for contacting HabitOwl support! I'm here to help. For general questions, check out our Help Center in Settings. Our team typically responds within 24 hours. Was this helpful?",
+      bug:
+        "Thanks for reporting this bug! Our team takes these seriously. Please include: 1) What you were doing, 2) What happened, 3) Your device type. We'll investigate and get back to you within 24 hours!",
+      feature:
+        'Great feature idea! We love hearing from users. All feature requests are reviewed by our product team. Keep the suggestions coming! Was this helpful?',
+      account:
+        "For account issues, please verify: 1) You're using the correct email, 2) Password is correct, 3) Try 'Forgot Password' reset. If still stuck, our support team will help within 24 hours!",
+      billing:
+        "For billing and subscription questions, please contact our support team directly. We'll review your account and respond within 24 hours. Thanks for your patience!",
+      data:
+        'For sync issues, try: 1) Check internet connection, 2) Sign out and sign back in, 3) Force quit and restart app. If problem persists, our team will investigate. Was this helpful?',
     };
 
     return fallbacks[issueType] || fallbacks.general;
   }
 
-  /**
-   * Get all tickets for admin review
-   */
   async getEscalatedTickets() {
     try {
       const q = query(
         collection(db, 'support_tickets'),
         where('status', '==', 'escalated'),
-        orderBy('createdAt', 'desc')
+        orderBy('createdAt', 'desc'),
       );
 
       const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
+      return snapshot.docs.map((ticketDoc) => ({
+        id: ticketDoc.id,
+        ...ticketDoc.data(),
       }));
     } catch (error) {
       console.error('Error fetching escalated tickets:', error);
@@ -465,21 +539,18 @@ YOUR RESPONSE:`;
     }
   }
 
-  /**
-   * Get user's ticket history
-   */
   async getUserTickets(userId) {
     try {
       const q = query(
         collection(db, 'support_tickets'),
         where('userId', '==', userId),
-        orderBy('createdAt', 'desc')
+        orderBy('createdAt', 'desc'),
       );
 
       const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
+      return snapshot.docs.map((ticketDoc) => ({
+        id: ticketDoc.id,
+        ...ticketDoc.data(),
       }));
     } catch (error) {
       console.error('Error fetching user tickets:', error);
@@ -487,15 +558,12 @@ YOUR RESPONSE:`;
     }
   }
 
-  /**
-   * Admin: Respond to escalated ticket
-   */
   async respondToTicket(ticketId, humanResponse) {
     await this.updateTicket(ticketId, {
-      humanResponse: humanResponse,
+      humanResponse,
       status: 'resolved',
       resolvedBy: 'human',
-      resolvedAt: new Date().toISOString()
+      resolvedAt: new Date().toISOString(),
     });
   }
 }
