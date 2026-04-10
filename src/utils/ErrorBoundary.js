@@ -32,7 +32,7 @@ class ErrorBoundary extends React.Component {
         screen: this.props.screen || 'Unknown',
         platform: Platform.OS,
         osVersion: Platform.Version,
-        appVersion: Constants.expoConfig?.version || '1.7.0',
+        appVersion: Constants.expoConfig?.version || '1.10.0',
         userActions: [] // You can track user actions before crash
       });
 

@@ -170,21 +170,23 @@ const CreateHabitScreen = ({ navigation }) => {
   const saveHabit = async () => {
     if (!validate()) return;
 
-    const canCreate = await FirebaseService.canCreateHabit(FREE_HABIT_LIMIT);
-    if (!canCreate.allowed) {
-      showFreePlanPrompt();
-      return;
-    }
-
     if (scheduleType === "timesPerWeek" && !canUseAdvancedSchedule) {
-      return Alert.alert(
+      Alert.alert(
         "Premium feature",
         "The weekly target schedule stays visible here so free users can preview it. Upgrade to unlock it.",
       );
+      return;
     }
 
     try {
       setIsLoading(true);
+
+      const cachedHabits = await FirebaseService.getCachedHabits();
+      if (!isPremium && !isAdmin && cachedHabits.length >= FREE_HABIT_LIMIT) {
+        showFreePlanPrompt();
+        return;
+      }
+
       const habitData = {
         name: habitName.trim(),
         description: description.trim(),
@@ -207,19 +209,18 @@ const CreateHabitScreen = ({ navigation }) => {
       };
 
       const newHabit = await FirebaseService.createHabit(habitData);
+      navigation.goBack();
+
       if (reminderEnabled) {
-        await NotificationService.scheduleHabitReminder(newHabit);
-        await NotificationService.scheduleWeeklyReviewPrompt();
+        NotificationService.scheduleHabitReminder(newHabit).catch(() => {});
+        NotificationService.scheduleWeeklyReviewPrompt?.().catch(() => {});
       }
-      await FirebaseService.trackEvent("habit_created_v2", {
+      FirebaseService.trackEvent("habit_created_v2", {
         category,
         scheduleType,
         reminderEnabled,
-      });
-      await adMobService.showInterstitialAd("habit_created");
-
-      Alert.alert("Habit created", `${habitName.trim()} is ready to track.`);
-      navigation.goBack();
+      }).catch(() => {});
+      adMobService.showInterstitialAd("habit_created").catch(() => {});
     } catch (error) {
       if (error.message?.toLowerCase().includes("free plan")) {
         showFreePlanPrompt();

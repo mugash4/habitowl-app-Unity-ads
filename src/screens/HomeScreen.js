@@ -46,6 +46,7 @@ const HomeScreen = ({ navigation }) => {
   const [isOffline, setIsOffline] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
   const [showTemplateTip, setShowTemplateTip] = useState(false);
+  const [pendingTemplateId, setPendingTemplateId] = useState(null);
   const [celebration, setCelebration] = useState({
     visible: false,
     title: "",
@@ -100,6 +101,15 @@ const HomeScreen = ({ navigation }) => {
       setRefreshing(false);
     }
   }, []);
+
+  const openCreateHabitScreen = useCallback(() => {
+    const parentNavigation = navigation.getParent?.();
+    if (parentNavigation?.navigate) {
+      parentNavigation.navigate("CreateHabit");
+      return;
+    }
+    navigation.navigate("CreateHabit");
+  }, [navigation]);
 
   const loadTips = useCallback(async () => {
     const [seenHomeGuide, showTemplatesTip] = await Promise.all([
@@ -182,19 +192,13 @@ const HomeScreen = ({ navigation }) => {
     );
   };
 
-  const handleCreateHabit = async () => {
-    const creationCheck =
-      await FirebaseService.canCreateHabit(FREE_HABIT_LIMIT);
-
-    if (!creationCheck.allowed) {
-      showFreePlanLimitPrompt(creationCheck.count);
-      return;
-    }
-
-    navigation.getParent()?.navigate("CreateHabit");
+  const handleCreateHabit = () => {
+    openCreateHabitScreen();
   };
 
   const handleCreateFromTemplate = async (template) => {
+    if (pendingTemplateId) return;
+
     if (template.premiumOnly && !isPremium && !isAdmin) {
       Alert.alert(
         "Premium template",
@@ -203,10 +207,8 @@ const HomeScreen = ({ navigation }) => {
       return openPremium();
     }
 
-    const creationCheck =
-      await FirebaseService.canCreateHabit(FREE_HABIT_LIMIT);
-    if (!creationCheck.allowed) {
-      showFreePlanLimitPrompt(creationCheck.count);
+    if (!isPremium && !isAdmin && habits.length >= FREE_HABIT_LIMIT) {
+      showFreePlanLimitPrompt(habits.length);
       return;
     }
 
@@ -230,37 +232,54 @@ const HomeScreen = ({ navigation }) => {
     };
 
     try {
-      await FirebaseService.createHabit(habitData);
-      await FirebaseService.trackEvent("template_created", {
+      setPendingTemplateId(template.id);
+      const newHabit = await FirebaseService.createHabit(habitData);
+      setHabits((current) =>
+        sortHabitsForDashboard([
+          newHabit,
+          ...current.filter((habit) => habit.id !== newHabit.id),
+        ]),
+      );
+      setSearchQuery("");
+      setIsOffline(false);
+
+      FirebaseService.trackEvent("template_created", {
         templateId: template.id,
         premium: !!template.premiumOnly,
-      });
-      await RateAppService.trackPositiveMoment(1);
-      await loadDashboard(true);
-      await adMobService.showInterstitialAd("template_created");
-      Alert.alert("Added", `${template.title} was added to your habits.`);
+      }).catch(() => {});
+      RateAppService.trackPositiveMoment(1).catch(() => {});
+      adMobService.showInterstitialAd("template_created").catch(() => {});
+      loadDashboard().catch(() => {});
     } catch (error) {
       if (error.message?.toLowerCase().includes("free plan")) {
-        showFreePlanLimitPrompt();
+        showFreePlanLimitPrompt(habits.length);
         return;
       }
       Alert.alert(
         "Could not add template",
         error.message || "Please try again.",
       );
+    } finally {
+      setPendingTemplateId(null);
     }
   };
 
+
   const handleDeleteHabit = async (habitId) => {
+    const previousHabits = habits;
+    setHabits((current) => current.filter((habit) => habit.id !== habitId));
+
     try {
       await FirebaseService.deleteHabit(habitId);
-      await NotificationService.cancelHabitNotifications(habitId);
-      await loadDashboard(true);
-      await adMobService.showInterstitialAd("habit_deleted");
+      NotificationService.cancelHabitNotifications(habitId).catch(() => {});
+      adMobService.showInterstitialAd("habit_deleted").catch(() => {});
+      loadDashboard().catch(() => {});
     } catch (error) {
+      setHabits(previousHabits);
       Alert.alert("Delete failed", error.message || "Please try again.");
     }
   };
+
 
   const handleHabitComplete = async (habit, nextCompleted, result = {}) => {
     const previousAchievementIds = new Set(
@@ -384,10 +403,16 @@ const HomeScreen = ({ navigation }) => {
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Starter packs</Text>
-        <Chip compact icon="wand-sparkles" style={styles.sectionChip}>
-          One tap
-        </Chip>
+        <View style={styles.sectionHeaderActions}>
+          <Button mode="contained-tonal" compact onPress={handleCreateHabit}>
+            Custom habit
+          </Button>
+          <Chip compact icon="wand-sparkles" style={styles.sectionChip}>
+            One tap
+          </Chip>
+        </View>
       </View>
+
 
       {showTemplateTip ? (
         <TipCard
@@ -446,9 +471,12 @@ const HomeScreen = ({ navigation }) => {
               <Button
                 mode={locked ? "contained-tonal" : "contained"}
                 onPress={() => handleCreateFromTemplate(template)}
+                loading={pendingTemplateId === template.id}
+                disabled={!!pendingTemplateId}
               >
-                {locked ? "Unlock" : "Add"}
+                {locked ? "Unlock" : pendingTemplateId === template.id ? "Adding" : "Add"}
               </Button>
+
             </Card>
           );
         })}
@@ -742,6 +770,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 12,
+  },
+  sectionHeaderActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   sectionTitle: {
     fontSize: 20,

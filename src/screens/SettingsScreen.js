@@ -240,7 +240,7 @@ const SettingsScreen = ({ navigation }) => {
                 {userStats.displayName || "HabitOwl User"}
               </Text>
               <Text style={styles.profileEmail}>
-                {userStats.email || "HabitOwl user"}
+                {userStats.email || "Quick stats view"}
               </Text>
             </View>
             <Chip

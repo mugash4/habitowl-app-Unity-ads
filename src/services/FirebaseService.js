@@ -812,8 +812,21 @@ class FirebaseService {
 
   async createHabit(habitData) {
     try {
-      const creationCheck = await this.canCreateHabit(5);
-      if (!creationCheck.allowed) {
+      const [habits, cachedProfile, accessFlags] = await Promise.all([
+        this.loadLocalHabits(),
+        this.getCachedUserProfile(),
+        AsyncStorage.multiGet(["user_premium_status", "user_admin_status"]),
+      ]);
+
+      const premiumStatusValue = accessFlags?.[0]?.[1];
+      const adminStatusValue = accessFlags?.[1]?.[1];
+      const hasPremiumAccess =
+        !!cachedProfile?.isPremium ||
+        premiumStatusValue === "true" ||
+        adminStatusValue === "true";
+      const visibleHabits = this.getVisibleHabits(habits);
+
+      if (!hasPremiumAccess && visibleHabits.length >= 5) {
         throw new Error(
           "Free plan limit reached. Upgrade to Premium to create unlimited habits.",
         );
@@ -837,10 +850,10 @@ class FirebaseService {
         isSyncedToRemote: false,
       });
 
-      const habits = await this.loadLocalHabits();
       habits.unshift(newHabit);
       await this.persistLocalHabits(habits);
       await this.syncCachedStatsFromHabits(habits);
+      this.ensureAnonymousUser().catch(() => {});
       this.syncPendingHabitsInBackground();
       return newHabit;
     } catch (error) {

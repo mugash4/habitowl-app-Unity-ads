@@ -299,6 +299,44 @@ class NotificationService {
     }
   }
 
+  async scheduleWeeklyReviewPrompt() {
+    try {
+      const storageKey = 'habitowl_weekly_review_notification';
+      const existingId = await AsyncStorage.getItem(storageKey);
+
+      if (existingId) {
+        await Notifications.cancelScheduledNotificationAsync(existingId).catch(() => {});
+      }
+
+      const notificationId = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: 'Weekly Habit Check-in 🦉',
+          body: 'Take a minute to review your progress and plan your next small win.',
+          data: {
+            type: 'weekly_review',
+          },
+          sound: false,
+          priority: Notifications.AndroidNotificationPriority.DEFAULT,
+          categoryIdentifier: 'motivational',
+        },
+        trigger: {
+          weekday: 1,
+          hour: 19,
+          minute: 0,
+          repeats: true,
+        },
+      });
+
+      await AsyncStorage.setItem(storageKey, notificationId);
+      console.log('✅ Weekly review prompt scheduled (offline-capable)');
+      return notificationId;
+    } catch (error) {
+      console.error('❌ Error scheduling weekly review prompt:', error);
+      return null;
+    }
+  }
+
+
   /**
    * ✅ UPDATED: Send push notification via Expo Push Service (FCM V1)
    * This requires network - but won't block other functionality if offline

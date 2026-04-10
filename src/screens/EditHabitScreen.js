@@ -180,22 +180,18 @@ const EditHabitScreen = ({ navigation, route }) => {
       };
 
       const updatedHabit = await FirebaseService.updateHabit(habit.id, updates);
+      navigation.goBack();
+
       if (reminderEnabled) {
-        await NotificationService.scheduleHabitReminder(updatedHabit);
+        NotificationService.scheduleHabitReminder(updatedHabit).catch(() => {});
       } else {
-        await NotificationService.cancelHabitNotifications(habit.id);
+        NotificationService.cancelHabitNotifications(habit.id).catch(() => {});
       }
-      await FirebaseService.trackEvent("habit_updated_v2", {
+      FirebaseService.trackEvent("habit_updated_v2", {
         habitId: habit.id,
         scheduleType,
-      });
-      await adMobService.showInterstitialAd("habit_updated");
-
-      Alert.alert(
-        "Habit updated",
-        `${habitName.trim()} was updated successfully.`,
-      );
-      navigation.goBack();
+      }).catch(() => {});
+      adMobService.showInterstitialAd("habit_updated").catch(() => {});
     } catch (error) {
       Alert.alert(
         "Could not update habit",
@@ -219,9 +215,9 @@ const EditHabitScreen = ({ navigation, route }) => {
             try {
               setIsLoading(true);
               await FirebaseService.deleteHabit(habit.id);
-              await NotificationService.cancelHabitNotifications(habit.id);
-              await adMobService.showInterstitialAd("habit_deleted");
               navigation.goBack();
+              NotificationService.cancelHabitNotifications(habit.id).catch(() => {});
+              adMobService.showInterstitialAd("habit_deleted").catch(() => {});
             } catch (error) {
               Alert.alert(
                 "Could not delete habit",
