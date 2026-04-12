@@ -265,7 +265,7 @@ const HomeScreen = ({ navigation }) => {
   };
 
 
-  const handleDeleteHabit = async (habitId) => {
+const handleDeleteHabit = async (habitId) => {
     const previousHabits = habits;
     setHabits((current) => current.filter((habit) => habit.id !== habitId));
 
@@ -280,13 +280,61 @@ const HomeScreen = ({ navigation }) => {
     }
   };
 
+  const buildUpdatedHabitFromResult = (habit, nextCompleted, result = {}) => {
+    if (result?.updatedHabit) {
+      return result.updatedHabit;
+    }
+
+    const todayKey = new Date().toDateString();
+    const currentCompletions = Array.isArray(habit.completions)
+      ? habit.completions
+      : [];
+    const nextCompletions = nextCompleted
+      ? currentCompletions.includes(todayKey)
+        ? currentCompletions
+        : [...currentCompletions, todayKey]
+      : currentCompletions.filter((dateKey) => dateKey !== todayKey);
+
+    const fallbackStreak = nextCompleted
+      ? Math.max((habit.currentStreak || 0) + 1, 1)
+      : Math.max((habit.currentStreak || 0) - 1, 0);
+    const nextStreak = result?.newStreak ?? fallbackStreak;
+    const nextLongestStreak =
+      result?.newLongestStreak ??
+      Math.max(habit.longestStreak || 0, nextStreak);
+
+    return {
+      ...habit,
+      completions: nextCompletions,
+      currentStreak: nextStreak,
+      longestStreak: nextLongestStreak,
+      totalCompletions: nextCompleted
+        ? (habit.totalCompletions || 0) + 1
+        : Math.max(0, (habit.totalCompletions || 0) - 1),
+      lastCompletedAt: nextCompleted
+        ? new Date().toISOString()
+        : habit.lastCompletedAt || null,
+      updatedAt: new Date().toISOString(),
+      syncStatus: "pending",
+    };
+  };
 
   const handleHabitComplete = async (habit, nextCompleted, result = {}) => {
     const previousAchievementIds = new Set(
       getEarnedAchievements(habits).map((item) => item.id),
     );
+    const updatedHabit = buildUpdatedHabitFromResult(
+      habit,
+      nextCompleted,
+      result,
+    );
+    const updatedHabits = sortHabitsForDashboard(
+      habits.map((currentHabit) =>
+        currentHabit.id === updatedHabit.id ? updatedHabit : currentHabit,
+      ),
+    );
 
-    const updatedHabits = await loadDashboard(true);
+    setHabits(updatedHabits);
 
     if (!nextCompleted) {
       return;
@@ -295,7 +343,7 @@ const HomeScreen = ({ navigation }) => {
     const newAchievements = getEarnedAchievements(updatedHabits).filter(
       (item) => !previousAchievementIds.has(item.id),
     );
-    const newStreak = result?.newStreak || 0;
+    const newStreak = updatedHabit.currentStreak || result?.newStreak || 0;
     const milestones = [3, 7, 14, 30, 60, 100, 365];
     const progress = getTodayProgress(updatedHabits);
 
@@ -309,12 +357,12 @@ const HomeScreen = ({ navigation }) => {
       });
       await RateAppService.trackPositiveMoment(2);
     } else if (milestones.includes(newStreak)) {
-      NotificationService.scheduleStreakCelebration(habit, newStreak).catch(
+      NotificationService.scheduleStreakCelebration(updatedHabit, newStreak).catch(
         () => {},
       );
       setCelebration({
         visible: true,
-        title: `${habit.name} milestone!`,
+        title: `${updatedHabit.name} milestone!`,
         subtitle: getSuccessMessageForStreak(newStreak),
         badge: `${newStreak} streak`,
       });
@@ -335,9 +383,10 @@ const HomeScreen = ({ navigation }) => {
       await RateAppService.trackPositiveMoment(1);
     }
 
-    await RateAppService.promptIfEligible();
-    await adMobService.showInterstitialAd("habit_completed");
+    RateAppService.promptIfEligible().catch(() => {});
+    adMobService.showInterstitialAd("habit_completed").catch(() => {});
   };
+
 
   const renderTopBanner = (placementKey) => {
     if (isPremium || isAdmin) return null;

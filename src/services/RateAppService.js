@@ -83,6 +83,44 @@ class RateAppService {
     });
   }
 
+  async openStoreListing() {
+    const candidateUrls =
+      Platform.OS === "android"
+        ? [PLAY_STORE_DEEP_LINK, PLAY_STORE_URL]
+        : [PLAY_STORE_URL];
+
+    for (const url of candidateUrls) {
+      try {
+        const supported = await Linking.canOpenURL(url);
+        if (!supported) {
+          continue;
+        }
+
+        await Linking.openURL(url);
+        return true;
+      } catch (error) {
+        // Try the next fallback URL.
+      }
+    }
+
+    Alert.alert(
+      "Unable to open rating page",
+      "We couldn't open the app rating page on this device right now. Please try again later.",
+    );
+    return false;
+  }
+
+  async requestManualReview() {
+    await this.trackPositiveMoment(1);
+    const opened = await this.openStoreListing();
+
+    if (opened) {
+      await this.markRated();
+    }
+
+    return opened;
+  }
+
   async promptIfEligible() {
     const shouldPrompt = await this.shouldPrompt();
     if (!shouldPrompt) return false;
@@ -105,15 +143,9 @@ class RateAppService {
         {
           text: "Rate app",
           onPress: async () => {
-            await this.markRated();
-            if (Platform.OS === "android") {
-              try {
-                await Linking.openURL(PLAY_STORE_DEEP_LINK);
-              } catch (error) {
-                await Linking.openURL(PLAY_STORE_URL);
-              }
-            } else {
-              await Linking.openURL(PLAY_STORE_URL);
+            const opened = await this.openStoreListing();
+            if (opened) {
+              await this.markRated();
             }
           },
         },

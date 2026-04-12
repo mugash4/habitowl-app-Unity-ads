@@ -118,7 +118,7 @@ const AboutScreen = ({ navigation }) => {
             />
           </View>
           <Text style={styles.appName}>HabitOwl</Text>
-          <Text style={styles.version}>Version 1.10.0</Text>
+          <Text style={styles.version}>Version 1.11.0</Text>
           <Text style={styles.tagline}>
             Your intelligent companion for building better habits
           </Text>
@@ -321,7 +321,7 @@ const AboutScreen = ({ navigation }) => {
             
             <List.Item
               title="Version"
-              description="1.10.0"
+              description="1.11.0"
               left={(props) => <List.Icon {...props} icon="information" />}
             />
             

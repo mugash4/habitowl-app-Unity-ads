@@ -8,6 +8,18 @@
     ],
     "rewrites": [
       {
+        "source": "/privacy",
+        "destination": "/privacy.html"
+      },
+      {
+        "source": "/terms",
+        "destination": "/terms.html"
+      },
+      {
+        "source": "/delete-data",
+        "destination": "/delete-data.html"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

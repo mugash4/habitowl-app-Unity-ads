@@ -2,7 +2,7 @@
   "expo": {
     "name": "HabitOwl",
     "slug": "habitowl",
-    "version": "1.10.0",
+    "version": "1.11.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -181,7 +181,7 @@
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "com.google.android.gms.permission.AD_ID"
       ],
-      "versionCode": 27,
+      "versionCode": 28,
       "googleServicesFile": "./google-services.json",
       "intentFilters": [
         {
@@ -230,13 +230,6 @@
             "deploymentTarget": "15.1",
             "useFrameworks": "static"
           }
-        }
-      ],
-      [
-        "expo-notifications",
-        {
-          "icon": "./assets/notification-icon.png",
-          "color": "#4f46e5"
         }
       ],
       [

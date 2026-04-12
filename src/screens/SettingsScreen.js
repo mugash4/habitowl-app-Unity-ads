@@ -35,6 +35,10 @@ import { useTabBarHeight } from "../hooks/useTabBarHeight";
 
 const PLAY_STORE_URL =
   "https://play.google.com/store/apps/details?id=com.mugash4.habitowl";
+const WEB_BASE_URL = "https://habitowl-3405d.web.app";
+const PRIVACY_POLICY_URL = `${WEB_BASE_URL}/privacy.html`;
+const TERMS_OF_SERVICE_URL = `${WEB_BASE_URL}/terms.html`;
+const DELETE_DATA_URL = `${WEB_BASE_URL}/delete-data.html`;
 const FREE_COACHING_LIMIT = 2;
 
 const SettingsScreen = ({ navigation }) => {
@@ -58,6 +62,9 @@ const SettingsScreen = ({ navigation }) => {
   const [isOffline, setIsOffline] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
   const [showSupport, setShowSupport] = useState(false);
+  const [pendingDeletion, setPendingDeletion] = useState({
+    hasPendingDeletion: false,
+  });
   const [coachingUsage, setCoachingUsage] = useState({
     count: 0,
     limit: FREE_COACHING_LIMIT,
@@ -68,16 +75,27 @@ const SettingsScreen = ({ navigation }) => {
 
   useEffect(() => {
     const bootstrap = async () => {
+      const targetUserId =
+        user?.uid || FirebaseService.currentUser?.uid || "habitowl_user";
+
       try {
         const localStats = await FirebaseService.getUserStats();
         setUserStats((current) => ({ ...current, ...localStats }));
 
-        const [stats, tipsState, seenGuide, usageStatus] = await Promise.all([
+        const [
+          stats,
+          tipsState,
+          seenGuide,
+          usageStatus,
+          deletionStatus,
+        ] = await Promise.all([
           FirebaseService.getUserStats(),
           TipsService.areTipsEnabled(),
           TipsService.hasSeenGuide("settings_overview"),
           FirebaseService.getAICoachingUsageStatus(FREE_COACHING_LIMIT),
+          PrivacyComplianceService.checkPendingDeletion(targetUserId),
         ]);
+
         const adminStatus = user?.email
           ? await AdminService.checkAdminStatus(user.email)
           : false;
@@ -94,24 +112,51 @@ const SettingsScreen = ({ navigation }) => {
         setNotificationsEnabled(permission?.status === "granted");
         setShowGuide(!seenGuide);
         setCoachingUsage(usageStatus);
+        setPendingDeletion(deletionStatus || { hasPendingDeletion: false });
         setIsOffline(false);
       } catch (error) {
         console.error("Settings bootstrap error:", error);
         const localStats = await FirebaseService.getUserStats();
         const usageStatus =
           await FirebaseService.getAICoachingUsageStatus(FREE_COACHING_LIMIT);
+        const deletionStatus =
+          await PrivacyComplianceService.checkPendingDeletion(targetUserId);
+
         setUserStats((current) => ({ ...current, ...localStats }));
         setCoachingUsage(usageStatus);
+        setPendingDeletion(deletionStatus || { hasPendingDeletion: false });
         setIsOffline(true);
       }
     };
 
     bootstrap();
-  }, [user?.email]);
+  }, [user?.email, user?.uid]);
 
   const openPremium = () => navigation.getParent()?.navigate("Premium");
   const openAchievements = () =>
     navigation.getParent()?.navigate("Achievements");
+
+  const openExternalUrl = async (url, fallbackTitle = "Unable to open link") => {
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (!supported) {
+        Alert.alert(
+          fallbackTitle,
+          "Your device could not open this link. Please try again later.",
+        );
+        return false;
+      }
+
+      await Linking.openURL(url);
+      return true;
+    } catch (error) {
+      Alert.alert(
+        fallbackTitle,
+        error?.message || "Something went wrong while opening the link.",
+      );
+      return false;
+    }
+  };
 
   const handleToggleTips = async () => {
     const next = !tipsEnabled;
@@ -137,10 +182,15 @@ const SettingsScreen = ({ navigation }) => {
     }
 
     await NotificationService.initialize();
-    setNotificationsEnabled(true);
+    const permission = await NotificationService.checkPermissionStatus();
+    const enabled = permission?.status === "granted";
+    setNotificationsEnabled(enabled);
+
     Alert.alert(
-      "Notifications on",
-      "You can re-enable reminder times on individual habits.",
+      enabled ? "Notifications on" : "Notifications unavailable",
+      enabled
+        ? "You can re-enable reminder times on individual habits."
+        : "Notification permission was not granted on this device.",
     );
   };
 
@@ -168,12 +218,15 @@ const SettingsScreen = ({ navigation }) => {
 
   const handleExportData = async () => {
     try {
-      const file = await PrivacyComplianceService.exportUserDataToFile(
+      const result = await PrivacyComplianceService.exportUserDataToFile(
         user?.uid || FirebaseService.currentUser?.uid || "habitowl_user",
       );
+
       Alert.alert(
         "Export ready",
-        `Your export file is ready: ${file?.uri || "saved to device storage"}`,
+        result?.shared
+          ? "Your data export file was prepared and the share sheet has been opened. Choose where you want to save or send it."
+          : `Your data export file is ready at: ${result?.uri || "device storage"}`,
       );
     } catch (error) {
       Alert.alert("Export failed", error.message || "Please try again.");
@@ -182,30 +235,65 @@ const SettingsScreen = ({ navigation }) => {
 
   const handleDeleteAccount = async () => {
     try {
-      await PrivacyComplianceService.requestAccountDeletion(
+      const result = await PrivacyComplianceService.requestAccountDeletion(
         user?.uid || FirebaseService.currentUser?.uid || "habitowl_user",
         deleteReason.trim() || "User requested account deletion",
       );
+
+      const refreshedStatus = await PrivacyComplianceService.checkPendingDeletion(
+        user?.uid || FirebaseService.currentUser?.uid || "habitowl_user",
+      );
+
+      setPendingDeletion(refreshedStatus || { hasPendingDeletion: false });
       setShowDeleteDialog(false);
       setDeleteReason("");
+
       Alert.alert(
-        "Deletion requested",
-        "Your account deletion request was scheduled according to the app privacy flow.",
+        result?.alreadyPending ? "Deletion already scheduled" : "Deletion requested",
+        result?.message ||
+          "Your account deletion request was scheduled according to the app privacy flow.",
       );
     } catch (error) {
       Alert.alert("Request failed", error.message || "Please try again.");
     }
   };
 
+  const handleCancelDeletion = async () => {
+    try {
+      const cancelled = await PrivacyComplianceService.cancelAccountDeletion(
+        user?.uid || FirebaseService.currentUser?.uid || "habitowl_user",
+      );
+
+      const refreshedStatus = await PrivacyComplianceService.checkPendingDeletion(
+        user?.uid || FirebaseService.currentUser?.uid || "habitowl_user",
+      );
+
+      setPendingDeletion(refreshedStatus || { hasPendingDeletion: false });
+      setShowDeleteDialog(false);
+
+      Alert.alert(
+        cancelled ? "Deletion cancelled" : "Nothing to cancel",
+        cancelled
+          ? "Your pending account deletion request was cancelled successfully."
+          : "There is no active deletion request on this account.",
+      );
+    } catch (error) {
+      Alert.alert("Cancel failed", error.message || "Please try again.");
+    }
+  };
+
   const handleRateApp = async () => {
-    await RateAppService.trackPositiveMoment(5);
-    await RateAppService.promptIfEligible();
+    await RateAppService.requestManualReview();
   };
 
   const coachingDescription =
     isPremium || isAdmin
       ? "Unlimited AI coaching is enabled on your plan."
       : `Free plan: ${coachingUsage.remaining}/${coachingUsage.limit} coaching sessions left today.`;
+
+  const deletionDescription = pendingDeletion?.hasPendingDeletion
+    ? `Deletion already requested. ${pendingDeletion.daysRemaining} day(s) remaining in grace period.`
+    : "Start the deletion flow";
 
   return (
     <View style={styles.container}>
@@ -383,7 +471,7 @@ const SettingsScreen = ({ navigation }) => {
             />
             <List.Item
               title="Rate HabitOwl"
-              description="Open the rating prompt if you find the app useful"
+              description="Open the Play Store rating page"
               left={(props) => <List.Icon {...props} icon="star-outline" />}
               onPress={handleRateApp}
             />
@@ -420,7 +508,7 @@ const SettingsScreen = ({ navigation }) => {
                 <List.Icon {...props} icon="shield-check-outline" />
               )}
               onPress={() =>
-                Linking.openURL("https://habitowl-3405d.web.app/privacy")
+                openExternalUrl(PRIVACY_POLICY_URL, "Unable to open privacy policy")
               }
             />
             <List.Item
@@ -430,12 +518,28 @@ const SettingsScreen = ({ navigation }) => {
                 <List.Icon {...props} icon="file-document-outline" />
               )}
               onPress={() =>
-                Linking.openURL("https://habitowl-3405d.web.app/terms")
+                openExternalUrl(
+                  TERMS_OF_SERVICE_URL,
+                  "Unable to open terms of service",
+                )
+              }
+            />
+            <List.Item
+              title="Delete my data page"
+              description="Open the hosted data deletion information page"
+              left={(props) => (
+                <List.Icon {...props} icon="web" />
+              )}
+              onPress={() =>
+                openExternalUrl(
+                  DELETE_DATA_URL,
+                  "Unable to open delete data page",
+                )
               }
             />
             <List.Item
               title="Request account deletion"
-              description="Start the deletion flow"
+              description={deletionDescription}
               left={(props) => (
                 <List.Icon {...props} icon="delete-alert-outline" />
               )}
@@ -472,24 +576,42 @@ const SettingsScreen = ({ navigation }) => {
         >
           <Dialog.Title>Request account deletion</Dialog.Title>
           <Dialog.Content>
-            <Text style={styles.dialogText}>
-              Tell us why you want to delete the account. This helps improve
-              retention and user trust.
-            </Text>
-            <TextInput
-              mode="outlined"
-              label="Reason"
-              value={deleteReason}
-              onChangeText={setDeleteReason}
-              multiline
-              style={{ marginTop: 12 }}
-            />
+            {pendingDeletion?.hasPendingDeletion ? (
+              <Text style={styles.dialogText}>
+                Your account already has a pending deletion request. There are
+                {" "}
+                {pendingDeletion.daysRemaining}
+                {" "}
+                day(s) left before the deletion is processed.
+              </Text>
+            ) : (
+              <>
+                <Text style={styles.dialogText}>
+                  Tell us why you want to delete the account. This helps improve
+                  retention and user trust.
+                </Text>
+                <TextInput
+                  mode="outlined"
+                  label="Reason"
+                  value={deleteReason}
+                  onChangeText={setDeleteReason}
+                  multiline
+                  style={{ marginTop: 12 }}
+                />
+              </>
+            )}
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setShowDeleteDialog(false)}>Cancel</Button>
-            <Button textColor="#dc2626" onPress={handleDeleteAccount}>
-              Request deletion
-            </Button>
+            <Button onPress={() => setShowDeleteDialog(false)}>Close</Button>
+            {pendingDeletion?.hasPendingDeletion ? (
+              <Button textColor="#dc2626" onPress={handleCancelDeletion}>
+                Cancel deletion
+              </Button>
+            ) : (
+              <Button textColor="#dc2626" onPress={handleDeleteAccount}>
+                Request deletion
+              </Button>
+            )}
           </Dialog.Actions>
         </Dialog>
       </Portal>

@@ -973,11 +973,13 @@ class FirebaseService {
       syncStatus: "pending",
     });
 
+    const updatedHabit = habits[index];
+
     await this.persistLocalHabits(habits);
     await this.syncCachedStatsFromHabits(habits);
     this.syncPendingHabitsInBackground();
 
-    return { newStreak, newLongestStreak };
+    return { newStreak, newLongestStreak, updatedHabit };
   }
 
   async uncompleteHabit(habitId) {
@@ -1004,11 +1006,13 @@ class FirebaseService {
       syncStatus: "pending",
     });
 
+    const updatedHabit = habits[index];
+
     await this.persistLocalHabits(habits);
     await this.syncCachedStatsFromHabits(habits);
     this.syncPendingHabitsInBackground();
 
-    return { newStreak };
+    return { newStreak, updatedHabit };
   }
 
   async getUserStats() {
