@@ -6,8 +6,8 @@ import {
   ScrollView,
   Alert,
   Share,
-  Linking,
 } from "react-native";
+import * as WebBrowser from "expo-web-browser";
 import {
   Card,
   List,
@@ -36,9 +36,9 @@ import { useTabBarHeight } from "../hooks/useTabBarHeight";
 const PLAY_STORE_URL =
   "https://play.google.com/store/apps/details?id=com.mugash4.habitowl";
 const WEB_BASE_URL = "https://habitowl-3405d.web.app";
-const PRIVACY_POLICY_URL = `${WEB_BASE_URL}/privacy.html`;
-const TERMS_OF_SERVICE_URL = `${WEB_BASE_URL}/terms.html`;
-const DELETE_DATA_URL = `${WEB_BASE_URL}/delete-data.html`;
+const PRIVACY_POLICY_URL = `${WEB_BASE_URL}/privacy`;
+const TERMS_OF_SERVICE_URL = `${WEB_BASE_URL}/terms`;
+const DELETE_DATA_URL = `${WEB_BASE_URL}/delete-data`;
 const FREE_COACHING_LIMIT = 2;
 
 const SettingsScreen = ({ navigation }) => {
@@ -138,16 +138,10 @@ const SettingsScreen = ({ navigation }) => {
 
   const openExternalUrl = async (url, fallbackTitle = "Unable to open link") => {
     try {
-      const supported = await Linking.canOpenURL(url);
-      if (!supported) {
-        Alert.alert(
-          fallbackTitle,
-          "Your device could not open this link. Please try again later.",
-        );
-        return false;
-      }
-
-      await Linking.openURL(url);
+      await WebBrowser.openBrowserAsync(url, {
+        showTitle: true,
+        enableBarCollapsing: true,
+      });
       return true;
     } catch (error) {
       Alert.alert(

@@ -3,10 +3,10 @@ import {
   View,
   Text,
   StyleSheet,  // ✅ FIXED: Was "StyleStyle" - now correct
-  Linking,
   Image,
-  Platform,
+  Alert,
 } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
 import {
   Card,
   Button,
@@ -20,6 +20,10 @@ import ContactSupport from '../components/ContactSupport';
 import FirebaseService from '../services/FirebaseService';
 import adMobService from '../services/AdMobService'; 
 
+const WEB_BASE_URL = 'https://habitowl-3405d.web.app';
+const PRIVACY_POLICY_URL = `${WEB_BASE_URL}/privacy`;
+const TERMS_OF_SERVICE_URL = `${WEB_BASE_URL}/terms`;
+const DELETE_DATA_URL = `${WEB_BASE_URL}/delete-data`;
 
 const AboutScreen = ({ navigation }) => {
   const [showContactSupport, setShowContactSupport] = useState(false);
@@ -46,9 +50,20 @@ const AboutScreen = ({ navigation }) => {
   };
 
   // ✅ FIXED: Updated to include ad tracking
-  const handleOpenLink = (url) => {
+  const handleOpenLink = async (url) => {
     trackInteractionAndShowAd('link_press');
-    Linking.openURL(url);
+
+    try {
+      await WebBrowser.openBrowserAsync(url, {
+        showTitle: true,
+        enableBarCollapsing: true,
+      });
+    } catch (error) {
+      Alert.alert(
+        'Unable to open link',
+        error?.message || 'Something went wrong while opening the link.'
+      );
+    }
   };
 
   // ✅ FIXED: Updated to include ad tracking
@@ -118,7 +133,7 @@ const AboutScreen = ({ navigation }) => {
             />
           </View>
           <Text style={styles.appName}>HabitOwl</Text>
-          <Text style={styles.version}>Version 1.11.0</Text>
+          <Text style={styles.version}>Version 1.12.0</Text>
           <Text style={styles.tagline}>
             Your intelligent companion for building better habits
           </Text>
@@ -229,7 +244,7 @@ const AboutScreen = ({ navigation }) => {
                 <Button
                   mode="text"
                   compact
-                  onPress={() => handleOpenLink('https://habitowl-3405d.web.app/privacy')}
+                  onPress={() => handleOpenLink(PRIVACY_POLICY_URL)}
                   style={styles.privacyButton}
                   labelStyle={styles.privacyButtonLabel}
                 >
@@ -295,7 +310,7 @@ const AboutScreen = ({ navigation }) => {
             <Button
               mode="outlined"
               icon="web"
-              onPress={() => handleOpenLink('https://habitowl-3405d.web.app/')}
+              onPress={() => handleOpenLink(WEB_BASE_URL)}
               style={styles.contactButton}
               contentStyle={styles.contactButtonContent}
             >
@@ -321,7 +336,7 @@ const AboutScreen = ({ navigation }) => {
             
             <List.Item
               title="Version"
-              description="1.11.0"
+              description="1.12.0"
               left={(props) => <List.Icon {...props} icon="information" />}
             />
             
@@ -358,7 +373,7 @@ const AboutScreen = ({ navigation }) => {
             
             <Button
               mode="text"
-              onPress={() => handleOpenLink('https://habitowl-3405d.web.app/privacy')}
+              onPress={() => handleOpenLink(PRIVACY_POLICY_URL)}
               style={styles.legalButton}
             >
               Privacy Policy
@@ -366,10 +381,18 @@ const AboutScreen = ({ navigation }) => {
             
             <Button
               mode="text"
-              onPress={() => handleOpenLink('https://habitowl-3405d.web.app/terms')}
+              onPress={() => handleOpenLink(TERMS_OF_SERVICE_URL)}
               style={styles.legalButton}
             >
               Terms of Service
+            </Button>
+
+            <Button
+              mode="text"
+              onPress={() => handleOpenLink(DELETE_DATA_URL)}
+              style={styles.legalButton}
+            >
+              Delete My Data
             </Button>
           </Card.Content>
         </Card>
