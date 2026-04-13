@@ -104,7 +104,7 @@ export default function Dashboard({ user }) {
         <div style={styles.content}>
           {activeTab === 'analytics' && <Analytics stats={stats} onRefresh={loadStats} />}
           {activeTab === 'api' && <APIKeyManager />}
-          {activeTab === 'users' && <UserManager />}
+          {activeTab === 'users' && <UserManager onStatsRefresh={loadStats} />}
         </div>
       </main>
     </div>

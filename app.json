@@ -194,6 +194,14 @@
     "plugins": [
       "react-native-iap",
       [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#4f46e5",
+          "defaultChannel": "habit-reminders"
+        }
+      ],
+      [
         "expo-build-properties",
         {
           "android": {
@@ -240,6 +248,6 @@
     "owner": "affiliateswitch74",
     "description": "HabitOwl - Smart Habit Tracker. Developed and managed by Astraea Labs.",
     "developedBy": "Astraea Labs",
-    "copyright": "© 2025 Astraea Labs. All rights reserved."
+    "copyright": "\u00a9 2025 Astraea Labs. All rights reserved."
   }
 }
