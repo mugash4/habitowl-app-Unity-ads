@@ -1,17 +1,16 @@
 {
-  "name": "habitowl-functions",
+  "name": "habitowl-admin",
+  "version": "1.0.0",
   "private": true,
-  "main": "index.js",
-  "engines": {
-    "node": "20"
-  },
   "scripts": {
-    "serve": "firebase emulators:start --only functions",
-    "deploy": "firebase deploy --only functions",
-    "logs": "firebase functions:log"
+    "dev": "next dev -p 3001",
+    "build": "next build",
+    "start": "next start -p 3001"
   },
   "dependencies": {
-    "firebase-admin": "^12.7.0",
-    "firebase-functions": "^5.1.1"
+    "firebase": "^10.13.2",
+    "next": "14.2.33",
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
   }
 }

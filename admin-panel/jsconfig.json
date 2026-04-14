@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "baseUrl": ".",
+    "baseUrl": "7.0",
     "paths": {
       "@/*": ["./*"]
     }
