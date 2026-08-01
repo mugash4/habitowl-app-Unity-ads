@@ -1,17 +1,14 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-import { 
-  getAuth, 
-  initializeAuth,
-  getReactNativePersistence 
+import {
+  getAuth,
 } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
+import { Platform } from "react-native";
 
 // Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || "AIzaSyDca2O9HlRLWSm09kHDtn8CaR2lWdpCXZk",
   authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || "habitowl-3405d.firebaseapp.com",
@@ -22,35 +19,27 @@ const firebaseConfig = {
   measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID || "G-2FFS8JMX4K"
 };
 
-
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// ✅ FIX: Initialize Auth with AsyncStorage persistence for React Native
-// This ensures users stay logged in even after closing the app
-let auth;
-
-if (Platform.OS === 'web') {
-  // For web, use default auth (browser persistence)
-  auth = getAuth(app);
-} else {
-  // For mobile (iOS/Android), use AsyncStorage persistence
-  auth = initializeAuth(app, {
-    persistence: getReactNativePersistence(AsyncStorage)
-  });
-}
-
-// Initialize Firestore and Storage
+// ✅ ONLINE-ONLY: removed `initializeAuth` + AsyncStorage persistence.
+// Uses stock `getAuth` so no offline token cache; sign-in is required
+// to be live every session.
+export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 
-// Initialize Analytics (only in web environment)
+// Analytics (web only)
 let analytics;
-if (typeof window !== 'undefined') {
-  analytics = getAnalytics(app);
+if (Platform.OS === "web" && typeof window !== "undefined") {
+  // Lazy require to keep native bundle small
+  try {
+    const { getAnalytics } = require("firebase/analytics");
+    analytics = getAnalytics(app);
+  } catch (e) {
+    // analytics unavailable, ignore
+  }
 }
 
-console.log('✅ Firebase initialized with persistence enabled');
-
-export { auth, analytics };
+export { analytics };
 export default app;

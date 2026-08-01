@@ -1,12 +1,9 @@
-// Import the functions you need from the SDKs you need
+// Web Firebase init — matches src/config/firebase.js but for browser builds.
 import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || "AIzaSyDca2O9HlRLWSm09kHDtn8CaR2lWdpCXZk",
   authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || "habitowl-3405d.firebaseapp.com",
@@ -17,18 +14,20 @@ const firebaseConfig = {
   measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID || "G-2FFS8JMX4K"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firebase services
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 
-// Initialize Analytics (only in web environment)
 let analytics;
-if (typeof window !== 'undefined') {
-  analytics = getAnalytics(app);
+if (typeof window !== "undefined") {
+  try {
+    const { getAnalytics } = require("firebase/analytics");
+    analytics = getAnalytics(app);
+  } catch (e) {
+    // ignore
+  }
 }
 
 export { analytics };

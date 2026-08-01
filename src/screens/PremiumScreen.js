@@ -121,7 +121,7 @@ const PremiumScreen = ({ navigation }) => {
         Platform.OS === "android"
           ? "habitowl_premium_monthly"
           : "com.habitowl.app.monthly",
-      price: getProductForPlan("monthly")?.localizedPrice || "$4.99",
+      price: getProductForPlan("monthly")?.displayPrice || getProductForPlan("monthly")?.localizedPrice || "$1.99",
       period: "/month",
       savings: null,
       popular: false,
@@ -134,7 +134,7 @@ const PremiumScreen = ({ navigation }) => {
         Platform.OS === "android"
           ? "habitowl_premium_yearly"
           : "com.habitowl.app.yearly",
-      price: getProductForPlan("yearly")?.localizedPrice || "$39.99",
+      price: getProductForPlan("yearly")?.displayPrice || getProductForPlan("yearly")?.localizedPrice || "$15.99",
       period: "/year",
       savings: "Save 33%",
       popular: true,
