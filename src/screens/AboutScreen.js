@@ -336,7 +336,7 @@ const AboutScreen = ({ navigation }) => {
             
             <List.Item
               title="Version"
-              description="1.12.0"
+              description="1.13.0"
               left={(props) => <List.Icon {...props} icon="information" />}
             />
             
